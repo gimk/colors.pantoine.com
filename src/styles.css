@@ -41,6 +41,14 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 html,
@@ -52,6 +60,14 @@ body {
   font-size: var(--text-base);
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 button,
@@ -791,7 +807,7 @@ body.is-dragging-hue * {
   display: flex;
   flex-direction: column;
   height: 100%;
-  max-height: 305px;
+  max-height: 298px;
   overflow: hidden;
 }
 
@@ -815,18 +831,16 @@ body.is-dragging-hue * {
 .drawer__body {
   flex: 1;
   min-height: 0;
-  max-height: 180px;
+  max-height: 165px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
 
 .drawer__body::-webkit-scrollbar {
-  width: 4px;
-}
-
-.drawer__body::-webkit-scrollbar-thumb {
-  background: var(--rule);
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /* --- drawer ----------------------------------------------------------- */
@@ -1081,6 +1095,34 @@ select:disabled {
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide);
   padding: 0 var(--space-2);
+}
+
+.prow__head button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 27px;
+  box-sizing: border-box;
+  padding: 0 var(--space-3);
+  font: inherit;
+  font-size: var(--text-base);
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.prow__btn-icon {
+  width: 28px;
+  padding: 0;
+}
+
+.prow__btn-icon svg {
+  display: block;
+  margin: auto;
+}
+
+.prow__btn-icon.is-copied {
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .prow .ramp {
