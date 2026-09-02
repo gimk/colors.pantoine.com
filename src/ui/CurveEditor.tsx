@@ -235,7 +235,7 @@ export function CurveEditor({ curve, channel, swatches, lockedIndex, onChange }:
               cx={at.x}
               cy={at.y}
               r={swatch.isBase ? 6 : 4.5}
-              fill={swatch.hex}
+              fill={swatch.displayColor}
             >
               <title>
                 {`${swatch.label} — ${swatch.hex}${isLocked ? ' — locked to the base colour' : ''}`}

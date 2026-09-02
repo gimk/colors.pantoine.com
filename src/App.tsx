@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { FORMATS, parseToOklch, type Format } from './color/oklch'
-import { baseIndexFor } from './color/presets'
+import { FORMATS, GAMUTS, gamutLabel, parseToOklch, type Format, type Gamut } from './color/oklch'
+import { baseIndexFor, MAX_STEPS, MIN_STEPS } from './color/presets'
 import { countDuplicateSteps } from './color/ramp'
 import { restoreDocument, saveDocument } from './state/storage'
 import { documentUrl, encodeDocument } from './state/url'
@@ -21,7 +21,8 @@ const seedsOf = (palettes: PaletteView[]) =>
 
 export function App() {
   const [session] = useState(readSession)
-  const doc = useDocument(session)
+  const [gamut, setGamut] = useState<Gamut>('srgb')
+  const doc = useDocument(session, gamut)
   const [format, setFormat] = useState<Format>('hex')
   const [dark, setDark] = useState(false)
   const [seamless, setSeamless] = useState(false)
@@ -121,6 +122,28 @@ export function App() {
           </select>
         </label>
 
+        <label className="field">
+          <span>Gamut</span>
+          <select value={gamut} onChange={(event) => setGamut(event.target.value as Gamut)}>
+            {GAMUTS.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field" title="Number of steps across all palettes">
+          <span>Steps</span>
+          <input
+            type="number"
+            min={MIN_STEPS}
+            max={MAX_STEPS}
+            value={doc.selected.config.steps}
+            onChange={(event) => doc.setSteps(Number(event.target.value))}
+          />
+        </label>
+
         <span className="spacer" />
 
         <button
@@ -159,6 +182,7 @@ export function App() {
               count={doc.palettes.length}
               selected={palette.id === selected.id}
               format={format}
+              gamut={gamut}
               seamless={seamless}
               bare={bare}
               copiedKey={copied}
@@ -181,7 +205,7 @@ export function App() {
           Click a swatch to copy it, or click another palette to bring the toolbox to
           it. Drag the round handles, or focus one and use the arrow keys (hold shift
           for bigger steps). A notched corner means the curve asked for more chroma
-          than sRGB can show, and the colour was mapped to the nearest one it can —
+          than {gamutLabel(gamut)} can show, and the colour was mapped to the nearest one it can —
           hue held, chroma reduced. Your palettes are saved in this browser, and the
           address bar holds all of them, so a link carries the whole set.
         </p>

@@ -1,9 +1,39 @@
-import { converter, formatHex, parse, toGamut } from 'culori'
+import { converter, formatCss, formatHex, inGamut, parse, toGamut } from 'culori'
 
 export type Oklch = { l: number; c: number; h: number }
 
+export type Gamut = 'srgb' | 'p3' | 'a98' | 'rec2020'
+
+export type GamutOption = {
+  id: Gamut
+  label: string
+}
+
+export const GAMUTS: GamutOption[] = [
+  { id: 'srgb', label: 'sRGB' },
+  { id: 'p3', label: 'Display P3' },
+  { id: 'a98', label: 'Adobe RGB' },
+  { id: 'rec2020', label: 'Rec. 2020' },
+]
+
+export function gamutLabel(gamut: Gamut): string {
+  switch (gamut) {
+    case 'srgb':
+      return 'sRGB'
+    case 'p3':
+      return 'Display P3'
+    case 'a98':
+      return 'Adobe RGB'
+    case 'rec2020':
+      return 'Rec. 2020'
+  }
+}
+
 const toOklch = converter('oklch')
 const toRgb = converter('rgb')
+const toP3 = converter('p3')
+const toA98 = converter('a98')
+const toRec2020 = converter('rec2020')
 
 /**
  * Half an 8-bit step. culori's own `inGamut` is exact to the last float,
@@ -14,18 +44,44 @@ const toRgb = converter('rgb')
  */
 const CHANNEL_TOLERANCE = 0.5 / 255
 
-/**
- * Hold L and H, reduce chroma until the colour fits sRGB.
- *
- * Deliberately *not* the CSS Color 4 default. That algorithm accepts a
- * candidate that is only "roughly" in gamut and lets the final 8-bit clip
- * finish the job, which measured up to 9° of hue drift on saturated colours
- * in exchange for about 0.001 of chroma. In a tool whose whole point is
- * steering hue, an unrequested 9° shift is unacceptable and a hair less
- * chroma is something the chroma curve can answer for. Passing jnd = 0
- * makes the search strict, holding hue to within half a degree.
- */
 const srgbMap = toGamut('rgb', 'oklch', null, 0)
+const p3Map = toGamut('p3', 'oklch', null, 0)
+const a98Map = toGamut('a98', 'oklch', null, 0)
+const rec2020Map = toGamut('rec2020', 'oklch', null, 0)
+
+function convertToGamut(color: Oklch, gamut: Gamut) {
+  const c = { mode: 'oklch' as const, ...color }
+  switch (gamut) {
+    case 'srgb':
+      return toRgb(c)
+    case 'p3':
+      return toP3(c)
+    case 'a98':
+      return toA98(c)
+    case 'rec2020':
+      return toRec2020(c)
+  }
+}
+
+function mapGamutColor(color: Oklch, gamut: Gamut) {
+  const c = { mode: 'oklch' as const, ...color }
+  switch (gamut) {
+    case 'srgb':
+      return srgbMap(c)
+    case 'p3':
+      return p3Map(c)
+    case 'a98':
+      return a98Map(c)
+    case 'rec2020':
+      return rec2020Map(c)
+  }
+}
+
+/** Check gamut inclusion using culori's exact inGamut check. */
+export function culoriInGamut(color: Oklch, gamut: Gamut = 'srgb'): boolean {
+  const mode = gamut === 'srgb' ? 'rgb' : gamut
+  return inGamut(mode)({ mode: 'oklch', ...color })
+}
 
 /** Parse anything CSS accepts (hex, rgb(), hsl(), oklch(), named) into OKLCH. */
 export function parseToOklch(input: string): Oklch | null {
@@ -36,12 +92,17 @@ export function parseToOklch(input: string): Oklch | null {
   return { l: c.l ?? 0, c: c.c ?? 0, h: c.h ?? 0 }
 }
 
-export function isInSrgb(color: Oklch): boolean {
-  const c = toRgb({ mode: 'oklch', ...color })
+/** Check whether an OKLCH color fits in the specified gamut within channel tolerance. */
+export function isInGamut(color: Oklch, gamut: Gamut = 'srgb'): boolean {
+  const c = convertToGamut(color, gamut)
   if (!c) return false
   const lo = -CHANNEL_TOLERANCE
   const hi = 1 + CHANNEL_TOLERANCE
   return c.r >= lo && c.r <= hi && c.g >= lo && c.g <= hi && c.b >= lo && c.b <= hi
+}
+
+export function isInSrgb(color: Oklch): boolean {
+  return isInGamut(color, 'srgb')
 }
 
 /** Nearest in-gamut sRGB hex for an OKLCH colour. */
@@ -58,6 +119,8 @@ export const CHROMA_JND = 0.004
 
 export type Mapped = {
   hex: string
+  /** CSS string suitable for element background (hex for sRGB, color(display-p3 ...) for P3, etc.). */
+  displayColor: string
   /** Chroma that survived the mapping. */
   chroma: number
   /** How much chroma the display could not give back. */
@@ -66,17 +129,26 @@ export type Mapped = {
   clipped: boolean
 }
 
-/** Map to sRGB once and report what it cost. */
-export function mapToSrgb(color: Oklch): Mapped {
-  const mapped = srgbMap({ mode: 'oklch', ...color })
+/** Map to the target gamut and report displayable CSS color and chroma cost. */
+export function mapToGamut(color: Oklch, gamut: Gamut = 'srgb'): Mapped {
+  const mapped = mapGamutColor(color, gamut)
   const chroma = toOklch(mapped)?.c ?? 0
   const chromaLost = Math.max(0, color.c - chroma)
+  const hex = formatHex(mapped) ?? '#000000'
+  const displayColor = gamut === 'srgb' ? hex : formatCss(mapped) ?? hex
+
   return {
-    hex: formatHex(mapped) ?? '#000000',
+    hex,
+    displayColor,
     chroma,
     chromaLost,
     clipped: chromaLost > CHROMA_JND,
   }
+}
+
+/** Map to sRGB once and report what it cost. */
+export function mapToSrgb(color: Oklch): Mapped {
+  return mapToGamut(color, 'srgb')
 }
 
 export function toRgb255(color: Oklch): { r: number; g: number; b: number } {

@@ -1,10 +1,11 @@
 import { CHANNELS, clamp, sampleCurve } from './curve'
 import {
   contrastRatio,
-  mapToSrgb,
+  mapToGamut,
   normalizeHue,
   parseToOklch,
   relativeLuminance,
+  type Gamut,
   type Oklch,
 } from './oklch'
 import { FALLBACK_BASE, type PaletteConfig } from './presets'
@@ -18,7 +19,9 @@ export type Swatch = {
   /** What the curves asked for. */
   oklch: Oklch
   hex: string
-  /** True when the requested chroma did not fit in sRGB and was visibly
+  /** CSS string suitable for element background (hex or color(display-p3 ...)). */
+  displayColor: string
+  /** True when the requested chroma did not fit in the target gamut and was visibly
    *  mapped down — surfaced in the UI rather than silently swallowed. */
   clipped: boolean
   /** How much chroma the mapping had to give up. */
@@ -68,7 +71,7 @@ export function countDuplicateSteps(ramp: Swatch[]): number {
   return duplicates
 }
 
-export function generateRamp(config: PaletteConfig): Swatch[] {
+export function generateRamp(config: PaletteConfig, gamut: Gamut = 'srgb'): Swatch[] {
   const base = resolveBase(config)
   const labels = stepLabels(config.steps)
   const last = Math.max(config.steps - 1, 1)
@@ -80,7 +83,7 @@ export function generateRamp(config: PaletteConfig): Swatch[] {
       c: clamp(sampleCurve(config.chroma, x), CHANNELS.chroma.min, CHANNELS.chroma.max),
       h: normalizeHue(base.h + sampleCurve(config.hue, x)),
     }
-    const mapped = mapToSrgb(color)
+    const mapped = mapToGamut(color, gamut)
     const luminance = relativeLuminance(color)
 
     return {
@@ -89,6 +92,7 @@ export function generateRamp(config: PaletteConfig): Swatch[] {
       x,
       oklch: color,
       hex: mapped.hex,
+      displayColor: mapped.displayColor,
       clipped: mapped.clipped,
       chromaLost: mapped.chromaLost,
       isBase: index === config.baseIndex,

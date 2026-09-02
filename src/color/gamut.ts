@@ -1,28 +1,25 @@
-import { isInSrgb } from './oklch'
+import { isInGamut, type Gamut } from './oklch'
 
-/** No sRGB colour exceeds this chroma, so it is a safe search ceiling. */
+/** No displayable colour in target gamuts exceeds this chroma, so it is a safe search ceiling. */
 const CHROMA_CEILING = 0.5
 const PRECISION = 1e-4
 
 /**
- * The most chroma sRGB can hold at a given lightness and hue.
+ * The most chroma the specified gamut can hold at a given lightness and hue.
  *
- * This is the shape of the gamut, and it is wildly uneven: yellow keeps a
- * lot of chroma only while it is very light, blue only while it is dark.
- * Knowing the ceiling is what lets the default ramp hold a *constant
- * fraction* of the available chroma at every step instead of a constant
- * absolute chroma, which is the difference between a ramp that stays vivid
- * end to end and one that clips at one end and goes chalky at the other.
+ * Defaults to sRGB. Knowing the ceiling is what lets the default ramp hold a
+ * *constant fraction* of the available chroma at every step instead of a constant
+ * absolute chroma.
  */
-export function maxChromaFor(l: number, h: number): number {
+export function maxChromaFor(l: number, h: number, gamut: Gamut = 'srgb'): number {
   if (l <= 0 || l >= 1) return 0
-  if (isInSrgb({ l, c: CHROMA_CEILING, h })) return CHROMA_CEILING
+  if (isInGamut({ l, c: CHROMA_CEILING, h }, gamut)) return CHROMA_CEILING
 
   let lo = 0
   let hi = CHROMA_CEILING
   while (hi - lo > PRECISION) {
     const mid = (lo + hi) / 2
-    if (isInSrgb({ l, c: mid, h })) lo = mid
+    if (isInGamut({ l, c: mid, h }, gamut)) lo = mid
     else hi = mid
   }
   return lo

@@ -12,11 +12,12 @@ import {
   type DocumentState,
   type PaletteSeed,
 } from './document'
+import type { Gamut } from '../color/oklch'
 import { canRedo, canUndo, initHistory, withHistory } from './history'
 import { anyEdited } from './paletteReducer'
 
 /**
- * Ramps are cached against the config object that produced them.
+ * Ramps are cached against the config object that produced them and the active gamut.
  *
  * Configs are immutable and replaced on every edit, so identity is a sound
  * key, and it means a drag on one palette does not re-map every step of every
@@ -24,13 +25,18 @@ import { anyEdited } from './paletteReducer'
  * the snapshot holds the very configs whose ramps are already cached. A
  * WeakMap so retired configs are collectable.
  */
-const ramps = new WeakMap<PaletteConfig, Swatch[]>()
+const ramps = new WeakMap<PaletteConfig, Map<Gamut, Swatch[]>>()
 
-function rampFor(config: PaletteConfig): Swatch[] {
-  const cached = ramps.get(config)
+function rampFor(config: PaletteConfig, gamut: Gamut = 'srgb'): Swatch[] {
+  let byGamut = ramps.get(config)
+  if (!byGamut) {
+    byGamut = new Map()
+    ramps.set(config, byGamut)
+  }
+  const cached = byGamut.get(gamut)
   if (cached) return cached
-  const ramp = generateRamp(config)
-  ramps.set(config, ramp)
+  const ramp = generateRamp(config, gamut)
+  byGamut.set(gamut, ramp)
   return ramp
 }
 
@@ -70,11 +76,13 @@ export type DocumentApi = {
   setEndpoint: (key: CurveKey, end: 'start' | 'end', value: number) => void
   resetCurve: (key: CurveKey) => void
   rederive: () => void
+  syncChannel: (key: CurveKey) => void
+  syncAll: () => void
 }
 
 type Seed = { seeds: PaletteSeed[]; selected: number }
 
-export function useDocument(seed: Seed): DocumentApi {
+export function useDocument(seed: Seed, gamut: Gamut = 'srgb'): DocumentApi {
   const [history, dispatch] = useReducer(historyReducer, seed, (initial) =>
     initHistory<DocumentState>(createDocument(initial.seeds, initial.selected)),
   )
@@ -93,10 +101,10 @@ export function useDocument(seed: Seed): DocumentApi {
         id: entry.id,
         name: entry.name,
         config: entry.state.config,
-        ramp: rampFor(entry.state.config),
+        ramp: rampFor(entry.state.config, gamut),
         edited: anyEdited(entry.state.edited),
       })),
-    [state.palettes],
+    [state.palettes, gamut],
   )
 
   const selectedId = selectedEntry(state).id
@@ -123,7 +131,7 @@ export function useDocument(seed: Seed): DocumentApi {
       [send],
     ),
     setSteps: useCallback(
-      (value: number) => send({ type: 'palette', action: { type: 'setSteps', value } }),
+      (value: number) => send({ type: 'setSteps', value }),
       [send],
     ),
     setBaseIndex: useCallback(
@@ -149,5 +157,7 @@ export function useDocument(seed: Seed): DocumentApi {
       [send],
     ),
     rederive: useCallback(() => send({ type: 'palette', action: { type: 'rederive' } }), [send]),
+    syncChannel: useCallback((key: CurveKey) => send({ type: 'syncChannel', key }), [send]),
+    syncAll: useCallback(() => send({ type: 'syncAll' }), [send]),
   }
 }

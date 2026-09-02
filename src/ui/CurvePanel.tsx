@@ -13,6 +13,8 @@ type Props = {
   onChange: (curve: Curve, moved?: CurveControl) => void
   onEndpoint: (end: 'start' | 'end', value: number) => void
   onReset: () => void
+  canSync?: boolean
+  onSync?: () => void
 }
 
 export function CurvePanel({
@@ -23,6 +25,8 @@ export function CurvePanel({
   onChange,
   onEndpoint,
   onReset,
+  canSync,
+  onSync,
 }: Props) {
   const channel = CHANNELS[channelKey]
   const last = Math.max(swatches.length - 1, 1)
@@ -62,14 +66,29 @@ export function CurvePanel({
           title={frozenEnd ? 'Locked to the base colour' : undefined}
           onCommit={(value) => onEndpoint('end', value)}
         />
-        <span className="spacer" />
-        <button
-          type="button"
-          onClick={onReset}
-          title="Rebuild this channel's default from the base colour"
-        >
-          Reset
-        </button>
+        <div className="panel__actions">
+          {onSync && (
+            <button
+              type="button"
+              onClick={onSync}
+              disabled={!canSync}
+              title={
+                !canSync
+                  ? 'Requires at least two palettes in the document'
+                  : `Apply this ${channel.label.toLowerCase()} curve to all palettes in the document`
+              }
+            >
+              Apply all
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onReset}
+            title="Rebuild this channel's default from the base colour"
+          >
+            Reset
+          </button>
+        </div>
       </div>
 
       <div className="panel__row panel__row--shapes">

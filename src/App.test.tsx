@@ -43,6 +43,20 @@ describe('App', () => {
     expect(html).toContain('aria-pressed="false"')
   })
 
+  it('offers a gamut dropdown with sRGB, Display P3, Adobe RGB, and Rec. 2020', () => {
+    const select = html.match(/Gamut<\/span>.*?<\/select>/s)?.[0] ?? ''
+    expect(select).toContain('sRGB')
+    expect(select).toContain('Display P3')
+    expect(select).toContain('Adobe RGB')
+    expect(select).toContain('Rec. 2020')
+  })
+
+  it('offers a global steps input in the header', () => {
+    const controls = html.slice(html.indexOf('class="controls"'), html.indexOf('class="stack"'))
+    expect(controls).toContain('<span>Steps</span>')
+    expect(controls).toContain(`value="${DEFAULT_STEPS}"`)
+  })
+
   it('does not warn about squeezed steps on the default ramp', () => {
     expect(html).not.toContain('class="notice"')
   })
@@ -160,6 +174,8 @@ describe('the palette stack', () => {
       expect(bar).not.toContain(control)
       expect(html).toContain(control)
     }
+    expect(html).toContain('Match all curves')
+    expect(html).toContain('Apply all')
   })
 
   it('says that palettes are saved and that a link carries all of them', () => {

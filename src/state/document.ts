@@ -1,8 +1,21 @@
+import { clamp, type Curve } from '../color/curve'
 import { normalizeHue, toHex } from '../color/oklch'
-import { FALLBACK_BASE, type PaletteConfig } from '../color/presets'
+import {
+  chromaCurveFor,
+  createPalette,
+  DEFAULT_STEPS,
+  FALLBACK_BASE,
+  holdBase,
+  MAX_STEPS,
+  MIN_STEPS,
+  type CurveKey,
+  type PaletteConfig,
+} from '../color/presets'
 import { resolveBase } from '../color/ramp'
 import {
   initialPaletteState,
+  nearestStep,
+  NOTHING_EDITED,
   paletteReducer,
   type PaletteAction,
   type PaletteState,
@@ -35,6 +48,9 @@ export type DocumentAction =
   | { type: 'remove'; id: string }
   | { type: 'move'; id: string; by: -1 | 1 }
   | { type: 'rename'; id: string; name: string }
+  | { type: 'setSteps'; value: number }
+  | { type: 'syncChannel'; key: CurveKey }
+  | { type: 'syncAll' }
 
 /**
  * A new palette starts a fifth of the way around the hue circle from the one
@@ -50,14 +66,32 @@ const makeId = () => `p${++nextId}`
 
 export type PaletteSeed = { name: string; config: PaletteConfig }
 
-function makeEntry(seed: string | PaletteConfig, name: string): PaletteEntry {
+function makeEntry(seed: string | PaletteConfig, name: string, steps?: number): PaletteEntry {
+  if (typeof seed === 'string') {
+    return {
+      id: makeId(),
+      name,
+      state: {
+        config: createPalette(seed, steps ?? DEFAULT_STEPS),
+        edited: { ...NOTHING_EDITED },
+      },
+    }
+  }
   return { id: makeId(), name, state: initialPaletteState(seed) }
 }
 
 export function createDocument(seeds: PaletteSeed[] = [], selected = -1): DocumentState {
+  // A document has a unified global step count across all palettes.
+  const globalSteps = seeds.length ? seeds[0].config.steps : DEFAULT_STEPS
   const palettes = seeds.length
-    ? seeds.map((seed) => makeEntry(seed.config, seed.name))
-    : [makeEntry(FALLBACK_BASE, 'brand')]
+    ? seeds.map((seed) => {
+        const entry = makeEntry(seed.config, seed.name)
+        if (entry.state.config.steps !== globalSteps) {
+          entry.state = paletteReducer(entry.state, { type: 'setSteps', value: globalSteps })
+        }
+        return entry
+      })
+    : [makeEntry(FALLBACK_BASE, 'brand', globalSteps)]
   // Default to the last one: that is the working palette, the one the toolbox
   // opens under, with the finished ones stacked above it.
   const index = selected >= 0 && selected < palettes.length ? selected : palettes.length - 1
@@ -89,9 +123,156 @@ function replaceEntry(
   return { ...state, palettes }
 }
 
+const cloneCurve = (curve: Curve): Curve => ({
+  start: curve.start,
+  end: curve.end,
+  h1: { ...curve.h1 },
+  h2: { ...curve.h2 },
+})
+
+function applyChannelSync(
+  targetEntry: PaletteEntry,
+  key: CurveKey,
+  sourceCurve: Curve,
+): PaletteEntry {
+  const { config, edited } = targetEntry.state
+  const base = resolveBase(config)
+  const curveCopy = cloneCurve(sourceCurve)
+
+  if (key === 'lightness') {
+    const baseIndex = nearestStep(curveCopy, config.steps, base.l)
+    const finalLightness = config.baseLocked
+      ? holdBase(curveCopy, 'lightness', base, config.steps, baseIndex)
+      : curveCopy
+
+    const finalChroma = !edited.chroma
+      ? chromaCurveFor(base, config.steps, baseIndex, finalLightness)
+      : config.baseLocked
+        ? holdBase(config.chroma, 'chroma', base, config.steps, baseIndex)
+        : config.chroma
+
+    return {
+      ...targetEntry,
+      state: {
+        ...targetEntry.state,
+        edited: { ...edited, lightness: true },
+        config: {
+          ...config,
+          baseIndex,
+          lightness: finalLightness,
+          chroma: finalChroma,
+        },
+      },
+    }
+  }
+
+  if (key === 'chroma') {
+    const finalChroma = config.baseLocked
+      ? holdBase(curveCopy, 'chroma', base, config.steps, config.baseIndex)
+      : curveCopy
+
+    return {
+      ...targetEntry,
+      state: {
+        ...targetEntry.state,
+        edited: { ...edited, chroma: true },
+        config: {
+          ...config,
+          chroma: finalChroma,
+        },
+      },
+    }
+  }
+
+  // key === 'hue'
+  const finalHue = config.baseLocked
+    ? holdBase(curveCopy, 'hue', base, config.steps, config.baseIndex)
+    : curveCopy
+
+  return {
+    ...targetEntry,
+    state: {
+      ...targetEntry.state,
+      edited: { ...edited, hue: true },
+      config: {
+        ...config,
+        hue: finalHue,
+      },
+    },
+  }
+}
+
+function applyAllSync(targetEntry: PaletteEntry, sourceConfig: PaletteConfig): PaletteEntry {
+  const { config } = targetEntry.state
+  const base = resolveBase(config)
+
+  const lCopy = cloneCurve(sourceConfig.lightness)
+  const cCopy = cloneCurve(sourceConfig.chroma)
+  const hCopy = cloneCurve(sourceConfig.hue)
+
+  const baseIndex = nearestStep(lCopy, config.steps, base.l)
+
+  const finalLightness = config.baseLocked
+    ? holdBase(lCopy, 'lightness', base, config.steps, baseIndex)
+    : lCopy
+  const finalChroma = config.baseLocked
+    ? holdBase(cCopy, 'chroma', base, config.steps, baseIndex)
+    : cCopy
+  const finalHue = config.baseLocked
+    ? holdBase(hCopy, 'hue', base, config.steps, baseIndex)
+    : hCopy
+
+  return {
+    ...targetEntry,
+    state: {
+      ...targetEntry.state,
+      edited: { lightness: true, chroma: true, hue: true },
+      config: {
+        ...config,
+        baseIndex,
+        lightness: finalLightness,
+        chroma: finalChroma,
+        hue: finalHue,
+      },
+    },
+  }
+}
+
 export function documentReducer(state: DocumentState, action: DocumentAction): DocumentState {
   switch (action.type) {
+    case 'syncChannel': {
+      if (state.palettes.length < 2) return state
+      const current = selectedEntry(state)
+      const sourceCurve = current.state.config[action.key]
+      const palettes = state.palettes.map((entry) =>
+        entry.id === current.id ? entry : applyChannelSync(entry, action.key, sourceCurve),
+      )
+      return { ...state, palettes }
+    }
+
+    case 'syncAll': {
+      if (state.palettes.length < 2) return state
+      const current = selectedEntry(state)
+      const palettes = state.palettes.map((entry) =>
+        entry.id === current.id ? entry : applyAllSync(entry, current.state.config),
+      )
+      return { ...state, palettes }
+    }
+    case 'setSteps': {
+      const steps = clamp(Math.round(action.value), MIN_STEPS, MAX_STEPS)
+      if (state.palettes.every((entry) => entry.state.config.steps === steps)) return state
+
+      const palettes = state.palettes.map((entry) => {
+        const next = paletteReducer(entry.state, { type: 'setSteps', value: steps })
+        return next === entry.state ? entry : { ...entry, state: next }
+      })
+      return { ...state, palettes }
+    }
+
     case 'palette': {
+      if (action.action.type === 'setSteps') {
+        return documentReducer(state, { type: 'setSteps', value: action.action.value })
+      }
       const current = selectedEntry(state)
       const next = paletteReducer(current.state, action.action)
       if (next === current.state) return state
@@ -99,9 +280,12 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
     }
 
     case 'new': {
+      const currentConfig = selectedEntry(state).state.config
+      const currentSteps = currentConfig.steps
       const entry = makeEntry(
-        steppedBase(selectedEntry(state).state.config),
+        steppedBase(currentConfig),
         `palette ${state.palettes.length + 1}`,
+        currentSteps,
       )
       return { palettes: [...state.palettes, entry], selectedId: entry.id }
     }
@@ -145,6 +329,10 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
  * choice from a select — begins an entry of its own.
  */
 export function coalesceKey(action: DocumentAction): string | null {
+  if (action.type === 'setSteps') {
+    return 'steps'
+  }
+
   if (action.type !== 'palette') {
     // Renaming is the one document-level edit typed a character at a time.
     return action.type === 'rename' ? `rename:${action.id}` : null

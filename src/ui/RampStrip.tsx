@@ -1,9 +1,10 @@
-import { formatColor, type Format } from '../color/oklch'
+import { formatColor, gamutLabel, type Format, type Gamut } from '../color/oklch'
 import type { Swatch } from '../color/ramp'
 
 type Props = {
   ramp: Swatch[]
   format: Format
+  gamut?: Gamut
   copiedKey: string | null
   /** Drop the rules between and around the colour chips. */
   seamless?: boolean
@@ -17,6 +18,7 @@ type Props = {
 export function RampStrip({
   ramp,
   format,
+  gamut = 'srgb',
   copiedKey,
   seamless,
   idPrefix = 'swatch',
@@ -38,11 +40,11 @@ export function RampStrip({
             onClick={() => onCopy(key, value)}
             title={swatchTitle ? swatchTitle(value) : `Copy ${value}`}
           >
-            <span className="swatch__chip" style={{ background: swatch.hex }}>
+            <span className="swatch__chip" style={{ background: swatch.displayColor }}>
               {swatch.clipped && (
                 <span
                   className="swatch__clipped"
-                  title="Requested chroma is outside sRGB — mapped to the nearest displayable colour"
+                  title={`Requested chroma is outside ${gamutLabel(gamut)} — mapped to the nearest displayable colour`}
                 />
               )}
               {swatch.isBase && <span className="swatch__base">base</span>}

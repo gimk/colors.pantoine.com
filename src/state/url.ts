@@ -48,6 +48,23 @@ export function encodePalette(config: PaletteConfig, name: string): string {
 export type DecodedPalette = { config: PaletteConfig; name: string }
 
 /**
+ * Restores the saved base color string.
+ *
+ * When palettes are encoded into URL query parameters, hex colours have their
+ * leading '#' stripped. When reloading, only re-attach '#' if the value is
+ * actually a bare hex string (3, 4, 6, or 8 hex digits). Formats like
+ * oklch(...), rgb(...), hsl(...), color(...), or named colours must not have '#' added.
+ */
+export function restoreBaseColor(base: string): string {
+  const trimmed = base.trim()
+  if (trimmed.startsWith('#')) return trimmed
+  if (/^(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(trimmed)) {
+    return `#${trimmed}`
+  }
+  return trimmed
+}
+
+/**
  * Rebuild a palette from a hash. Anything missing or malformed falls back to
  * the default for that field, so a truncated or hand-mangled link still
  * opens something usable instead of an error.
@@ -64,7 +81,7 @@ export function decodePalette(hash: string): DecodedPalette | null {
   const parsedSteps =
     Number.isFinite(steps) && steps >= MIN_STEPS && steps <= MAX_STEPS ? steps : undefined
 
-  const config = createPalette(base.startsWith('#') ? base : `#${base}`, parsedSteps)
+  const config = createPalette(restoreBaseColor(base), parsedSteps)
 
   const baseIndex = Number(params.get(KEYS.baseIndex))
   if (Number.isInteger(baseIndex) && baseIndex >= 0 && baseIndex < config.steps) {

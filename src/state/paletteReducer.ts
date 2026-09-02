@@ -52,7 +52,7 @@ export type PaletteAction =
 export const anyEdited = (edited: Edited) => CURVE_KEYS.some((key) => edited[key])
 
 /** Step whose current lightness sits closest to `l`. */
-function nearestStep(curve: Curve, steps: number, l: number): number {
+export function nearestStep(curve: Curve, steps: number, l: number): number {
   const last = Math.max(steps - 1, 1)
   let best = 0
   let bestDistance = Infinity

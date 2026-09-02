@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react'
-import type { Format } from '../color/oklch'
+import type { Format, Gamut } from '../color/oklch'
 import type { PaletteView } from '../state/useDocument'
 import { RampStrip } from './RampStrip'
 
@@ -9,6 +9,7 @@ type Props = {
   count: number
   selected: boolean
   format: Format
+  gamut?: Gamut
   seamless: boolean
   /** Tools are hidden: the stack is being looked at, not edited. */
   bare: boolean
@@ -25,6 +26,7 @@ export function PaletteRow({
   count,
   selected,
   format,
+  gamut = 'srgb',
   seamless,
   bare,
   copiedKey,
@@ -97,6 +99,7 @@ export function PaletteRow({
       <RampStrip
         ramp={palette.ramp}
         format={format}
+        gamut={gamut}
         copiedKey={copiedKey}
         seamless={seamless}
         idPrefix={palette.id}

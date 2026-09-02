@@ -48,7 +48,7 @@ export function Toolbox({ doc, shareHref }: Props) {
           onChange={doc.setBase}
         />
 
-        <label className="field">
+        <label className="field" title="Number of steps across all palettes in the document">
           <span>Steps</span>
           <input
             type="number"
@@ -92,6 +92,19 @@ export function Toolbox({ doc, shareHref }: Props) {
 
         <button
           type="button"
+          disabled={doc.palettes.length < 2}
+          onClick={doc.syncAll}
+          title={
+            doc.palettes.length < 2
+              ? 'Requires at least two palettes in the document'
+              : 'Make all other palettes match this palette’s lightness, chroma, and hue curves'
+          }
+        >
+          Match all curves
+        </button>
+
+        <button
+          type="button"
           disabled={!selected.edited}
           onClick={doc.rederive}
           title="Throw away every curve edit and rebuild this ramp from the base colour"
@@ -110,6 +123,8 @@ export function Toolbox({ doc, shareHref }: Props) {
             lockedIndex={
               selected.config.baseLocked ? selected.config.baseIndex : undefined
             }
+            canSync={doc.palettes.length > 1}
+            onSync={() => doc.syncChannel(key)}
             onChange={(curve: Curve, moved?: CurveControl) => doc.setCurve(key, curve, moved)}
             onEndpoint={(end, value) => doc.setEndpoint(key, end, value)}
             onReset={() => doc.resetCurve(key)}

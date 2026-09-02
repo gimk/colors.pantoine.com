@@ -10,7 +10,7 @@ import {
   type DocumentState,
 } from './document'
 import { restoreDocument, saveDocument } from './storage'
-import { decodeDocument, encodeDocument, encodePalette } from './url'
+import { decodeDocument, decodePalette, encodeDocument, encodePalette, restoreBaseColor } from './url'
 
 const run = (state: DocumentState, ...actions: DocumentAction[]) =>
   actions.reduce(documentReducer, state)
@@ -109,6 +109,94 @@ describe('document', () => {
     expect(renamed.palettes[0].name).toBe('accent')
     expect(renamed.palettes[0].state).toBe(doc.palettes[0].state)
   })
+
+  it('updates steps globally across all palettes in the document', () => {
+    const doc = run(createDocument(), { type: 'new' }, { type: 'new' })
+    expect(doc.palettes).toHaveLength(3)
+    for (const p of doc.palettes) {
+      expect(p.state.config.steps).toBe(11)
+    }
+
+    const changed = run(doc, { type: 'setSteps', value: 7 })
+    for (const p of changed.palettes) {
+      expect(p.state.config.steps).toBe(7)
+    }
+  })
+
+  it('inherits the global step count when creating a new palette', () => {
+    const doc = run(createDocument(), { type: 'setSteps', value: 15 }, { type: 'new' })
+    expect(doc.palettes).toHaveLength(2)
+    expect(doc.palettes[0].state.config.steps).toBe(15)
+    expect(doc.palettes[1].state.config.steps).toBe(15)
+  })
+
+  it('unifies loaded palettes to the document global step count', () => {
+    const mixedSeeds = [
+      { name: 'brand', config: createPalette('#7c3aed', 9) },
+      { name: 'accent', config: createPalette('#facc15', 13) },
+    ]
+    const doc = createDocument(mixedSeeds)
+    expect(doc.palettes[0].state.config.steps).toBe(9)
+    expect(doc.palettes[1].state.config.steps).toBe(9)
+  })
+
+  it('syncs lightness across all palettes and aligns their base steps', () => {
+    const doc = run(createDocument(), { type: 'new' })
+
+    const customCurve = { start: 0.99, end: 0.12, h1: { x: 0.3, y: 0.8 }, h2: { x: 0.7, y: 0.3 } }
+    const withCustom = run(doc, {
+      type: 'palette',
+      action: { type: 'setCurve', key: 'lightness', curve: customCurve },
+    })
+
+    const synced = run(withCustom, { type: 'syncChannel', key: 'lightness' })
+    expect(synced.palettes[0].state.config.lightness).toEqual(customCurve)
+    expect(synced.palettes[1].state.config.lightness).toEqual(customCurve)
+    expect(synced.palettes[0].state.edited.lightness).toBe(true)
+  })
+
+  it('syncs chroma curve across all palettes', () => {
+    const doc = run(createDocument(), { type: 'new' })
+    const customChroma = flat(0.12)
+    const withCustom = run(doc, {
+      type: 'palette',
+      action: { type: 'setCurve', key: 'chroma', curve: customChroma },
+    })
+
+    const synced = run(withCustom, { type: 'syncChannel', key: 'chroma' })
+    expect(synced.palettes[0].state.config.chroma.start).toBeCloseTo(0.12, 4)
+    expect(synced.palettes[0].state.config.chroma.end).toBeCloseTo(0.12, 4)
+    expect(synced.palettes[0].state.edited.chroma).toBe(true)
+  })
+
+  it('syncs hue shift delta curve across palettes', () => {
+    const doc = run(createDocument(), { type: 'new' })
+    const customHue = flat(10)
+    const withCustom = run(doc, {
+      type: 'palette',
+      action: { type: 'setCurve', key: 'hue', curve: customHue },
+    })
+
+    const synced = run(withCustom, { type: 'syncChannel', key: 'hue' })
+    expect(synced.palettes[0].state.config.hue.start).toBeCloseTo(10, 4)
+    expect(synced.palettes[0].state.config.hue.end).toBeCloseTo(10, 4)
+    expect(synced.palettes[0].state.edited.hue).toBe(true)
+  })
+
+  it('syncs all three curves simultaneously with syncAll', () => {
+    const doc = run(createDocument(), { type: 'new' })
+    const synced = run(doc, { type: 'syncAll' })
+    const source = synced.palettes[1].state.config
+    const target = synced.palettes[0].state.config
+    expect(target.lightness).toEqual(source.lightness)
+    expect(target.chroma).toEqual(source.chroma)
+    expect(target.hue).toEqual(source.hue)
+    expect(synced.palettes[0].state.edited).toEqual({
+      lightness: true,
+      chroma: true,
+      hue: true,
+    })
+  })
 })
 
 describe('document links', () => {
@@ -149,6 +237,30 @@ describe('document links', () => {
   it('returns nothing for an empty hash', () => {
     expect(decodeDocument('')).toEqual([])
     expect(decodeDocument('#')).toEqual([])
+  })
+
+  it('adds # only when necessary when reloading base color from save', () => {
+    // Bare hex codes should have # restored
+    expect(restoreBaseColor('7c3aed')).toBe('#7c3aed')
+    expect(restoreBaseColor('f0a')).toBe('#f0a')
+    expect(restoreBaseColor('7c3aedff')).toBe('#7c3aedff')
+    expect(restoreBaseColor('#7c3aed')).toBe('#7c3aed')
+
+    // CSS color formats must NOT have # added
+    expect(restoreBaseColor('oklch(0.6 0.15 240)')).toBe('oklch(0.6 0.15 240)')
+    expect(restoreBaseColor('rgb(255 0 0)')).toBe('rgb(255 0 0)')
+    expect(restoreBaseColor('hsl(120 50% 50%)')).toBe('hsl(120 50% 50%)')
+    expect(restoreBaseColor('color(display-p3 1 0 0)')).toBe('color(display-p3 1 0 0)')
+    expect(restoreBaseColor('rebeccapurple')).toBe('rebeccapurple')
+  })
+
+  it('preserves oklch base color when encoding and decoding palette', () => {
+    const oklchPalette = createPalette('oklch(0.6 0.15 240)')
+    const encoded = encodePalette(oklchPalette, 'vibrant')
+    const decoded = decodePalette(encoded)
+    expect(decoded).not.toBeNull()
+    expect(decoded!.config.base).toBe('oklch(0.6 0.15 240)')
+    expect(decoded!.config.base.startsWith('#')).toBe(false)
   })
 })
 

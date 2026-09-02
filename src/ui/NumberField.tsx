@@ -12,6 +12,27 @@ type Props = {
   onCommit: (value: number) => void
 }
 
+export function parseNumberInput(raw: string): number | null {
+  const normalized = raw.trim().replace(',', '.')
+  if (
+    normalized === '' ||
+    normalized === '-' ||
+    normalized === '.' ||
+    normalized === '-.' ||
+    normalized.endsWith('.')
+  ) {
+    return null
+  }
+  const parsed = Number.parseFloat(normalized)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+export function parseNumberCommit(raw: string): number | null {
+  const normalized = raw.trim().replace(',', '.')
+  const parsed = Number.parseFloat(normalized)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 /**
  * A number input that lets you finish typing.
  *
@@ -37,6 +58,13 @@ export function NumberField({
     if (!focused.current) setDraft(value.toFixed(decimals))
   }, [value, decimals])
 
+  const commitIfValid = (raw: string) => {
+    const parsed = parseNumberInput(raw)
+    if (parsed !== null) {
+      onCommit(parsed)
+    }
+  }
+
   return (
     <label className="field" title={title}>
       <span>{label}</span>
@@ -45,6 +73,8 @@ export function NumberField({
         min={min}
         max={max}
         step={step}
+        lang="en"
+        inputMode="decimal"
         disabled={disabled}
         value={draft}
         onFocus={() => {
@@ -52,12 +82,37 @@ export function NumberField({
         }}
         onBlur={() => {
           focused.current = false
-          setDraft(value.toFixed(decimals))
+          const parsed = parseNumberCommit(draft)
+          if (parsed !== null) {
+            const clamped = Math.min(max, Math.max(min, parsed))
+            onCommit(clamped)
+            setDraft(clamped.toFixed(decimals))
+          } else {
+            setDraft(value.toFixed(decimals))
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.currentTarget.blur()
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault()
+            const delta = event.shiftKey ? step * 10 : step
+            const current = parseNumberCommit(draft) ?? value
+            const next = Math.min(max, Math.max(min, current + delta))
+            onCommit(next)
+            setDraft(next.toFixed(decimals))
+          } else if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            const delta = event.shiftKey ? step * 10 : step
+            const current = parseNumberCommit(draft) ?? value
+            const next = Math.min(max, Math.max(min, current - delta))
+            onCommit(next)
+            setDraft(next.toFixed(decimals))
+          }
         }}
         onChange={(event) => {
           setDraft(event.target.value)
-          const parsed = Number.parseFloat(event.target.value)
-          if (Number.isFinite(parsed)) onCommit(parsed)
+          commitIfValid(event.target.value)
         }}
       />
     </label>
