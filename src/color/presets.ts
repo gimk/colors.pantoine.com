@@ -13,7 +13,7 @@ import {
   type CurveControl,
 } from './curve'
 import { maxChromaFor } from './gamut'
-import { parseToOklch, type Oklch } from './oklch'
+import { parseToOklch, type Gamut, type Oklch } from './oklch'
 
 /** The three channels a palette shapes. */
 export type CurveKey = ChannelKey
@@ -134,8 +134,12 @@ export function lightnessCurveFor(
 /**
  * A chroma curve for a ramp whose lightness is already decided.
  *
- * Holds a constant fraction of the chroma sRGB can actually provide at each
- * step. The ceiling has to be sampled at every step rather than interpolated
+ * Holds a constant fraction of the chroma the target gamut can actually
+ * provide at each step, which is why the gamut has to reach this far in: on
+ * a P3 or Rec. 2020 palette the ceiling is a different shape, and a curve
+ * derived against sRGB's would leave most of the display unused.
+ *
+ * The ceiling has to be sampled at every step rather than interpolated
  * between the ends: it is strongly curved in L, rising to a peak and falling
  * away, so a straight line between the two endpoint ceilings sails clean over
  * the top of it and the whole middle of the ramp clips.
@@ -149,15 +153,16 @@ export function chromaCurveFor(
   steps: number,
   index: number,
   lightness: Curve,
+  gamut: Gamut = 'srgb',
 ): Curve {
   const channel = CHANNELS.chroma
   const last = Math.max(steps - 1, 1)
   const x = baseX(steps, index)
 
   const ceilings = Array.from({ length: steps }, (_, i) =>
-    maxChromaFor(sampleCurve(lightness, i / last), base.h),
+    maxChromaFor(sampleCurve(lightness, i / last), base.h, gamut),
   )
-  const ceilingAtBase = maxChromaFor(base.l, base.h)
+  const ceilingAtBase = maxChromaFor(base.l, base.h, gamut)
   const share = ceilingAtBase > 0 ? clamp(base.c / ceilingAtBase, 0, 1) : 0
   const targets = ceilings.map((ceiling) => clamp(share * ceiling, channel.min, channel.max))
 
@@ -176,11 +181,12 @@ export function defaultCurves(
   base: Oklch,
   steps: number,
   baseIndex: number,
+  gamut: Gamut = 'srgb',
 ): Pick<PaletteConfig, 'lightness' | 'chroma' | 'hue'> {
   const lightness = lightnessCurveFor(base, steps, baseIndex)
   return {
     lightness,
-    chroma: chromaCurveFor(base, steps, baseIndex, lightness),
+    chroma: chromaCurveFor(base, steps, baseIndex, lightness, gamut),
     hue: flat(0),
   }
 }
@@ -219,7 +225,11 @@ export function holdBase(
 
 export const FALLBACK_BASE = '#7c3aed'
 
-export function createPalette(input: string, steps = DEFAULT_STEPS): PaletteConfig {
+export function createPalette(
+  input: string,
+  steps = DEFAULT_STEPS,
+  gamut: Gamut = 'srgb',
+): PaletteConfig {
   const base = parseToOklch(input) ?? parseToOklch(FALLBACK_BASE)!
   const baseIndex = baseIndexFor(base, steps)
   return {
@@ -227,6 +237,6 @@ export function createPalette(input: string, steps = DEFAULT_STEPS): PaletteConf
     baseIndex,
     baseLocked: false,
     steps,
-    ...defaultCurves(base, steps, baseIndex),
+    ...defaultCurves(base, steps, baseIndex, gamut),
   }
 }

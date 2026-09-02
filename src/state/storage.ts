@@ -1,4 +1,11 @@
-import { decodeDocument, encodeDocument, encodePalette, type DecodedPalette } from './url'
+import type { Gamut } from '../color/oklch'
+import {
+  decodeDocument,
+  decodeGamut,
+  encodeDocument,
+  encodePalette,
+  type DecodedPalette,
+} from './url'
 
 /**
  * The document survives a reload in localStorage.
@@ -6,14 +13,15 @@ import { decodeDocument, encodeDocument, encodePalette, type DecodedPalette } fr
  * What is stored is the same hash string a share link carries, so there is one
  * deserialiser to trust rather than two: anything that can open a mangled link
  * can open mangled storage. Only the selection is stored alongside it, as an
- * index, because palette ids are per-session handles and mean nothing later.
+ * index, because palette ids are per-session handles and mean nothing later —
+ * the gamut travels inside the hash, since a link has to carry it too.
  */
 
 const KEY = 'colors.pantoine.com/v1'
 
 type Stored = { v: number; hash: string; selected: number }
 
-export type Restored = { seeds: DecodedPalette[]; selected: number }
+export type Restored = { seeds: DecodedPalette[]; selected: number; gamut: Gamut }
 
 const segmentOf = (seed: DecodedPalette) => encodePalette(seed.config, seed.name)
 
@@ -29,6 +37,7 @@ function readStored(): Restored | null {
     const selected = Number(parsed.selected)
     return {
       seeds,
+      gamut: decodeGamut(parsed.hash),
       selected: Number.isInteger(selected) && selected >= 0 && selected < seeds.length
         ? selected
         : seeds.length - 1,
@@ -38,9 +47,13 @@ function readStored(): Restored | null {
   }
 }
 
-export function saveDocument(palettes: DecodedPalette[], selected: number): void {
+export function saveDocument(
+  palettes: DecodedPalette[],
+  selected: number,
+  gamut: Gamut = 'srgb',
+): void {
   try {
-    const value: Stored = { v: 1, hash: encodeDocument(palettes), selected }
+    const value: Stored = { v: 1, hash: encodeDocument(palettes, gamut), selected }
     window.localStorage.setItem(KEY, JSON.stringify(value))
   } catch {
     // Full, disabled, or a private window. Autosave is a convenience, and the
@@ -58,19 +71,25 @@ export function saveDocument(palettes: DecodedPalette[], selected: number): void
  * holds the whole document — keep the palette you were editing.
  */
 export function restoreDocument(hash: string): Restored {
-  if (typeof window === 'undefined') return { seeds: [], selected: 0 }
+  if (typeof window === 'undefined') return { seeds: [], selected: 0, gamut: 'srgb' }
 
   const stored = readStored()
   const shared = decodeDocument(hash)
+  const sharedGamut = decodeGamut(hash)
 
-  if (!shared.length) return stored ?? { seeds: [], selected: 0 }
-  if (!stored) return { seeds: shared, selected: shared.length - 1 }
+  if (!shared.length) return stored ?? { seeds: [], selected: 0, gamut: 'srgb' }
+  if (!stored) return { seeds: shared, selected: shared.length - 1, gamut: sharedGamut }
 
   const have = new Set(stored.seeds.map(segmentOf))
   const added = shared.filter((seed) => !have.has(segmentOf(seed)))
   if (!added.length) return stored
 
   // Land on the first palette the link brought, which is the one the person
-  // who sent it meant you to look at.
-  return { seeds: [...stored.seeds, ...added], selected: stored.seeds.length }
+  // who sent it meant you to look at — and in the gamut they made it in, or
+  // the palettes they sent would not be the colours they saw.
+  return {
+    seeds: [...stored.seeds, ...added],
+    selected: stored.seeds.length,
+    gamut: sharedGamut,
+  }
 }

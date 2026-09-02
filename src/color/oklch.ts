@@ -1,8 +1,8 @@
-import { converter, formatCss, formatHex, inGamut, parse, toGamut } from 'culori'
+import { converter, formatCss, formatHex, parse, toGamut } from 'culori'
 
 export type Oklch = { l: number; c: number; h: number }
 
-export type Gamut = 'srgb' | 'p3' | 'a98' | 'rec2020'
+export type Gamut = 'srgb' | 'p3' | 'a98' | 'rec2020' | 'oklab'
 
 export type GamutOption = {
   id: Gamut
@@ -14,7 +14,21 @@ export const GAMUTS: GamutOption[] = [
   { id: 'p3', label: 'Display P3' },
   { id: 'a98', label: 'Adobe RGB' },
   { id: 'rec2020', label: 'Rec. 2020' },
+  { id: 'oklab', label: 'OKLab' },
 ]
+
+export function isGamut(value: string | null | undefined): value is Gamut {
+  return value != null && GAMUTS.some((option) => option.id === value)
+}
+
+export function parseGamut(value: string | null | undefined): Gamut | null {
+  if (!value) return null
+  if (isGamut(value)) return value
+  const match = GAMUTS.find(
+    (option) => option.label.toLowerCase() === value.toLowerCase(),
+  )
+  return match?.id ?? null
+}
 
 export function gamutLabel(gamut: Gamut): string {
   switch (gamut) {
@@ -26,10 +40,13 @@ export function gamutLabel(gamut: Gamut): string {
       return 'Adobe RGB'
     case 'rec2020':
       return 'Rec. 2020'
+    case 'oklab':
+      return 'OKLab'
   }
 }
 
 const toOklch = converter('oklch')
+const toOklab = converter('oklab')
 const toRgb = converter('rgb')
 const toP3 = converter('p3')
 const toA98 = converter('a98')
@@ -44,6 +61,17 @@ const toRec2020 = converter('rec2020')
  */
 const CHANNEL_TOLERANCE = 0.5 / 255
 
+/**
+ * Hold L and H, reduce chroma until the colour fits the target gamut.
+ *
+ * Deliberately *not* the CSS Color 4 default. That algorithm accepts a
+ * candidate that is only "roughly" in gamut and lets the final channel clip
+ * finish the job, which measured up to 9° of hue drift on saturated colours
+ * in exchange for about 0.001 of chroma. In a tool whose whole point is
+ * steering hue, an unrequested 9° shift is unacceptable and a hair less
+ * chroma is something the chroma curve can answer for. Passing jnd = 0
+ * makes the search strict, holding hue to within half a degree.
+ */
 const srgbMap = toGamut('rgb', 'oklch', null, 0)
 const p3Map = toGamut('p3', 'oklch', null, 0)
 const a98Map = toGamut('a98', 'oklch', null, 0)
@@ -60,10 +88,12 @@ function convertToGamut(color: Oklch, gamut: Gamut) {
       return toA98(c)
     case 'rec2020':
       return toRec2020(c)
+    case 'oklab':
+      return toOklab(c)
   }
 }
 
-function mapGamutColor(color: Oklch, gamut: Gamut) {
+function mapGamutColor(color: Oklch, gamut: Exclude<Gamut, 'oklab'>) {
   const c = { mode: 'oklch' as const, ...color }
   switch (gamut) {
     case 'srgb':
@@ -77,10 +107,31 @@ function mapGamutColor(color: Oklch, gamut: Gamut) {
   }
 }
 
-/** Check gamut inclusion using culori's exact inGamut check. */
-export function culoriInGamut(color: Oklch, gamut: Gamut = 'srgb'): boolean {
-  const mode = gamut === 'srgb' ? 'rgb' : gamut
-  return inGamut(mode)({ mode: 'oklch', ...color })
+/** Four decimals is finer than a 16-bit step, and keeps a copied `color()` readable. */
+const CHANNEL_PLACES = 4
+
+/**
+ * Round the channels of an already-mapped colour and settle them into range.
+ *
+ * The strict search lands exactly on the gamut boundary, which leaves float
+ * dust behind (-1.2e-14 for a channel that means 0, 1.0000000000000002 for
+ * one that means 1) and `formatCss` would print every digit of it. This is
+ * not the naive clip the strict map exists to avoid: the colour is already
+ * inside the gamut, and all that is being removed is the dust.
+ */
+function settle<T extends { mode: string; r: number; g: number; b: number }>(color: T): T {
+  const fix = (n: number) => Math.min(1, Math.max(0, Number(n.toFixed(CHANNEL_PLACES))))
+  return { ...color, r: fix(color.r), g: fix(color.g), b: fix(color.b) }
+}
+
+function settleLab<T extends { l: number; a: number; b: number }>(color: T): T {
+  const fix = (n: number) => Number(n.toFixed(CHANNEL_PLACES))
+  return {
+    ...color,
+    l: Math.min(1, Math.max(0, fix(color.l))),
+    a: fix(color.a),
+    b: fix(color.b),
+  }
 }
 
 /** Parse anything CSS accepts (hex, rgb(), hsl(), oklch(), named) into OKLCH. */
@@ -94,8 +145,11 @@ export function parseToOklch(input: string): Oklch | null {
 
 /** Check whether an OKLCH color fits in the specified gamut within channel tolerance. */
 export function isInGamut(color: Oklch, gamut: Gamut = 'srgb'): boolean {
+  if (gamut === 'oklab') {
+    return color.l >= -CHANNEL_TOLERANCE && color.l <= 1 + CHANNEL_TOLERANCE && color.c >= 0
+  }
   const c = convertToGamut(color, gamut)
-  if (!c) return false
+  if (!c || !('r' in c)) return false
   const lo = -CHANNEL_TOLERANCE
   const hi = 1 + CHANNEL_TOLERANCE
   return c.r >= lo && c.r <= hi && c.g >= lo && c.g <= hi && c.b >= lo && c.b <= hi
@@ -117,7 +171,30 @@ export function toHex(color: Oklch): string {
  */
 export const CHROMA_JND = 0.004
 
+/**
+ * CSS Color 4 `color()` notation for the colour as the target gamut shows it.
+ *
+ * The one output that can carry a wide-gamut colour intact: hex, rgb() and
+ * hsl() are all sRGB by definition, so on a P3 palette they are the sRGB
+ * rendition of what is on screen, not what is on screen.
+ */
+export function toColorCss(color: Oklch, gamut: Gamut = 'srgb'): string {
+  if (gamut === 'oklab') {
+    const oklabColor = toOklab({ mode: 'oklch', ...color })
+    if (oklabColor) {
+      return formatCss(settleLab(oklabColor)) ?? formatColor(color, 'oklch')
+    }
+    return formatColor(color, 'oklch')
+  }
+  return formatCss(settle(mapGamutColor(color, gamut))) ?? toHex(color)
+}
+
 export type Mapped = {
+  /**
+   * Nearest sRGB hex, whatever the target gamut. Wide-gamut colours have no
+   * hex, so this is the sRGB rendition — reached by the same strict map, not
+   * by clipping the wide-gamut channels, which would drift the hue.
+   */
   hex: string
   /** CSS string suitable for element background (hex for sRGB, color(display-p3 ...) for P3, etc.). */
   displayColor: string
@@ -131,11 +208,23 @@ export type Mapped = {
 
 /** Map to the target gamut and report displayable CSS color and chroma cost. */
 export function mapToGamut(color: Oklch, gamut: Gamut = 'srgb'): Mapped {
+  if (gamut === 'oklab') {
+    return {
+      hex: toHex(color),
+      displayColor: toColorCss(color, 'oklab'),
+      chroma: color.c,
+      chromaLost: 0,
+      clipped: false,
+    }
+  }
   const mapped = mapGamutColor(color, gamut)
   const chroma = toOklch(mapped)?.c ?? 0
   const chromaLost = Math.max(0, color.c - chroma)
-  const hex = formatHex(mapped) ?? '#000000'
-  const displayColor = gamut === 'srgb' ? hex : formatCss(mapped) ?? hex
+  // Not `formatHex(mapped)`: on a wide-gamut value that clamps the channels,
+  // which is the hue-drifting clip the strict map exists to avoid, and `hex`
+  // is what every export writes. Map the request to sRGB properly instead.
+  const hex = toHex(color)
+  const displayColor = gamut === 'srgb' ? hex : toColorCss(color, gamut)
 
   return {
     hex,
@@ -166,14 +255,21 @@ export function normalizeHue(h: number): number {
 
 // --- formatting -------------------------------------------------------------
 
-export type Format = 'hex' | 'oklch' | 'rgb' | 'hsl'
+export type Format = 'hex' | 'oklch' | 'rgb' | 'hsl' | 'color()'
 
-export const FORMATS: Format[] = ['hex', 'oklch', 'rgb', 'hsl']
+export const FORMATS: Format[] = ['hex', 'oklch', 'rgb', 'hsl', 'color()']
 
-export function formatColor(color: Oklch, format: Format): string {
+/**
+ * `gamut` only reaches `color()`. Every other format is sRGB by definition,
+ * and `oklch` prints the request, so none of them can say anything about the
+ * gamut the palette is being viewed in.
+ */
+export function formatColor(color: Oklch, format: Format, gamut: Gamut = 'srgb'): string {
   switch (format) {
     case 'hex':
       return toHex(color)
+    case 'color()':
+      return toColorCss(color, gamut)
     case 'oklch': {
       // Printed from the requested values, not the gamut-mapped ones, so the
       // string says what the curves asked for. Wide-gamut displays honour it.

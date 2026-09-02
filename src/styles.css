@@ -2,17 +2,53 @@
    Every drop of colour in this UI belongs to the palette, not the frame. */
 
 :root {
+  /* Colors */
   --ink: #000;
   --paper: #fff;
   --rule: #000;
-  --muted: #767676;
+  --muted: #626262;
   --grid: #e4e4e4;
+
+  /* Typography scale */
   --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  --text-2xs: 9px;
+  --text-xs: 10px;
+  --text-sm: 11px;
+  --text-base: 12px;
+  --text-md: 13px;
+
+  /* Letter spacing */
+  --tracking-normal: 0;
+  --tracking-tight: 0.06em;
+  --tracking-wide: 0.08em;
+  --tracking-wider: 0.1em;
+  --tracking-widest: 0.12em;
+  --tracking-pill: 0.14em;
+
+  /* Spacing system (8pt derived) */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 16px;
+  --space-8: 20px;
+  --space-9: 24px;
+
   color-scheme: light;
 }
 
 * {
   box-sizing: border-box;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 html,
@@ -21,9 +57,17 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--text-base);
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 button,
@@ -35,18 +79,6 @@ select {
   border: 1px solid var(--rule);
   border-radius: 0;
   padding: 4px 6px;
-}
-
-/* Hide browser native spin buttons that steal space and clip digits */
-input[type='number']::-webkit-inner-spin-button,
-input[type='number']::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-input[type='number'] {
-  -moz-appearance: textfield;
-  appearance: textfield;
 }
 
 button {
@@ -64,7 +96,11 @@ button:hover:not(:disabled) {
 button:disabled {
   color: var(--muted);
   border-color: var(--muted);
-  cursor: default;
+  cursor: not-allowed;
+}
+
+select {
+  cursor: pointer;
 }
 
 :focus-visible {
@@ -72,43 +108,94 @@ button:disabled {
   outline-offset: 1px;
 }
 
+/* Full width, and the padding lives on the sections rather than here, so the
+   two sticky bars can span the window edge to edge and stay opaque while the
+   palettes scroll behind them.
+
+   At least a windowful tall, as a column, with the stack taking the slack.
+   `position: sticky` only has somewhere to stick while its container runs past
+   the foot of the window: with a short stack the shell ended above the fold
+   and the dock came to rest in the middle of the screen, over a band of bare
+   body. Growing the stack instead pins the dock to the bottom at any length,
+   and the spare room reads as empty canvas above it — which is where the next
+   palette goes. */
 .app {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* --- header ---------------------------------------------------------- */
 
 .masthead {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
+  align-items: center;
+  gap: var(--space-5);
   border-bottom: 2px solid var(--rule);
-  padding-bottom: 8px;
+  padding: var(--space-5) var(--space-7);
 }
 
 .masthead h1 {
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: var(--tracking-widest);
   text-transform: uppercase;
   margin: 0;
 }
 
-.masthead p {
-  margin: 0;
+/* Square, so the glyph sits centred: the base button rule's letter-spacing
+   pushes a single character off to the left. Sized to match control height. */
+.help__open {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  letter-spacing: 0;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Native <dialog>: `showModal` gives focus trapping, Escape, and an inert
+   background for nothing. No padding of its own, so the panel covers its box
+   entirely and a click landing on the dialog itself can only be the
+   backdrop. */
+.help {
+  border: 1px solid var(--rule);
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  width: min(60ch, calc(100vw - 32px));
+}
+
+.help::backdrop {
+  background: rgb(0 0 0 / 0.55);
+}
+
+.help__body {
+  padding: var(--space-6);
+}
+
+.help__body p {
+  margin: 0 0 var(--space-4);
   color: var(--muted);
-  max-width: 46ch;
+  line-height: 1.55;
+}
+
+.help__body p:last-child {
+  margin-bottom: 0;
 }
 
 .badge {
   border: 1px solid var(--rule);
   padding: 2px 6px;
-  letter-spacing: 0.14em;
+  letter-spacing: var(--tracking-pill);
   text-transform: uppercase;
   white-space: nowrap;
+  font-size: var(--text-2xs);
+  line-height: 1;
 }
 
 .badge--solid {
@@ -118,26 +205,54 @@ button:disabled {
 
 /* --- control bar ----------------------------------------------------- */
 
+/* Pinned to the top of the window: undo, the step count and the gamut are
+   wanted at any scroll position, and the stack can be long. Opaque, or the
+   ramps would read through it. */
 .controls {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 20px;
+  gap: var(--space-4) var(--space-7);
   border-bottom: 1px solid var(--rule);
-  padding: 10px 0;
+  padding: var(--space-5) var(--space-7);
+  background: var(--paper);
+}
+
+.controls__group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.divider {
+  width: 1px;
+  height: 18px;
+  background: var(--rule);
+  align-self: center;
+  flex-shrink: 0;
 }
 
 .field {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
 }
 
 .field > label,
 .legend {
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--tracking-wider);
   color: var(--muted);
+  font-size: var(--text-base);
+}
+
+.field--checkbox {
+  cursor: pointer;
+  user-select: none;
 }
 
 .field input[type='text'] {
@@ -145,9 +260,13 @@ button:disabled {
   text-transform: lowercase;
 }
 
-.field input[type='number'] {
+/* Numeric fields are text inputs — a number input's own sanitiser eats a
+   comma decimal, and its spinner clipped the digits — so they are named
+   rather than selected by type. */
+.field input.number {
   width: 8ch;
   min-width: 58px;
+  text-transform: none;
 }
 
 .field input.invalid {
@@ -155,22 +274,25 @@ button:disabled {
   color: #b00;
 }
 
-/* Native colour picker, squared off and flush with the text field. */
+/* The swatch that opens the picker, squared off and flush with the text
+   field. A button rather than an `input[type=color]`: the system picker
+   speaks sRGB hex only, so on a wide-gamut document it cannot express the
+   colour being designed for.
+
+   Its background is set inline to the colour in hand, which outranks the
+   button hover rule — inverting a colour swatch would misreport it — so the
+   hover affordance is an outline instead. */
 .picker {
   width: 26px;
   height: 26px;
   padding: 0;
   border: 1px solid var(--rule);
-  background: none;
   cursor: pointer;
 }
 
-.picker::-webkit-color-swatch-wrapper {
-  padding: 2px;
-}
-
-.picker::-webkit-color-swatch {
-  border: none;
+.picker:hover {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
 }
 
 .spacer {
@@ -203,24 +325,13 @@ button.swatch:hover:not(:disabled) {
   color: inherit;
 }
 
+/* No rules around the chips, deliberately and permanently. A 1px black line
+   changes how the eye reads the two colours it separates, which is exactly
+   the judgement this tool exists to support — so the steps meet edge to edge
+   and nothing stands between them. */
 .swatch__chip {
   position: relative;
   height: 116px;
-  border: 1px solid var(--rule);
-  border-right: none;
-  border-bottom: none;
-}
-
-.swatch:last-child .swatch__chip {
-  border-right: 1px solid var(--rule);
-}
-
-/* A 1px black line changes how the eye reads the two colours it separates,
-   so being able to drop it matters for judging a ramp. Held as transparent
-   rather than removed, so toggling does not reflow the strip. */
-.ramp--seamless .swatch__chip,
-.ramp--seamless .swatch:last-child .swatch__chip {
-  border-color: transparent;
 }
 
 /* Corner tick: the curves asked for more chroma than sRGB can show. */
@@ -269,6 +380,11 @@ button.swatch:hover:not(:disabled) {
   white-space: nowrap;
 }
 
+.swatch__value--unavailable {
+  color: var(--muted);
+  opacity: 0.55;
+}
+
 .swatch__sub {
   color: var(--muted);
   font-size: 10px;
@@ -281,12 +397,49 @@ button.swatch:hover:not(:disabled) {
   text-transform: uppercase;
 }
 
+/* Where the copy is acknowledged once the label cells are away. Centred in
+   the chip and boxed, so it lands on any colour: a knocked-out word alone
+   would vanish against a step of its own lightness. */
+.swatch__flash {
+  position: absolute;
+  inset: 50% 0 auto;
+  transform: translateY(-50%);
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 2px 0;
+  background: var(--ink);
+  color: var(--paper);
+}
+
 /* --- curve panels ---------------------------------------------------- */
 
 .curves {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: 1fr 1fr 1fr minmax(200px, 240px);
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+@media (max-width: 1100px) {
+  .curves {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .curves > :last-child {
+    grid-column: 1 / -1;
+    max-width: 320px;
+  }
+}
+
+@media (max-width: 768px) {
+  .curves {
+    grid-template-columns: 1fr;
+  }
+  .curves > :last-child {
+    grid-column: 1;
+    max-width: 100%;
+  }
 }
 
 .panel {
@@ -299,49 +452,52 @@ button.swatch:hover:not(:disabled) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-5);
   border-bottom: 1px solid var(--rule);
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-4);
 }
 
 .panel__title {
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--tracking-wider);
 }
 
 .panel__axis {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 
 .panel__row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   border-bottom: 1px solid var(--rule);
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-4);
   flex-wrap: wrap;
 }
 
-.panel__row input {
+.panel__row input,
+.panel__row .field input.number {
   width: 7ch;
+  min-width: 0;
 }
 
 .panel__row .field {
-  gap: 4px;
+  gap: var(--space-2);
 }
 
 .panel__actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   margin-left: auto;
 }
 
 .panel__actions button {
-  font-size: 11px;
+  font-size: var(--text-sm);
   padding: 3px 6px;
+  height: 24px;
 }
 
 .graph {
@@ -400,24 +556,211 @@ button.swatch:hover:not(:disabled) {
 
 .graph__label {
   fill: var(--muted);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-family: var(--mono);
 }
 
-/* --- footnote -------------------------------------------------------- */
+/* --- colour picker --------------------------------------------------- */
 
-.footnote {
-  margin: 20px 0 0;
-  border-top: 1px solid var(--rule);
-  padding-top: 8px;
+/* Floating dialog positioned adjacent to the picker button.
+   Zero dark backdrop overlay so the canvas and swatches remain fully visible. */
+.cdialog {
+  position: fixed;
+  margin: 0;
+  inset: auto;
+  border: 1px solid var(--rule);
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  width: min(420px, calc(100vw - 32px));
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.2), 0 0 0 1px var(--rule);
+  z-index: 100;
+}
+
+.cdialog::backdrop {
+  background: transparent;
+}
+
+/* Every child here is a fixed height, and has to stay that way. The dialog
+   is centred, so anything that appears or vanishes mid-drag — a clipping
+   warning was the first attempt — re-centres the whole modal and shifts the
+   plot out from under the pointer. Out-of-gamut is reported inside the plot
+   instead, where it costs no layout. */
+.cpick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  box-sizing: border-box;
+}
+
+body.is-dragging-plot,
+body.is-dragging-plot * {
+  cursor: crosshair !important;
+  user-select: none !important;
+}
+
+body.is-dragging-hue,
+body.is-dragging-hue * {
+  cursor: ew-resize !important;
+  user-select: none !important;
+}
+
+/* Blocks, so the width the wrapper measures is the width these are given.
+   `touch-action: none` because both drags are ours: without it a drag on a
+   touchscreen scrolls the dialog instead of moving the marker.
+   All child markers and overlays have pointer-events: none so the pointer target
+   and cursor never oscillate or blink during a drag. */
+.cpick__plot,
+.cpick__hue {
+  display: block;
+  width: 100%;
+  touch-action: none;
+  user-select: none;
+}
+
+.cpick__plot {
+  cursor: crosshair;
+}
+
+.cpick__hue {
+  cursor: ew-resize;
+}
+
+.cpick__plot *,
+.cpick__hue * {
+  pointer-events: none;
+}
+
+.cpick__frame {
+  fill: none;
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+/* The exact gamut edge, drawn over the staircase of rows that approximates
+   it — the whole reason the slice is worth showing. */
+.cpick__edge {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+
+/* Always sits on the most saturated colour there is at this hue, so a paper
+   ring reads against it on either canvas. */
+.cpick__cusp {
+  fill: none;
+  stroke: var(--paper);
+  stroke-width: 2;
+}
+
+.cpick__spill {
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+
+.cpick__lands {
+  fill: none;
+  stroke: var(--paper);
+  stroke-width: 2;
+}
+
+/* Two rings, paper under ink, so the marker holds up on any colour beneath
+   it — including the near-white and near-black corners of the slice. */
+.cpick__halo {
+  fill: none;
+  stroke: var(--paper);
+  stroke-width: 3;
+}
+
+.cpick__marker {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.cpick__fields {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.cpick__fields .field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.cpick__fields .field input.number {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+/* The colour as a full-width band with its values beneath, rather than a
+   swatch beside them: it gives the pick real presence, and it leaves the
+   corner label room for the longest gamut name there is. */
+.cpick__out {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rule);
+  width: 100%;
+}
+
+.cpick__preview {
+  position: relative;
+  height: 48px;
+  border-bottom: 1px solid var(--rule);
+  width: 100%;
+}
+
+/* Ink on paper, as the ramp's own base label is: it lands on a colour the
+   eye is judging, so it cannot be a tint of one. */
+.cpick__clipped {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 1px 5px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cpick__values {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-2) var(--space-4);
+}
+
+.cpick__values code {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.cpick__hex {
   color: var(--muted);
+  font-size: var(--text-xs);
+  flex-shrink: 0;
+}
+
+.cpick__hex--unavailable {
+  opacity: 0.45;
 }
 
 /* --- export ---------------------------------------------------------- */
 
 .export__group {
   border-bottom: 1px solid var(--rule);
-  padding: 8px;
+  padding: var(--space-4);
 }
 
 .export__group:last-of-type {
@@ -426,52 +769,157 @@ button.swatch:hover:not(:disabled) {
 
 .export__group > .legend {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-3);
 }
 
 .export__buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-2);
+}
+
+.export__btn--unavailable {
+  color: var(--muted);
+  opacity: 0.65;
 }
 
 .panel__row--flush {
   border-bottom: none;
-  padding: 0 0 8px;
+  padding: 0 0 var(--space-4);
 }
 
 .export__hint {
-  margin: 8px 0 0;
+  margin: var(--space-4) 0 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+/* The export panel is a column, and the drawer takes whatever height is left
+   in it rather than asking for more.
+
+   Opening the drawer used to grow the grid row, which pushed the dock taller
+   and stretched the three curve panels beside it over empty space. Capped
+   here instead: the cap only bites when the row would otherwise exceed it,
+   which tracks the curve panels' own height — a 190px graph plus two rows and
+   a head. Past that the drawer scrolls. */
+.export {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 298px;
+  overflow: hidden;
+}
+
+.export > .drawer,
+.export > .drawer[open] {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.export > .drawer::details-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.drawer__body {
+  flex: 1;
+  min-height: 0;
+  max-height: 165px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.drawer__body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* --- drawer ----------------------------------------------------------- */
+
+/* Situational exports, folded away. The marker is a plain +/− because the
+   chrome has no other glyphs in it — a disclosure triangle would be the only
+   drawn shape in the whole frame. */
+.drawer > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  border-top: 1px solid var(--rule);
+  padding: var(--space-4);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.drawer > summary::-webkit-details-marker {
+  display: none;
+}
+
+.drawer > summary::after {
+  content: '+';
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.drawer[open] > summary {
+  border-bottom: 1px solid var(--rule);
+}
+
+.drawer[open] > summary::after {
+  content: '–';
+}
+
+.drawer > summary:hover {
+  background: var(--ink);
+}
+
+.drawer > summary:hover .legend,
+.drawer > summary:hover::after {
+  color: var(--paper);
 }
 
 .field input[type='checkbox'] {
-  width: 13px;
+  width: 14px;
+  height: 14px;
   padding: 0;
-  height: 13px;
   margin: 0;
   accent-color: var(--ink);
+  cursor: pointer;
 }
 
 .panel__row--shapes {
-  gap: 4px;
+  gap: var(--space-2);
 }
 
 .panel__row--shapes .legend {
-  margin-right: 4px;
+  margin-right: var(--space-2);
 }
 
 /* --- dark canvas ------------------------------------------------------ */
 
 /* Not a theme so much as a second ground: the same ramp reads differently
-   against black, and a designer needs to judge it both ways. */
+   against black, and a designer needs to judge it both ways.
+
+   Pulled back from pure #fff on pure #000. At full contrast the white rules
+   glared, and every one of them borders a colour the eye is trying to judge —
+   the frame was competing with the palette. An off-white on a soft near-black,
+   with lines a clear step below the text, keeps the chrome legible and lets
+   the swatches be the brightest thing on screen. */
 :root[data-canvas='dark'] {
-  --ink: #fff;
-  --paper: #0a0a0a;
-  --rule: #fff;
-  --muted: #8a8a8a;
-  --grid: #262626;
+  --ink: #e6e6e8;
+  --paper: #000000;
+  --rule: #7a7a82;
+  --muted: #a4a4ac;
+  --grid: #2b2b30;
   color-scheme: dark;
 }
 
@@ -480,6 +928,24 @@ button.swatch:hover:not(:disabled) {
 button.is-on {
   background: var(--ink);
   color: var(--paper);
+}
+
+button.is-on:hover:not(:disabled) {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* Filled standing, not as a state: the one control in the bar that adds to
+   the document rather than adjusting it. `is-on` would be the wrong word for
+   it — nothing is toggled. */
+button.is-primary {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+button.is-primary:hover:not(:disabled) {
+  background: var(--paper);
+  color: var(--ink);
 }
 
 .graph__lock {
@@ -498,7 +964,8 @@ button.is-on {
   fill: var(--muted);
 }
 
-input:disabled {
+input:disabled,
+select:disabled {
   color: var(--muted);
   border-color: var(--muted);
   cursor: not-allowed;
@@ -510,12 +977,17 @@ input:disabled {
    the ramp in and out of duplicate steps, and in flow that reflowed the whole
    page mid-gesture — the graph moved under the pointer. Fixed position costs
    nothing in layout, and pointer-events: none means that even where it lands
-   over a graph or a swatch it cannot swallow the drag. */
+   over a graph or a swatch it cannot swallow the drag.
+
+   Held against the right edge and centred vertically, which is the one place
+   neither sticky bar can reach: the dock owns the foot of the window and the
+   controls own the head. */
 .notice {
   position: fixed;
   right: 16px;
-  bottom: 16px;
-  z-index: 10;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 25;
   max-width: min(46ch, calc(100vw - 32px));
   margin: 0;
   border: 1px solid var(--rule);
@@ -528,18 +1000,21 @@ input:disabled {
 
 /* --- palette stack ---------------------------------------------------- */
 
+/* Takes the slack in the shell, so the dock below it is always flush with the
+   foot of the window. Palettes stay top-aligned; the spare room falls below
+   them, where the next one goes. */
 .stack {
-  margin: 20px 0 0;
-}
-
-.stack__item + .stack__item {
-  margin-top: 24px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-9);
+  padding: var(--space-7);
 }
 
 /* With the tools away the stack closes up: nothing between the palettes but
    the gap needed to tell one from the next. */
-.app--bare .stack__item + .stack__item {
-  margin-top: 10px;
+.app--bare .stack {
+  gap: var(--space-5);
 }
 
 /* An unselected palette advertises that clicking it brings the toolbox. */
@@ -547,64 +1022,287 @@ input:disabled {
   cursor: pointer;
 }
 
+/* A contour around the whole row.
+
+   An outline rather than a border, which settles both problems the earlier
+   markers had: it is painted outside the box model, so it cannot move the
+   ramp as the selection travels down the stack and needs no reserved space
+   on the rows without it — and the offset holds it clear of the end chips,
+   so no colour gains a black neighbour. */
+.prow--selected {
+  outline: 2px solid var(--ink);
+  outline-offset: 5px;
+}
+
+/* The state in words, next to the contour that shows it. Sized under the
+   name it sits beside, so it cannot set the height of the header row and
+   nudge the ramp down. */
+.prow__badge {
+  font-size: 9px;
+  padding: 1px 5px;
+}
+
+.prow__handle {
+  cursor: grab;
+  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 0 4px;
+  user-select: none;
+  touch-action: none;
+}
+
+.prow__handle:hover {
+  color: var(--ink);
+}
+
+.prow__handle:active {
+  cursor: grabbing;
+}
+
+.prow--dragging {
+  opacity: 0.4;
+}
+
+.prow--drop-target {
+  outline: 2px dashed var(--ink);
+  outline-offset: 4px;
+}
+
+/* No rule under it: the contour already bounds the row, and a line here was
+   a second edge inside that boundary. The ramp's own top margin does the
+   separating. */
 .prow__head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  border-bottom: 1px solid var(--rule);
-  padding-bottom: 5px;
+  gap: var(--space-3);
 }
 
-/* Padding is on the name at all times and only the colours swap, so marking
-   the selection cannot move the ramp underneath it. */
 .prow__name {
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--tracking-wider);
   padding: 1px 6px;
-}
-
-.prow--selected .prow__name {
-  background: var(--ink);
-  color: var(--paper);
 }
 
 .prow__note {
   color: var(--muted);
 }
 
+.prow__duplicates {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  padding: 0 var(--space-2);
+}
+
+.prow__head button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 27px;
+  box-sizing: border-box;
+  padding: 0 var(--space-3);
+  font: inherit;
+  font-size: var(--text-base);
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.prow__btn-icon {
+  width: 28px;
+  padding: 0;
+}
+
+.prow__btn-icon svg {
+  display: block;
+  margin: auto;
+}
+
+.prow__btn-icon.is-copied {
+  background: var(--ink);
+  color: var(--paper);
+}
+
 .prow .ramp {
-  margin: 10px 0 0;
+  margin: var(--space-5) 0 0;
 }
 
 /* --- toolbox ---------------------------------------------------------- */
 
-/* The heavy top rule joins the toolbox to the palette it is editing: the two
-   read as one block, which is what tells you which ramp the controls act on. */
+/* Docked to the foot of the window, horizontal and always visible, so the
+   curves stay reachable however far down the stack you are. The heavy top
+   rule is what separates it from the palettes scrolling behind it.
+
+   Height is capped rather than fixed: the dock takes what its contents need,
+   and scrolls internally past that, so a short window still leaves most of
+   itself to the palettes. */
 .toolbox {
-  border: 1px solid var(--rule);
-  border-top-width: 4px;
-  margin-top: 10px;
+  position: sticky;
+  bottom: 0;
+  z-index: 15;
+  border-top: 4px solid var(--rule);
+  background: var(--paper);
+  max-height: 62vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .toolbox__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-5);
   border-bottom: 1px solid var(--rule);
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-7);
 }
 
 .toolbox__controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 20px;
+  gap: var(--space-4) var(--space-8);
   border-bottom: 1px solid var(--rule);
-  padding: 8px;
+  padding: var(--space-4) var(--space-7);
+}
+
+.toolbox__primary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--rule);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root[data-canvas='dark'] .toolbox__primary {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.toolbox__param {
+  display: flex;
+  flex-direction: column;
+}
+
+.toolbox__separator {
+  width: 1px;
+  height: 48px;
+  background: var(--rule);
+  opacity: 0.35;
+}
+
+.field--stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+}
+
+.field__tag {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  line-height: 12px;
+  height: 12px;
+  margin: 0;
+  padding: 0;
+}
+
+.field__swatch-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  margin: 0;
+  padding: 0;
+}
+
+.toolbox__input-name,
+.toolbox__input-color,
+.toolbox__select-step,
+.toolbox__btn-lock {
+  box-sizing: border-box;
+  height: 32px;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  vertical-align: middle;
+}
+
+.field input[type='text'].toolbox__input-name,
+.toolbox__input-name {
+  width: 260px !important;
+  text-transform: none;
+  padding: 4px 10px;
+}
+
+.field input[type='text'].toolbox__input-color,
+.toolbox__input-color {
+  width: 145px !important;
+  padding: 4px 8px;
+}
+
+.toolbox__select-step {
+  min-width: 90px;
+  padding: 4px 8px;
+}
+
+.toolbox__btn-lock {
+  padding: 0 var(--space-4);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.field__swatch-wrap .picker {
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.toolbox__group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.toolbox__group button {
+  box-sizing: border-box;
+  height: 36px;
+  padding: 0 var(--space-5);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  white-space: nowrap;
+}
+
+.toolbox__group button:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .toolbox .curves {
-  padding: 8px;
+  padding: var(--space-5) var(--space-7) var(--space-6);
 }

@@ -88,6 +88,25 @@ export function clampCurve(curve: Curve, channel: Channel): Curve {
   }
 }
 
+/**
+ * Whether two curves describe the same shape.
+ *
+ * Curves are replaced rather than mutated, so identity is the usual test —
+ * but a derivation that lands on the values it already had produces a fresh
+ * object, and the reducers use this to hand back the state they were given
+ * instead of recording an undo entry for nothing.
+ */
+export function curvesEqual(a: Curve, b: Curve): boolean {
+  return (
+    a.start === b.start &&
+    a.end === b.end &&
+    a.h1.x === b.h1.x &&
+    a.h1.y === b.h1.y &&
+    a.h2.x === b.h2.x &&
+    a.h2.y === b.h2.y
+  )
+}
+
 /** Flat line at `v`. */
 export function flat(v: number): Curve {
   return { start: v, end: v, h1: { x: 1 / 3, y: v }, h2: { x: 2 / 3, y: v } }

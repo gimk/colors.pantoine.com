@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { isInSrgb, type Gamut } from '../color/oklch'
 import type { Swatch } from '../color/ramp'
 import { TEXT_FORMATS } from '../export/formats'
 import {
@@ -16,9 +17,11 @@ type Props = {
   /** Link that reopens the whole document, curves intact. */
   shareHref: string
   name: string
+  /** Named in the output, since `clipped` is relative to it. */
+  gamut?: Gamut
 }
 
-export function ExportPanel({ ramp, name, shareHref }: Props) {
+export function ExportPanel({ ramp, name, shareHref, gamut = 'srgb' }: Props) {
   const { copy, copied } = useCopy()
   const [sizeId, setSizeId] = useState(SIZE_PRESETS[1].id)
   const [labels, setLabels] = useState(false)
@@ -39,53 +42,10 @@ export function ExportPanel({ ramp, name, shareHref }: Props) {
         <span className="panel__axis">{ramp.length} steps</span>
       </header>
 
-      <div className="panel__row">
-        <button
-          type="button"
-          onClick={() => copy('share', shareHref)}
-          title="A link that reopens every palette here, with every curve intact"
-        >
-          {copied === 'share' ? 'Link copied' : 'Copy link'}
-        </button>
-      </div>
-
+      {/* The two gestures that carry almost every hand-off — paste the ramp
+          into Figma as pixels, or as layers — with the one option that
+          changes what they produce. Everything else is a drawer down. */}
       <div className="export__group">
-        <span className="legend">As text</span>
-        <div className="export__buttons">
-          {TEXT_FORMATS.map((format) => (
-            <button
-              key={format.id}
-              type="button"
-              onClick={() => copy(format.id, format.build(ramp, name))}
-            >
-              {copied === format.id ? 'Copied' : format.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="export__group">
-        <span className="legend">As image</span>
-        <div className="panel__row panel__row--flush">
-          <label className="field">
-            <span>Size</span>
-            <select value={sizeId} onChange={(event) => setSizeId(event.target.value)}>
-              {SIZE_PRESETS.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.label} · {preset.size}px
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <input
-              type="checkbox"
-              checked={labels}
-              onChange={(event) => setLabels(event.target.checked)}
-            />
-            <span>Labels</span>
-          </label>
-        </div>
         <div className="export__buttons">
           <button
             type="button"
@@ -97,27 +57,101 @@ export function ExportPanel({ ramp, name, shareHref }: Props) {
           >
             Copy PNG
           </button>
-          <button type="button" onClick={() => downloadPng(ramp, options, name)}>
-            Download PNG
-          </button>
           <button
             type="button"
             onClick={() => copy('svg', toSvg(ramp, options, name))}
             title="Paste into Figma as one named, editable rectangle per step"
           >
-            {copied === 'svg' ? 'Copied' : 'Copy SVG'}
+            {copied === 'svg' ? 'SVG copied' : 'Copy SVG'}
           </button>
-          <button type="button" onClick={() => downloadSvg(ramp, options, name)}>
-            Download SVG
-          </button>
+          <label className="field field--checkbox">
+            <input
+              type="checkbox"
+              checked={labels}
+              onChange={(event) => setLabels(event.target.checked)}
+            />
+            <span>Labels</span>
+          </label>
         </div>
-        <p className="export__hint">
-          {imageNote ??
-            (labels
-              ? 'Labels are baked in — turn them off if you plan to eyedrop this.'
-              : 'Flat blocks, no gaps or rules, so a pipette always lands on a real step.')}
-        </p>
+        {imageNote && <p className="export__hint">{imageNote}</p>}
       </div>
+
+      {/* Native <details>: no state to hold, and the keyboard and screen
+          reader behaviour comes for free. Its contents scroll inside
+          `drawer__body` rather than growing the panel, so opening it cannot
+          push the dock taller and leave the three curve panels beside it
+          stretched over empty space. */}
+      <details className="drawer">
+        <summary>
+          <span className="legend">Other formats</span>
+        </summary>
+
+        <div className="drawer__body">
+          <div className="panel__row">
+            <button
+              type="button"
+              onClick={() => copy('share', shareHref)}
+              title="A link that reopens every palette here, with every curve intact"
+            >
+              {copied === 'share' ? 'Link copied' : 'Share palette'}
+            </button>
+          </div>
+
+          <div className="export__group">
+            <span className="legend">As text</span>
+            <div className="export__buttons">
+              {TEXT_FORMATS.map((format) => {
+                const isSrgbOnly = ['hex', 'css-hex', 'tailwind', 'scss'].includes(format.id)
+                const unavailable =
+                  gamut !== 'srgb' && isSrgbOnly && ramp.some((s) => !isInSrgb(s.oklch))
+                return (
+                  <button
+                    key={format.id}
+                    type="button"
+                    className={unavailable ? 'export__btn--unavailable' : undefined}
+                    onClick={() => copy(format.id, format.build(ramp, name, gamut))}
+                    title={
+                      unavailable
+                        ? `${format.label} is sRGB-only — wide-gamut colours will be mapped to sRGB`
+                        : undefined
+                    }
+                  >
+                    {copied === format.id ? 'Copied' : format.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="export__group">
+            <span className="legend">As a file</span>
+            <div className="panel__row panel__row--flush">
+              <label className="field">
+                <span>Size</span>
+                <select
+                  value={sizeId}
+                  title="Size applies to the copies above as well."
+                  onChange={(event) => setSizeId(event.target.value)}
+                >
+                  {SIZE_PRESETS.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.label} · {preset.size}px
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="export__buttons">
+              <button type="button" onClick={() => downloadPng(ramp, options, name)}>
+                Download PNG
+              </button>
+              <button type="button" onClick={() => downloadSvg(ramp, options, name)}>
+                Download SVG
+              </button>
+            </div>
+          </div>
+        </div>
+      </details>
     </section>
   )
 }

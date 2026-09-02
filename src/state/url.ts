@@ -1,4 +1,5 @@
 import { CHANNELS, clampCurve, type Curve } from '../color/curve'
+import { isGamut, type Gamut } from '../color/oklch'
 import { createPalette, MAX_STEPS, MIN_STEPS, type PaletteConfig } from '../color/presets'
 
 /**
@@ -10,6 +11,9 @@ import { createPalette, MAX_STEPS, MIN_STEPS, type PaletteConfig } from '../colo
  */
 
 const KEYS = { base: 'c', name: 'n', steps: 's', baseIndex: 'b', locked: 'x' } as const
+
+/** Document-level, so it lives in its own segment rather than on a palette. */
+const GAMUT_KEY = 'g'
 const CURVE_KEYS: Record<'lightness' | 'chroma' | 'hue', string> = {
   lightness: 'l',
   chroma: 'k',
@@ -106,8 +110,14 @@ export function decodePalette(hash: string): DecodedPalette | null {
  */
 const SEPARATOR = '~'
 
-export function encodeDocument(palettes: DecodedPalette[]): string {
-  return palettes.map((entry) => encodePalette(entry.config, entry.name)).join(SEPARATOR)
+export function encodeDocument(palettes: DecodedPalette[], gamut: Gamut = 'srgb'): string {
+  const segments = palettes.map((entry) => encodePalette(entry.config, entry.name))
+  // Carries no palette key, so `decodeDocument` drops it the way it drops any
+  // other segment it cannot read — which is what lets an older reader open a
+  // link from a newer one. Omitted at the default so ordinary links are
+  // exactly what they always were.
+  if (gamut !== 'srgb') segments.unshift(`${GAMUT_KEY}=${gamut}`)
+  return segments.join(SEPARATOR)
 }
 
 /** Segments that do not decode are dropped rather than failing the whole link. */
@@ -120,7 +130,18 @@ export function decodeDocument(hash: string): DecodedPalette[] {
     .filter((entry): entry is DecodedPalette => entry !== null)
 }
 
-export function documentUrl(palettes: DecodedPalette[]): string {
+/** The gamut a link was made in, or sRGB for a link made before there was one. */
+export function decodeGamut(hash: string): Gamut {
+  const raw = hash.replace(/^#/, '')
+  if (!raw) return 'srgb'
+  for (const segment of raw.split(SEPARATOR)) {
+    const value = new URLSearchParams(segment).get(GAMUT_KEY)
+    if (isGamut(value)) return value
+  }
+  return 'srgb'
+}
+
+export function documentUrl(palettes: DecodedPalette[], gamut: Gamut = 'srgb'): string {
   const { origin, pathname } = window.location
-  return `${origin}${pathname}#${encodeDocument(palettes)}`
+  return `${origin}${pathname}#${encodeDocument(palettes, gamut)}`
 }
