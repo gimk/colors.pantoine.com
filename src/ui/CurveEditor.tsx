@@ -24,7 +24,7 @@ const GRAPH_H = 190
 /** Before measurement, and on the server, where there is nothing to measure. */
 const FALLBACK_W = 520
 
-const PAD = { top: 14, right: 14, bottom: 22, left: 42 }
+const PAD = { top: 8, right: 8, bottom: 8, left: 8 }
 
 /** Which control the pointer or keyboard is moving. */
 type Target = CurveControl
@@ -216,21 +216,6 @@ export function CurveEditor({ curve, channel, swatches, lockedIndex, onChange }:
       ))}
 
       <rect className="graph__frame" x={PAD.left} y={PAD.top} width={plotW} height={plotH} />
-
-      <text className="graph__label" x={PAD.left - 6} y={PAD.top + 4} textAnchor="end">
-        {show(channel.max)}
-        {channel.unit}
-      </text>
-      <text className="graph__label" x={PAD.left - 6} y={PAD.top + plotH} textAnchor="end">
-        {show(channel.min)}
-        {channel.unit}
-      </text>
-      <text className="graph__label" x={PAD.left} y={GRAPH_H - 7}>
-        first step
-      </text>
-      <text className="graph__label" x={PAD.left + plotW} y={GRAPH_H - 7} textAnchor="end">
-        last step
-      </text>
 
       {/* Tangent lines, so this reads as a curve editor rather than loose dots. */}
       <line

@@ -1,4 +1,4 @@
-import { formatColor, gamutLabel, type Format, type Gamut } from '../color/oklch'
+import { formatColor, gamutLabel, isInSrgb, type Format, type Gamut } from '../color/oklch'
 import type { Swatch } from '../color/ramp'
 
 type Props = {
@@ -39,6 +39,10 @@ export function RampStrip({
         const value = formatColor(swatch.oklch, format, gamut)
         const key = `${idPrefix}-${swatch.index}`
         const isCopied = copiedKey === key
+        const isUnavailable =
+          gamut !== 'srgb' &&
+          (format === 'hex' || format === 'rgb' || format === 'hsl') &&
+          !isInSrgb(swatch.oklch)
 
         return (
           <button
@@ -67,9 +71,21 @@ export function RampStrip({
                 {isCopied ? (
                   <span className="swatch__copied">copied</span>
                 ) : (
-                  <span className="swatch__value">{value}</span>
+                  <span
+                    className={`swatch__value${isUnavailable ? ' swatch__value--unavailable' : ''}`}
+                    title={
+                      isUnavailable
+                        ? `${format.toUpperCase()} does not cover ${gamutLabel(gamut)} — showing mapped sRGB fallback`
+                        : undefined
+                    }
+                  >
+                    {value}
+                  </span>
                 )}
-                <span className="swatch__sub">
+                <span
+                  className="swatch__sub"
+                  title={`WCAG 2.1 contrast ratios: ${swatch.contrastOnWhite.toFixed(2)}:1 on White, ${swatch.contrastOnBlack.toFixed(2)}:1 on Black`}
+                >
                   {`W ${swatch.contrastOnWhite.toFixed(1)} · B ${swatch.contrastOnBlack.toFixed(1)}`}
                 </span>
               </span>

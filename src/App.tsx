@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
-import { FORMATS, GAMUTS, parseToOklch, type Format, type Gamut } from './color/oklch'
-import { baseIndexFor, MAX_STEPS, MIN_STEPS } from './color/presets'
-import { countDuplicateSteps } from './color/ramp'
+import { FORMATS, GAMUTS, type Format, type Gamut } from './color/oklch'
+import { MAX_STEPS, MIN_STEPS } from './color/presets'
 import { restoreDocument, saveDocument } from './state/storage'
-import { documentUrl, encodeDocument } from './state/url'
+import { documentUrl } from './state/url'
 import { useDocument, type PaletteView } from './state/useDocument'
 import { NumberField } from './ui/NumberField'
 import { HelpDialog } from './ui/HelpDialog'
@@ -53,23 +52,20 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [undo, redo])
 
-  // Keep the address bar and the saved document in step, without stacking up a
-  // history entry for every pixel of a curve drag.
+  // Clear hash from the address bar so the page URL stays clean and short.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
+  }, [])
+
+  // Auto-save the document to local storage without writing giant strings to the address bar.
   useEffect(() => {
     const seeds = seedsOf(doc.palettes)
-    const hash = `#${encodeDocument(seeds, gamut)}`
-    if (window.location.hash !== hash) {
-      window.history.replaceState(null, '', hash)
-    }
     saveDocument(seeds, doc.selectedIndex, gamut)
   }, [doc.palettes, doc.selectedIndex, gamut])
 
   const { selected } = doc
-  const parsedBase = parseToOklch(selected.config.base)
-  const duplicates = countDuplicateSteps(selected.ramp)
-  const measuredIndex = parsedBase
-    ? baseIndexFor(parsedBase, selected.config.steps)
-    : selected.config.baseIndex
 
   const shareHref =
     typeof window === 'undefined' ? '' : documentUrl(seedsOf(doc.palettes), gamut)
@@ -121,11 +117,19 @@ export function App() {
           <label className="field">
             <span>Click copies</span>
             <select value={format} onChange={(event) => setFormat(event.target.value as Format)}>
-              {FORMATS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
+              {FORMATS.map((option) => {
+                const unavailable =
+                  gamut !== 'srgb' && (option === 'hex' || option === 'rgb' || option === 'hsl')
+                return (
+                  <option
+                    key={option}
+                    value={option}
+                    style={unavailable ? { color: 'var(--muted)' } : undefined}
+                  >
+                    {option}{unavailable ? ' (sRGB only)' : ''}
+                  </option>
+                )
+              })}
             </select>
           </label>
 
@@ -214,20 +218,6 @@ export function App() {
           the palettes scroll behind, and it names the palette it is editing
           since it is no longer beside it. */}
       {!bare && <Toolbox doc={doc} shareHref={shareHref} />}
-
-      {/* Out of flow, and last in the tree. It comes and goes mid-drag as the
-          ramp squeezes and relaxes, so anything in flow here would shove the
-          curve you are dragging up and down under the pointer. */}
-      {!bare && duplicates > 0 && (
-        <p className="notice" role="status">
-          {duplicates === 1 ? '1 step is' : `${duplicates} steps are`} identical to
-          the one before in “{selected.name}”. Holding the base at{' '}
-          <strong>{selected.ramp[selected.config.baseIndex]?.label}</strong> squeezes
-          the ramp toward one end — move it nearer{' '}
-          <strong>{selected.ramp[measuredIndex]?.label}</strong>, where this colour&rsquo;s
-          own lightness sits, or widen the lightness Start and End.
-        </p>
-      )}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useState, type DragEvent, type MouseEvent } from 'react'
 import type { Format, Gamut } from '../color/oklch'
+import { countDuplicateSteps } from '../color/ramp'
 import type { PaletteView } from '../state/useDocument'
 import { RampStrip } from './RampStrip'
 
@@ -38,6 +39,7 @@ export function PaletteRow({
 }: Props) {
   const [isOver, setIsOver] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const duplicates = countDuplicateSteps(palette.ramp)
 
   // With the tools hidden there is nothing to select into, so every strip goes
   // back to copying. Otherwise the first click on a palette picks it up and
@@ -122,6 +124,14 @@ export function PaletteRow({
             {palette.ramp.length} steps · {palette.config.base}
           </span>
           <span className="spacer" />
+          {duplicates > 0 && (
+            <span
+              className="prow__duplicates"
+              title={`${duplicates} step${duplicates > 1 ? 's are' : ' is'} identical to the adjacent step due to ramp compression`}
+            >
+              {duplicates === 1 ? '1 identical step' : `${duplicates} identical steps`}
+            </span>
+          )}
           {!selected && (
             <button type="button" onClick={onSelect} title="Bring the toolbox to this palette">
               Edit

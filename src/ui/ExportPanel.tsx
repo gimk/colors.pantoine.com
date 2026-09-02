@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Gamut } from '../color/oklch'
+import { isInSrgb, type Gamut } from '../color/oklch'
 import type { Swatch } from '../color/ramp'
 import { TEXT_FORMATS } from '../export/formats'
 import {
@@ -73,12 +73,7 @@ export function ExportPanel({ ramp, name, shareHref, gamut = 'srgb' }: Props) {
             <span>Labels</span>
           </label>
         </div>
-        <p className="export__hint">
-          {imageNote ??
-            (labels
-              ? 'Labels are baked in — turn them off if you plan to eyedrop this.'
-              : 'Flat blocks, no gaps or rules, so a pipette always lands on a real step.')}
-        </p>
+        {imageNote && <p className="export__hint">{imageNote}</p>}
       </div>
 
       {/* Native <details>: no state to hold, and the keyboard and screen
@@ -98,22 +93,33 @@ export function ExportPanel({ ramp, name, shareHref, gamut = 'srgb' }: Props) {
               onClick={() => copy('share', shareHref)}
               title="A link that reopens every palette here, with every curve intact"
             >
-              {copied === 'share' ? 'Link copied' : 'Copy link'}
+              {copied === 'share' ? 'Link copied' : 'Share palette'}
             </button>
           </div>
 
           <div className="export__group">
             <span className="legend">As text</span>
             <div className="export__buttons">
-              {TEXT_FORMATS.map((format) => (
-                <button
-                  key={format.id}
-                  type="button"
-                  onClick={() => copy(format.id, format.build(ramp, name, gamut))}
-                >
-                  {copied === format.id ? 'Copied' : format.label}
-                </button>
-              ))}
+              {TEXT_FORMATS.map((format) => {
+                const isSrgbOnly = ['hex', 'css-hex', 'tailwind', 'scss'].includes(format.id)
+                const unavailable =
+                  gamut !== 'srgb' && isSrgbOnly && ramp.some((s) => !isInSrgb(s.oklch))
+                return (
+                  <button
+                    key={format.id}
+                    type="button"
+                    className={unavailable ? 'export__btn--unavailable' : undefined}
+                    onClick={() => copy(format.id, format.build(ramp, name, gamut))}
+                    title={
+                      unavailable
+                        ? `${format.label} is sRGB-only — wide-gamut colours will be mapped to sRGB`
+                        : undefined
+                    }
+                  >
+                    {copied === format.id ? 'Copied' : format.label}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -122,7 +128,11 @@ export function ExportPanel({ ramp, name, shareHref, gamut = 'srgb' }: Props) {
             <div className="panel__row panel__row--flush">
               <label className="field">
                 <span>Size</span>
-                <select value={sizeId} onChange={(event) => setSizeId(event.target.value)}>
+                <select
+                  value={sizeId}
+                  title="Size applies to the copies above as well."
+                  onChange={(event) => setSizeId(event.target.value)}
+                >
                   {SIZE_PRESETS.map((preset) => (
                     <option key={preset.id} value={preset.id}>
                       {preset.label} · {preset.size}px
@@ -139,7 +149,6 @@ export function ExportPanel({ ramp, name, shareHref, gamut = 'srgb' }: Props) {
                 Download SVG
               </button>
             </div>
-            <p className="export__hint">Size applies to the copies above as well.</p>
           </div>
         </div>
       </details>

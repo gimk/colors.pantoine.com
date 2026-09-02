@@ -132,6 +132,24 @@ describe('RampStrip', () => {
     }
   })
 
+  it('greys out unavailable swatch values in wide gamuts when format is hex', () => {
+    const p3Config = createPalette('oklch(70% 0.32 145)', 9, 'p3')
+    const p3Ramp = generateRamp(p3Config, 'p3')
+    const htmlP3 = renderToStaticMarkup(
+      <RampStrip ramp={p3Ramp} format="hex" gamut="p3" copiedKey={null} onCopy={() => {}} />,
+    )
+    expect(htmlP3).toContain('swatch__value--unavailable')
+  })
+
+  it('does not grey out values in wide gamuts when format is oklch or color()', () => {
+    const p3Config = createPalette('oklch(70% 0.32 145)', 9, 'p3')
+    const p3Ramp = generateRamp(p3Config, 'p3')
+    const htmlOklch = renderToStaticMarkup(
+      <RampStrip ramp={p3Ramp} format="oklch" gamut="p3" copiedKey={null} onCopy={() => {}} />,
+    )
+    expect(htmlOklch).not.toContain('swatch__value--unavailable')
+  })
+
   /**
    * With the labels away the chips are all that is left, which is the point —
    * but the label cell is also where a copy is acknowledged, so the
@@ -195,7 +213,7 @@ describe('the export panel', () => {
     const drawer = panel.slice(panel.indexOf('<details'))
     // Shut: a <details> with no `open` attribute.
     expect(drawer.slice(0, drawer.indexOf('>'))).not.toContain('open')
-    for (const label of ['Copy link', 'Hex list', 'Tailwind scale', 'Download PNG', 'Download SVG']) {
+    for (const label of ['Share palette', 'Hex list', 'Tailwind scale', 'Download PNG', 'Download SVG']) {
       expect(drawer).toContain(label)
       expect(front).not.toContain(label)
     }
@@ -362,9 +380,9 @@ describe('the curve graphs', () => {
 describe('the dark canvas', () => {
   const rule = declarations(":root[data-canvas='dark']")
 
-  it('is an off-white on a soft near-black, not #fff on #000', () => {
+  it('is an off-white on a true black ground, not #fff on #000', () => {
     expect(rule).toMatch(/--ink:\s*#e6e6e8/)
-    expect(rule).toMatch(/--paper:\s*#17171a/)
+    expect(rule).toMatch(/--paper:\s*#000000/)
     expect(rule).not.toMatch(/#fff\b/)
   })
 

@@ -30,60 +30,75 @@ export function Toolbox({ doc, shareHref }: Props) {
       </header>
 
       <div className="toolbox__controls">
-        <div className="toolbox__group">
-          <label className="field">
-            <span>Name</span>
-            <input
-              type="text"
-              value={selected.name}
-              spellCheck={false}
-              autoComplete="off"
-              onChange={(event) => doc.rename(selected.id, event.target.value)}
+        <div className="toolbox__primary">
+          <div className="toolbox__param">
+            <label className="field field--stacked">
+              <span className="field__tag">Name</span>
+              <input
+                type="text"
+                className="toolbox__input-name"
+                value={selected.name}
+                spellCheck={false}
+                autoComplete="off"
+                placeholder="Palette name"
+                onChange={(event) => doc.rename(selected.id, event.target.value)}
+              />
+            </label>
+          </div>
+
+          <span className="toolbox__separator" aria-hidden="true" />
+
+          <div className="toolbox__param">
+            <BaseColorInput
+              value={selected.config.base}
+              color={parsedBase ?? parseToOklch(FALLBACK_BASE)!}
+              gamut={doc.gamut}
+              valid={parsedBase !== null}
+              onChange={doc.setBase}
+              onGamut={doc.setGamut}
             />
-          </label>
+          </div>
 
-          <BaseColorInput
-            value={selected.config.base}
-            color={parsedBase ?? parseToOklch(FALLBACK_BASE)!}
-            gamut={doc.gamut}
-            valid={parsedBase !== null}
-            onChange={doc.setBase}
-            onGamut={doc.setGamut}
-          />
+          <span className="toolbox__separator" aria-hidden="true" />
 
-          <label className="field">
-            <span>Base at</span>
-            <select
-              value={selected.config.baseIndex}
-              disabled={selected.config.baseLocked}
-              onChange={(event) => doc.setBaseIndex(Number(event.target.value))}
-              title={
-                selected.config.baseLocked
-                  ? 'Base position is locked. Unlock base to change which step carries your base colour.'
-                  : 'Which step carries your base colour. Moving it redistributes lightness across the ramp.'
-              }
-            >
-              {selected.ramp.map((swatch) => (
-                <option key={swatch.index} value={swatch.index}>
-                  {swatch.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="toolbox__param">
+            <label className="field field--stacked">
+              <span className="field__tag">Base at</span>
+              <select
+                className="toolbox__select-step"
+                value={selected.config.baseIndex}
+                onChange={(event) => doc.setBaseIndex(Number(event.target.value))}
+                title="Which step carries your base colour. Moving it redistributes lightness across the ramp."
+              >
+                {selected.ramp.map((swatch) => (
+                  <option key={swatch.index} value={swatch.index}>
+                    {swatch.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
-          <button
-            type="button"
-            className={selected.config.baseLocked ? 'is-on' : undefined}
-            aria-pressed={selected.config.baseLocked}
-            onClick={() => doc.setBaseLocked(!selected.config.baseLocked)}
-            title={
-              selected.config.baseLocked
-                ? 'Curve edits are being corrected so they cannot move the base colour'
-                : 'Pin the base colour so curve edits cannot change it'
-            }
-          >
-            {selected.config.baseLocked ? 'Base locked' : 'Lock base'}
-          </button>
+          <span className="toolbox__separator" aria-hidden="true" />
+
+          <div className="toolbox__param">
+            <div className="field field--stacked">
+              <span className="field__tag">Constraint</span>
+              <button
+                type="button"
+                className={`toolbox__btn-lock ${selected.config.baseLocked ? 'is-on' : ''}`}
+                aria-pressed={selected.config.baseLocked}
+                onClick={() => doc.setBaseLocked(!selected.config.baseLocked)}
+                title={
+                  selected.config.baseLocked
+                    ? 'Curve edits are being corrected so they cannot move the base colour'
+                    : 'Pin the base colour so curve edits cannot change it'
+                }
+              >
+                {selected.config.baseLocked ? 'Base locked' : 'Lock base'}
+              </button>
+            </div>
+          </div>
         </div>
 
         <span className="spacer" />

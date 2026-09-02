@@ -5,6 +5,7 @@ import {
   CHROMA_JND,
   formatColor,
   gamutLabel,
+  isInSrgb,
   mapToGamut,
   normalizeHue,
   type Gamut,
@@ -821,7 +822,16 @@ export function ColorPicker({
         </span>
         <span className="cpick__values">
           <code>{formatColor(color, 'oklch')}</code>
-          <code className="cpick__hex">{resolved.hex}</code>
+          <code
+            className={`cpick__hex${gamut !== 'srgb' && !isInSrgb(color) ? ' cpick__hex--unavailable' : ''}`}
+            title={
+              gamut !== 'srgb' && !isInSrgb(color)
+                ? 'Hex is restricted to sRGB and cannot represent this wide-gamut colour'
+                : undefined
+            }
+          >
+            {resolved.hex}
+          </code>
         </span>
       </div>
 

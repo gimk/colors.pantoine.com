@@ -16,22 +16,22 @@ type Props = {
 
 export function BaseColorInput({ value, color, gamut, valid, onChange, onGamut }: Props) {
   return (
-    <div className="field">
-      <label htmlFor="base-color">
-        <span>Base</span>
-      </label>
-      <input
-        id="base-color"
-        type="text"
-        className={valid ? undefined : 'invalid'}
-        value={value}
-        spellCheck={false}
-        autoComplete="off"
-        placeholder="#7c3aed"
-        aria-invalid={!valid}
-        onChange={(event) => onChange(event.target.value)}
-      />
-      <ColorPickerDialog color={color} gamut={gamut} onChange={onChange} onGamut={onGamut} />
+    <div className="field field--stacked">
+      <span className="field__tag">Base color</span>
+      <div className="field__swatch-wrap">
+        <input
+          id="base-color"
+          type="text"
+          className={`toolbox__input-color${valid ? '' : ' invalid'}`}
+          value={value}
+          spellCheck={false}
+          autoComplete="off"
+          placeholder="#7c3aed"
+          aria-invalid={!valid}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <ColorPickerDialog color={color} gamut={gamut} onChange={onChange} onGamut={onGamut} />
+      </div>
     </div>
   )
 }

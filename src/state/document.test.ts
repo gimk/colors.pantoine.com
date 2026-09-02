@@ -261,7 +261,7 @@ describe('setting base color', () => {
     expect(newConfig.chroma).not.toEqual(initialConfig.chroma)
   })
 
-  it('locks base position so setBaseIndex is ignored and setBase retains baseIndex', () => {
+  it('locks base position against color changes when baseLocked is true, while still allowing user to change baseIndex', () => {
     const doc = createDocument()
     // Lock the base
     const locked = run(doc, {
@@ -271,22 +271,20 @@ describe('setting base color', () => {
     const initialIndex = locked.palettes[0].state.config.baseIndex
     expect(locked.palettes[0].state.config.baseLocked).toBe(true)
 
-    // Attempt to change baseIndex while locked
-    const attemptedIndex = (initialIndex + 2) % locked.palettes[0].state.config.steps
-    const afterIndexChange = run(locked, {
+    // User can still manually change baseIndex
+    const newIndex = (initialIndex + 2) % locked.palettes[0].state.config.steps
+    const afterUserChange = run(locked, {
       type: 'palette',
-      action: { type: 'setBaseIndex', value: attemptedIndex },
+      action: { type: 'setBaseIndex', value: newIndex },
     })
-    // Must remain at initialIndex
-    expect(afterIndexChange.palettes[0].state.config.baseIndex).toBe(initialIndex)
+    expect(afterUserChange.palettes[0].state.config.baseIndex).toBe(newIndex)
 
-    // Set a very dark base color that would normally shift baseIndex to the dark end
-    const afterDarkBase = run(locked, {
+    // Setting a very dark base color retains the locked baseIndex rather than jumping to nearestStep
+    const afterDarkBase = run(afterUserChange, {
       type: 'palette',
       action: { type: 'setBase', value: '#050505' },
     })
-    // Must remain at initialIndex
-    expect(afterDarkBase.palettes[0].state.config.baseIndex).toBe(initialIndex)
+    expect(afterDarkBase.palettes[0].state.config.baseIndex).toBe(newIndex)
   })
 })
 

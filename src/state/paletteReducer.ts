@@ -184,7 +184,6 @@ export function paletteReducer(
     }
 
     case 'setBaseIndex': {
-      if (config.baseLocked) return state
       const baseIndex = clamp(Math.round(action.value), 0, config.steps - 1)
       if (baseIndex === config.baseIndex) return state
 

@@ -364,6 +364,11 @@ button.swatch:hover:not(:disabled) {
   white-space: nowrap;
 }
 
+.swatch__value--unavailable {
+  color: var(--muted);
+  opacity: 0.55;
+}
+
 .swatch__sub {
   color: var(--muted);
   font-size: 10px;
@@ -396,8 +401,29 @@ button.swatch:hover:not(:disabled) {
 
 .curves {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: var(--space-7);
+  grid-template-columns: 1fr 1fr 1fr minmax(200px, 240px);
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+@media (max-width: 1100px) {
+  .curves {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .curves > :last-child {
+    grid-column: 1 / -1;
+    max-width: 320px;
+  }
+}
+
+@media (max-width: 768px) {
+  .curves {
+    grid-template-columns: 1fr;
+  }
+  .curves > :last-child {
+    grid-column: 1;
+    max-width: 100%;
+  }
 }
 
 .panel {
@@ -710,6 +736,10 @@ body.is-dragging-hue * {
   flex-shrink: 0;
 }
 
+.cpick__hex--unavailable {
+  opacity: 0.45;
+}
+
 /* --- export ---------------------------------------------------------- */
 
 .export__group {
@@ -730,6 +760,11 @@ body.is-dragging-hue * {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+.export__btn--unavailable {
+  color: var(--muted);
+  opacity: 0.65;
 }
 
 .panel__row--flush {
@@ -755,21 +790,43 @@ body.is-dragging-hue * {
 .export {
   display: flex;
   flex-direction: column;
-  max-height: 320px;
+  height: 100%;
+  max-height: 305px;
+  overflow: hidden;
 }
 
-.export > .drawer {
+.export > .drawer,
+.export > .drawer[open] {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+}
+
+.export > .drawer::details-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .drawer__body {
   flex: 1;
   min-height: 0;
+  max-height: 180px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.drawer__body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.drawer__body::-webkit-scrollbar-thumb {
+  background: var(--rule);
 }
 
 /* --- drawer ----------------------------------------------------------- */
@@ -845,7 +902,7 @@ body.is-dragging-hue * {
    the swatches be the brightest thing on screen. */
 :root[data-canvas='dark'] {
   --ink: #e6e6e8;
-  --paper: #17171a;
+  --paper: #000000;
   --rule: #7a7a82;
   --muted: #a4a4ac;
   --grid: #2b2b30;
@@ -1018,6 +1075,14 @@ select:disabled {
   color: var(--muted);
 }
 
+.prow__duplicates {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  padding: 0 var(--space-2);
+}
+
 .prow .ramp {
   margin: var(--space-5) 0 0;
 }
@@ -1060,11 +1125,140 @@ select:disabled {
   padding: var(--space-4) var(--space-7);
 }
 
+.toolbox__primary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--rule);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root[data-canvas='dark'] .toolbox__primary {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.toolbox__param {
+  display: flex;
+  flex-direction: column;
+}
+
+.toolbox__separator {
+  width: 1px;
+  height: 48px;
+  background: var(--rule);
+  opacity: 0.35;
+}
+
+.field--stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+}
+
+.field__tag {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  line-height: 12px;
+  height: 12px;
+  margin: 0;
+  padding: 0;
+}
+
+.field__swatch-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  margin: 0;
+  padding: 0;
+}
+
+.toolbox__input-name,
+.toolbox__input-color,
+.toolbox__select-step,
+.toolbox__btn-lock {
+  box-sizing: border-box;
+  height: 32px;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  vertical-align: middle;
+}
+
+.field input[type='text'].toolbox__input-name,
+.toolbox__input-name {
+  width: 260px !important;
+  text-transform: none;
+  padding: 4px 10px;
+}
+
+.field input[type='text'].toolbox__input-color,
+.toolbox__input-color {
+  width: 145px !important;
+  padding: 4px 8px;
+}
+
+.toolbox__select-step {
+  min-width: 90px;
+  padding: 4px 8px;
+}
+
+.toolbox__btn-lock {
+  padding: 0 var(--space-4);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.field__swatch-wrap .picker {
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
 .toolbox__group {
   display: flex;
   align-items: center;
   gap: var(--space-4);
   flex-wrap: wrap;
+}
+
+.toolbox__group button {
+  box-sizing: border-box;
+  height: 36px;
+  padding: 0 var(--space-5);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  white-space: nowrap;
+}
+
+.toolbox__group button:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .toolbox .curves {
