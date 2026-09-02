@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { CHANNEL_ORDER } from './color/curve'
 import { FORMATS, parseToOklch, toHex, type Format } from './color/oklch'
-import { FALLBACK_BASE, MAX_STEPS, MIN_STEPS } from './color/presets'
+import { baseIndexFor, FALLBACK_BASE, MAX_STEPS, MIN_STEPS } from './color/presets'
+import { countDuplicateSteps } from './color/ramp'
 import { usePalette } from './state/usePalette'
 import { decodePalette, encodePalette } from './state/url'
 import { BaseColorInput } from './ui/BaseColorInput'
@@ -38,6 +39,10 @@ export function App() {
   }, [palette.config, name])
 
   const parsedBase = parseToOklch(palette.config.base)
+  const duplicates = countDuplicateSteps(palette.ramp)
+  const measuredIndex = parsedBase
+    ? baseIndexFor(parsedBase, palette.config.steps)
+    : palette.config.baseIndex
 
   return (
     <div className="app">
@@ -72,6 +77,35 @@ export function App() {
         </label>
 
         <label className="field">
+          <span>Base at</span>
+          <select
+            value={palette.config.baseIndex}
+            onChange={(event) => palette.setBaseIndex(Number(event.target.value))}
+            title="Which step carries your base colour. Moving it redistributes lightness across the ramp."
+          >
+            {palette.ramp.map((swatch) => (
+              <option key={swatch.index} value={swatch.index}>
+                {swatch.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button
+          type="button"
+          className={palette.config.baseLocked ? 'is-on' : undefined}
+          aria-pressed={palette.config.baseLocked}
+          onClick={() => palette.setBaseLocked(!palette.config.baseLocked)}
+          title={
+            palette.config.baseLocked
+              ? 'Curve edits are being corrected so they cannot move the base colour'
+              : 'Pin the base colour so curve edits cannot change it'
+          }
+        >
+          {palette.config.baseLocked ? 'Base locked' : 'Lock base'}
+        </button>
+
+        <label className="field">
           <span>Click copies</span>
           <select value={format} onChange={(event) => setFormat(event.target.value as Format)}>
             {FORMATS.map((option) => (
@@ -102,6 +136,17 @@ export function App() {
         </button>
       </div>
 
+      {duplicates > 0 && (
+        <p className="notice">
+          {duplicates === 1 ? '1 step is' : `${duplicates} steps are`} identical to
+          the one before. Holding the base at{' '}
+          <strong>{palette.ramp[palette.config.baseIndex]?.label}</strong> squeezes
+          the ramp toward one end — move it nearer{' '}
+          <strong>{palette.ramp[measuredIndex]?.label}</strong>, where this colour&rsquo;s
+          own lightness sits, or widen the lightness Start and End.
+        </p>
+      )}
+
       <RampStrip ramp={palette.ramp} format={format} copiedKey={copied} onCopy={copy} />
 
       <div className="curves">
@@ -111,7 +156,8 @@ export function App() {
             channelKey={key}
             curve={palette.config[key]}
             swatches={palette.ramp}
-            onChange={(curve) => palette.setCurve(key, curve)}
+            lockedIndex={palette.config.baseLocked ? palette.config.baseIndex : undefined}
+            onChange={(curve, moved) => palette.setCurve(key, curve, moved)}
             onEndpoint={(end, value) => palette.setEndpoint(key, end, value)}
             onReset={() => palette.resetCurve(key)}
           />

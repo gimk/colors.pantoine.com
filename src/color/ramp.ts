@@ -52,6 +52,22 @@ export function resolveBase(config: PaletteConfig): Oklch {
   return parseToOklch(config.base) ?? parseToOklch(FALLBACK_BASE)!
 }
 
+/**
+ * How many steps came out identical to the one before them.
+ *
+ * Worth reporting rather than hiding: pinning the base to a step far from its
+ * own lightness squeezes the ramp toward one end, and the squeezed steps stop
+ * being distinguishable. The tool should say so instead of quietly handing
+ * over a scale with four identical near-whites in it.
+ */
+export function countDuplicateSteps(ramp: Swatch[]): number {
+  let duplicates = 0
+  for (let i = 1; i < ramp.length; i++) {
+    if (ramp[i].hex === ramp[i - 1].hex) duplicates++
+  }
+  return duplicates
+}
+
 export function generateRamp(config: PaletteConfig): Swatch[] {
   const base = resolveBase(config)
   const labels = stepLabels(config.steps)

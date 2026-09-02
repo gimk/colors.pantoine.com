@@ -122,6 +122,11 @@ const FIT_H2_X = [0.5, 0.58, 2 / 3, 0.75, 0.82, 0.88, 0.94]
 /** A point the fitted curve must pass through exactly. */
 export type FitConstraint = { x: number; y: number }
 
+/** The four things on a curve that can be moved. */
+export type CurveControl = 'start' | 'h1' | 'h2' | 'end'
+
+const CONTROL_INDEX: Record<CurveControl, number> = { start: 0, h1: 1, h2: 2, end: 3 }
+
 /** Gauss-Jordan solve of a small dense system. Returns null if singular. */
 function solveLinearSystem(matrix: number[][], rhs: number[]): number[] | null {
   const n = rhs.length
@@ -246,11 +251,47 @@ const OVERSHOOT_PENALTY = 6
  * Used to trace shapes with no closed form, such as the sRGB chroma ceiling
  * as it rises and falls across the lightness range.
  */
+/**
+ * True when the values the curve produces *at the steps* never reverse
+ * direction.
+ *
+ * Deliberately sampled at the steps rather than testing the control heights
+ * for monotonicity. That test is sufficient but not necessary, and it is far
+ * too strict here: fitting a target that is nearly flat at one end and steep
+ * at the other makes the cubic wiggle a hair above the flat part, which fails
+ * the control-height test while every step value still descends perfectly.
+ * Rejecting those left nothing to choose from. What matters is the ramp the
+ * designer sees, and that is the steps.
+ */
+export function stepsAreMonotonic(curve: Curve, steps: number, tolerance = 1e-9): boolean {
+  const last = Math.max(steps - 1, 1)
+  const descending = curve.end <= curve.start
+  let previous = sampleCurve(curve, 0)
+  for (let i = 1; i <= last; i++) {
+    const value = sampleCurve(curve, i / last)
+    if (descending ? value > previous + tolerance : value < previous - tolerance) return false
+    previous = value
+  }
+  return true
+}
+
 export function fitCurve(
   targets: number[],
   min: number,
   max: number,
   extraConstraints: FitConstraint[] = [],
+  /** Reject candidates that fail this, e.g. a lightness ramp that doubles back. */
+  accept?: (curve: Curve) => boolean,
+  /**
+   * Whether the two ends must land exactly on the first and last target.
+   *
+   * On for chroma, where a free end lets least squares trade the darkest
+   * step's chroma away and finish a purple scale in flat grey. Off for
+   * lightness, where pinning the ends *and* the base *and* demanding
+   * monotonicity over-determines one cubic — and of those three, a couple of
+   * thousandths of L at an end is by far the cheapest thing to give up.
+   */
+  pinEnds = true,
 ): Curve {
   const n = targets.length
   const last = n - 1
@@ -262,10 +303,12 @@ export function fitCurve(
   // lost all its chroma — a purple scale ending in flat grey. The endpoints
   // are also the two values the Start and End inputs report, so they are the
   // designer's declared intent rather than a suggestion.
-  const constraints: FitConstraint[] = [
-    { x: 0, y: targets[0] },
-    { x: 1, y: targets[last] },
-  ]
+  const constraints: FitConstraint[] = pinEnds
+    ? [
+        { x: 0, y: targets[0] },
+        { x: 1, y: targets[last] },
+      ]
+    : []
   for (const extra of extraConstraints) {
     if (constraints.every((existing) => Math.abs(existing.x - extra.x) > 1e-6)) {
       constraints.push(extra)
@@ -274,6 +317,11 @@ export function fitCurve(
 
   let weights = new Array<number>(n).fill(1)
   let best: Curve | null = null
+  // Kept in case `accept` turns everything down. A constrained cubic that
+  // fits well but breaks the predicate is still far better than the exact
+  // bend below, which distorts the whole shape to hit one point.
+  let bestRejected: Curve | null = null
+  let bestRejectedError = Infinity
 
   // Iteratively reweighted least squares. A plain fit treats overshoot and
   // undershoot alike, but they are not alike here: sitting above the target
@@ -289,6 +337,13 @@ export function fitCurve(
         const candidate = fitControlHeights(targets, weights, h1x, h2x, min, max, constraints)
         if (!candidate) continue
         const error = fitError(candidate, targets, weights)
+        if (accept && !accept(candidate)) {
+          if (error < bestRejectedError) {
+            bestRejected = candidate
+            bestRejectedError = error
+          }
+          continue
+        }
         if (error < passError) {
           passBest = candidate
           passError = error
@@ -304,9 +359,10 @@ export function fitCurve(
   }
 
   if (best) return best
+  if (bestRejected) return bestRejected
 
-  // No constrained cubic fits inside the channel box. Honour the points that
-  // matter most — the two ends, then the base — with the exact bend instead.
+  // No constrained cubic fits inside the channel box at all. Honour the points
+  // that matter most — the two ends, then the base — with the exact bend.
   let fallback = linear(targets[0], targets[last])
   for (const extra of extraConstraints) {
     fallback = bendThrough(fallback, extra.x, extra.y, min, max)
@@ -369,19 +425,34 @@ export function bendThrough(
   targetY: number,
   min: number,
   max: number,
+  /**
+   * A control to leave exactly where it is. Used when the correction is
+   * enforcing a lock during a drag: if the control under the pointer also
+   * absorbed part of the correction it would slide away as you moved it,
+   * which reads as the handle fighting you.
+   */
+  hold?: CurveControl,
 ): Curve {
   const target = clamp(targetY, min, max)
   if (x <= 0) return { ...curve, start: target }
   if (x >= 1) return { ...curve, end: target }
+
+  const held = hold === undefined ? -1 : CONTROL_INDEX[hold]
+  const usable = (group: number[]) => group.filter((i) => i !== held)
 
   const weights = basisAtX(curve.h1.x, curve.h2.x, x)
   const ys = [curve.start, curve.h1.y, curve.h2.y, curve.end].map((y) => clamp(y, min, max))
   const current = weights.reduce((sum, w, i) => sum + w * ys[i], 0)
 
   let residual = target - current
-  residual = distribute(ys, weights, [1, 2], residual, min, max)
+  residual = distribute(ys, weights, usable([1, 2]), residual, min, max)
   if (Math.abs(residual) > 1e-12) {
-    residual = distribute(ys, weights, [0, 3], residual, min, max)
+    residual = distribute(ys, weights, usable([0, 3]), residual, min, max)
+  }
+  // If holding a control left too little headroom, let it help after all —
+  // meeting the target matters more than a perfectly steady handle.
+  if (Math.abs(residual) > 1e-12 && held >= 0) {
+    distribute(ys, weights, [held], residual, min, max)
   }
 
   return {

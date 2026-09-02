@@ -9,7 +9,7 @@ import { createPalette, MAX_STEPS, MIN_STEPS, type PaletteConfig } from '../colo
  * store anything in.
  */
 
-const KEYS = { base: 'c', name: 'n', steps: 's', baseIndex: 'b' } as const
+const KEYS = { base: 'c', name: 'n', steps: 's', baseIndex: 'b', locked: 'x' } as const
 const CURVE_KEYS: Record<'lightness' | 'chroma' | 'hue', string> = {
   lightness: 'l',
   chroma: 'k',
@@ -38,6 +38,7 @@ export function encodePalette(config: PaletteConfig, name: string): string {
   params.set(KEYS.name, name)
   params.set(KEYS.steps, String(config.steps))
   params.set(KEYS.baseIndex, String(config.baseIndex))
+  if (config.baseLocked) params.set(KEYS.locked, '1')
   params.set(CURVE_KEYS.lightness, encodeCurve(config.lightness))
   params.set(CURVE_KEYS.chroma, encodeCurve(config.chroma))
   params.set(CURVE_KEYS.hue, encodeCurve(config.hue))
@@ -69,6 +70,8 @@ export function decodePalette(hash: string): DecodedPalette | null {
   if (Number.isInteger(baseIndex) && baseIndex >= 0 && baseIndex < config.steps) {
     config.baseIndex = baseIndex
   }
+
+  config.baseLocked = params.get(KEYS.locked) === '1'
 
   for (const key of ['lightness', 'chroma', 'hue'] as const) {
     const curve = decodeCurve(params.get(CURVE_KEYS[key]))

@@ -32,6 +32,17 @@ describe('App', () => {
     expect(html.match(/class="swatch__base"/g)).toHaveLength(1)
   })
 
+  it('offers a base position for every step, and a lock', () => {
+    const select = html.match(/Base at<\/span>.*?<\/select>/s)?.[0] ?? ''
+    expect(select.match(/<option /g)).toHaveLength(DEFAULT_STEPS)
+    expect(html).toContain('Lock base')
+    expect(html).toContain('aria-pressed="false"')
+  })
+
+  it('does not warn about squeezed steps on the default ramp', () => {
+    expect(html).not.toContain('class="notice"')
+  })
+
   it('paints the default ramp with real colours, not placeholders', () => {
     const fills = html.match(/background:#[0-9a-f]{6}/g) ?? []
     expect(fills.length).toBe(DEFAULT_STEPS)

@@ -7,6 +7,8 @@ type Props = {
   max: number
   step: number
   decimals: number
+  disabled?: boolean
+  title?: string
   onCommit: (value: number) => void
 }
 
@@ -17,7 +19,17 @@ type Props = {
  * the field only re-adopts the incoming value when it is not focused —
  * otherwise dragging a curve handle would fight the caret.
  */
-export function NumberField({ label, value, min, max, step, decimals, onCommit }: Props) {
+export function NumberField({
+  label,
+  value,
+  min,
+  max,
+  step,
+  decimals,
+  disabled,
+  title,
+  onCommit,
+}: Props) {
   const [draft, setDraft] = useState(() => value.toFixed(decimals))
   const focused = useRef(false)
 
@@ -26,13 +38,14 @@ export function NumberField({ label, value, min, max, step, decimals, onCommit }
   }, [value, decimals])
 
   return (
-    <label className="field">
+    <label className="field" title={title}>
       <span>{label}</span>
       <input
         type="number"
         min={min}
         max={max}
         step={step}
+        disabled={disabled}
         value={draft}
         onFocus={() => {
           focused.current = true

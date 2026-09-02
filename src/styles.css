@@ -420,3 +420,40 @@ button.swatch:hover:not(:disabled) {
   --grid: #262626;
   color-scheme: dark;
 }
+
+/* --- locked base ----------------------------------------------------- */
+
+button.is-on {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.graph__lock {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.graph__handle--frozen {
+  fill: var(--muted);
+  stroke: var(--muted);
+  cursor: not-allowed;
+}
+
+.graph__handle--frozen:hover {
+  fill: var(--muted);
+}
+
+input:disabled {
+  color: var(--muted);
+  border-color: var(--muted);
+  cursor: not-allowed;
+}
+
+.notice {
+  margin: 16px 0 0;
+  border: 1px solid var(--rule);
+  border-left-width: 4px;
+  padding: 8px 10px;
+  line-height: 1.5;
+}

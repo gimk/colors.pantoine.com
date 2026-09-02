@@ -1,4 +1,4 @@
-import { CHANNELS, type ChannelKey, type Curve } from '../color/curve'
+import { CHANNELS, type ChannelKey, type Curve, type CurveControl } from '../color/curve'
 import { SHAPES } from '../color/shapes'
 import type { Swatch } from '../color/ramp'
 import { CurveEditor } from './CurveEditor'
@@ -8,7 +8,9 @@ type Props = {
   channelKey: ChannelKey
   curve: Curve
   swatches: Swatch[]
-  onChange: (curve: Curve) => void
+  /** Index of the base step, when the base colour is locked. */
+  lockedIndex?: number
+  onChange: (curve: Curve, moved?: CurveControl) => void
   onEndpoint: (end: 'start' | 'end', value: number) => void
   onReset: () => void
 }
@@ -17,11 +19,18 @@ export function CurvePanel({
   channelKey,
   curve,
   swatches,
+  lockedIndex,
   onChange,
   onEndpoint,
   onReset,
 }: Props) {
   const channel = CHANNELS[channelKey]
+  const last = Math.max(swatches.length - 1, 1)
+
+  // A locked base sitting on an endpoint pins that endpoint outright: no
+  // other control on the curve could absorb the correction.
+  const frozenStart = lockedIndex === 0
+  const frozenEnd = lockedIndex === last
 
   return (
     <section className="panel">
@@ -38,6 +47,8 @@ export function CurvePanel({
           max={channel.max}
           step={channel.nudge}
           decimals={channel.decimals}
+          disabled={frozenStart}
+          title={frozenStart ? 'Locked to the base colour' : undefined}
           onCommit={(value) => onEndpoint('start', value)}
         />
         <NumberField
@@ -47,6 +58,8 @@ export function CurvePanel({
           max={channel.max}
           step={channel.nudge}
           decimals={channel.decimals}
+          disabled={frozenEnd}
+          title={frozenEnd ? 'Locked to the base colour' : undefined}
           onCommit={(value) => onEndpoint('end', value)}
         />
         <span className="spacer" />
@@ -77,6 +90,7 @@ export function CurvePanel({
         curve={curve}
         channel={channel}
         swatches={swatches}
+        lockedIndex={lockedIndex}
         onChange={onChange}
       />
     </section>
