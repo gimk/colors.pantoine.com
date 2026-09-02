@@ -67,6 +67,7 @@ export type DocumentApi = {
   select: (id: string) => void
   remove: (id: string) => void
   move: (id: string, by: -1 | 1) => void
+  reorder: (sourceId: string, targetId: string) => void
   rename: (id: string, name: string) => void
   setBase: (value: string) => void
   setSteps: (value: number) => void
@@ -130,6 +131,10 @@ export function useDocument(seed: Seed): DocumentApi {
     select: useCallback((id: string) => send({ type: 'select', id }), [send]),
     remove: useCallback((id: string) => send({ type: 'remove', id }), [send]),
     move: useCallback((id: string, by: -1 | 1) => send({ type: 'move', id, by }), [send]),
+    reorder: useCallback(
+      (sourceId: string, targetId: string) => send({ type: 'reorder', sourceId, targetId }),
+      [send],
+    ),
     rename: useCallback((id: string, name: string) => send({ type: 'rename', id, name }), [send]),
     setBase: useCallback(
       (value: string) => send({ type: 'palette', action: { type: 'setBase', value } }),

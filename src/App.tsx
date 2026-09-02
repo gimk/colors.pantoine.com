@@ -84,109 +84,116 @@ export function App() {
       </header>
 
       <div className="controls">
-        {/* First in the bar and filled solid: it is the one thing here that
-            adds to the document rather than adjusting it. */}
-        <button
-          type="button"
-          className="is-primary"
-          onClick={doc.newPalette}
-          title="Add a palette below this one and bring the toolbox to it"
-        >
-          + New palette
-        </button>
-
-        <button
-          type="button"
-          disabled={!doc.canUndo}
-          onClick={undo}
-          title="Undo the last edit (Ctrl+Z)"
-        >
-          Undo
-        </button>
-
-        <button
-          type="button"
-          disabled={!doc.canRedo}
-          onClick={redo}
-          title="Redo (Ctrl+Shift+Z)"
-        >
-          Redo
-        </button>
-
-        <label className="field">
-          <span>Click copies</span>
-          <select value={format} onChange={(event) => setFormat(event.target.value as Format)}>
-            {FORMATS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="field">
-          <span>Gamut</span>
-          <select
-            value={gamut}
-            onChange={(event) => doc.setGamut(event.target.value as Gamut)}
-            title="Which display the palette is designed for. Widening it lets every derived chroma curve ask for more."
+        <div className="controls__group">
+          {/* First in the bar and filled solid: it is the one thing here that
+              adds to the document rather than adjusting it. */}
+          <button
+            type="button"
+            className="is-primary"
+            onClick={doc.newPalette}
+            title="Add a palette below this one and bring the toolbox to it"
           >
-            {GAMUTS.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+            + New palette
+          </button>
 
-        <NumberField
-          label="Steps"
-          title="Number of steps, across every palette in the document"
-          value={selected.config.steps}
-          min={MIN_STEPS}
-          max={MAX_STEPS}
-          step={1}
-          decimals={0}
-          onCommit={doc.setSteps}
-        />
+          <button
+            type="button"
+            disabled={!doc.canUndo}
+            onClick={undo}
+            title="Undo the last edit (Ctrl+Z)"
+          >
+            Undo
+          </button>
+
+          <button
+            type="button"
+            disabled={!doc.canRedo}
+            onClick={redo}
+            title="Redo (Ctrl+Shift+Z)"
+          >
+            Redo
+          </button>
+        </div>
+
+        <span className="divider" aria-hidden="true" />
+
+        <div className="controls__group">
+          <label className="field">
+            <span>Click copies</span>
+            <select value={format} onChange={(event) => setFormat(event.target.value as Format)}>
+              {FORMATS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            <span>Gamut</span>
+            <select
+              value={gamut}
+              onChange={(event) => doc.setGamut(event.target.value as Gamut)}
+              title="Which display the palette is designed for. Widening it lets every derived chroma curve ask for more."
+            >
+              {GAMUTS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <NumberField
+            label="Steps"
+            title="Number of steps, across every palette in the document"
+            value={selected.config.steps}
+            min={MIN_STEPS}
+            max={MAX_STEPS}
+            step={1}
+            decimals={0}
+            onCommit={doc.setSteps}
+          />
+        </div>
 
         <span className="spacer" />
 
-        <button
-          type="button"
-          className={!labels ? 'is-on' : undefined}
-          aria-pressed={!labels}
-          onClick={() => setLabels((on) => !on)}
-          title="Drop the step names, values and contrast figures, and look at nothing but the colours"
-        >
-          {labels ? 'Hide labels' : 'Show labels'}
-        </button>
+        <div className="controls__group">
+          <button
+            type="button"
+            className={!labels ? 'is-on' : undefined}
+            aria-pressed={!labels}
+            onClick={() => setLabels((on) => !on)}
+            title="Drop the step names, values and contrast figures, and look at nothing but the colours"
+          >
+            {labels ? 'Hide labels' : 'Show labels'}
+          </button>
 
-        <button
-          type="button"
-          className={bare ? 'is-on' : undefined}
-          aria-pressed={bare}
-          onClick={() => setBare((on) => !on)}
-          title="Put every tool away and look at nothing but the palettes"
-        >
-          {bare ? 'Show tools' : 'Hide tools'}
-        </button>
+          <button
+            type="button"
+            className={bare ? 'is-on' : undefined}
+            aria-pressed={bare}
+            onClick={() => setBare((on) => !on)}
+            title="Put every tool away and look at nothing but the palettes"
+          >
+            {bare ? 'Show tools' : 'Hide tools'}
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setDark((on) => !on)}
-          title="Judge the ramp against the other ground"
-        >
-          {dark ? 'Light canvas' : 'Dark canvas'}
-        </button>
+          <button
+            type="button"
+            onClick={() => setDark((on) => !on)}
+            title="Judge the ramp against the other ground"
+          >
+            {dark ? 'Light canvas' : 'Dark canvas'}
+          </button>
+        </div>
       </div>
 
       <div className="stack">
-        {doc.palettes.map((palette, index) => (
+        {doc.palettes.map((palette) => (
           <PaletteRow
             key={palette.id}
             palette={palette}
-            index={index}
             count={doc.palettes.length}
             selected={palette.id === selected.id}
             format={format}
@@ -196,7 +203,7 @@ export function App() {
             copiedKey={copied}
             onSelect={() => doc.select(palette.id)}
             onRemove={() => doc.remove(palette.id)}
-            onMove={(by) => doc.move(palette.id, by)}
+            onReorder={doc.reorder}
             onCopy={copy}
           />
         ))}

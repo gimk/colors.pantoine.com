@@ -2,12 +2,40 @@
    Every drop of colour in this UI belongs to the palette, not the frame. */
 
 :root {
+  /* Colors */
   --ink: #000;
   --paper: #fff;
   --rule: #000;
-  --muted: #767676;
+  --muted: #626262;
   --grid: #e4e4e4;
+
+  /* Typography scale */
   --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  --text-2xs: 9px;
+  --text-xs: 10px;
+  --text-sm: 11px;
+  --text-base: 12px;
+  --text-md: 13px;
+
+  /* Letter spacing */
+  --tracking-normal: 0;
+  --tracking-tight: 0.06em;
+  --tracking-wide: 0.08em;
+  --tracking-wider: 0.1em;
+  --tracking-widest: 0.12em;
+  --tracking-pill: 0.14em;
+
+  /* Spacing system (8pt derived) */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 16px;
+  --space-8: 20px;
+  --space-9: 24px;
+
   color-scheme: light;
 }
 
@@ -21,7 +49,7 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--text-base);
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
 }
@@ -52,7 +80,11 @@ button:hover:not(:disabled) {
 button:disabled {
   color: var(--muted);
   border-color: var(--muted);
-  cursor: default;
+  cursor: not-allowed;
+}
+
+select {
+  cursor: pointer;
 }
 
 :focus-visible {
@@ -86,21 +118,21 @@ button:disabled {
 .masthead {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-5);
   border-bottom: 2px solid var(--rule);
-  padding: 10px 16px;
+  padding: var(--space-5) var(--space-7);
 }
 
 .masthead h1 {
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: var(--tracking-widest);
   text-transform: uppercase;
   margin: 0;
 }
 
 /* Square, so the glyph sits centred: the base button rule's letter-spacing
-   pushes a single character off to the left. */
+   pushes a single character off to the left. Sized to match control height. */
 .help__open {
   width: 22px;
   height: 22px;
@@ -127,11 +159,11 @@ button:disabled {
 }
 
 .help__body {
-  padding: 12px;
+  padding: var(--space-6);
 }
 
 .help__body p {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-4);
   color: var(--muted);
   line-height: 1.55;
 }
@@ -143,9 +175,11 @@ button:disabled {
 .badge {
   border: 1px solid var(--rule);
   padding: 2px 6px;
-  letter-spacing: 0.14em;
+  letter-spacing: var(--tracking-pill);
   text-transform: uppercase;
   white-space: nowrap;
+  font-size: var(--text-2xs);
+  line-height: 1;
 }
 
 .badge--solid {
@@ -165,23 +199,44 @@ button:disabled {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 20px;
+  gap: var(--space-4) var(--space-7);
   border-bottom: 1px solid var(--rule);
-  padding: 10px 16px;
+  padding: var(--space-5) var(--space-7);
   background: var(--paper);
+}
+
+.controls__group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.divider {
+  width: 1px;
+  height: 18px;
+  background: var(--rule);
+  align-self: center;
+  flex-shrink: 0;
 }
 
 .field {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
 }
 
 .field > label,
 .legend {
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--tracking-wider);
   color: var(--muted);
+  font-size: var(--text-base);
+}
+
+.field--checkbox {
+  cursor: pointer;
+  user-select: none;
 }
 
 .field input[type='text'] {
@@ -339,7 +394,7 @@ button.swatch:hover:not(:disabled) {
 .curves {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
+  gap: var(--space-7);
 }
 
 .panel {
@@ -352,28 +407,28 @@ button.swatch:hover:not(:disabled) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-5);
   border-bottom: 1px solid var(--rule);
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-4);
 }
 
 .panel__title {
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--tracking-wider);
 }
 
 .panel__axis {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 
 .panel__row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   border-bottom: 1px solid var(--rule);
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-4);
   flex-wrap: wrap;
 }
 
@@ -384,19 +439,20 @@ button.swatch:hover:not(:disabled) {
 }
 
 .panel__row .field {
-  gap: 4px;
+  gap: var(--space-2);
 }
 
 .panel__actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   margin-left: auto;
 }
 
 .panel__actions button {
-  font-size: 11px;
+  font-size: var(--text-sm);
   padding: 3px 6px;
+  height: 24px;
 }
 
 .graph {
@@ -455,7 +511,7 @@ button.swatch:hover:not(:disabled) {
 
 .graph__label {
   fill: var(--muted);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-family: var(--mono);
 }
 
@@ -463,7 +519,7 @@ button.swatch:hover:not(:disabled) {
 
 .export__group {
   border-bottom: 1px solid var(--rule);
-  padding: 8px;
+  padding: var(--space-4);
 }
 
 .export__group:last-of-type {
@@ -472,24 +528,25 @@ button.swatch:hover:not(:disabled) {
 
 .export__group > .legend {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-3);
 }
 
 .export__buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-2);
 }
 
 .panel__row--flush {
   border-bottom: none;
-  padding: 0 0 8px;
+  padding: 0 0 var(--space-4);
 }
 
 .export__hint {
-  margin: 8px 0 0;
+  margin: var(--space-4) 0 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-xs);
+  line-height: 1.4;
 }
 
 /* The export panel is a column, and the drawer takes whatever height is left
@@ -529,11 +586,12 @@ button.swatch:hover:not(:disabled) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-5);
   border-top: 1px solid var(--rule);
-  padding: 8px;
+  padding: var(--space-4);
   cursor: pointer;
   list-style: none;
+  user-select: none;
 }
 
 .drawer > summary::-webkit-details-marker {
@@ -564,19 +622,20 @@ button.swatch:hover:not(:disabled) {
 }
 
 .field input[type='checkbox'] {
-  width: 13px;
+  width: 14px;
+  height: 14px;
   padding: 0;
-  height: 13px;
   margin: 0;
   accent-color: var(--ink);
+  cursor: pointer;
 }
 
 .panel__row--shapes {
-  gap: 4px;
+  gap: var(--space-2);
 }
 
 .panel__row--shapes .legend {
-  margin-right: 4px;
+  margin-right: var(--space-2);
 }
 
 /* --- dark canvas ------------------------------------------------------ */
@@ -593,7 +652,7 @@ button.swatch:hover:not(:disabled) {
   --ink: #e6e6e8;
   --paper: #17171a;
   --rule: #7a7a82;
-  --muted: #9a9aa2;
+  --muted: #a4a4ac;
   --grid: #2b2b30;
   color-scheme: dark;
 }
@@ -603,6 +662,11 @@ button.swatch:hover:not(:disabled) {
 button.is-on {
   background: var(--ink);
   color: var(--paper);
+}
+
+button.is-on:hover:not(:disabled) {
+  background: var(--paper);
+  color: var(--ink);
 }
 
 /* Filled standing, not as a state: the one control in the bar that adds to
@@ -676,14 +740,14 @@ input:disabled {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding: 16px;
+  gap: var(--space-9);
+  padding: var(--space-7);
 }
 
 /* With the tools away the stack closes up: nothing between the palettes but
    the gap needed to tell one from the next. */
 .app--bare .stack {
-  gap: 10px;
+  gap: var(--space-5);
 }
 
 /* An unselected palette advertises that clicking it brings the toolbox. */
@@ -711,19 +775,46 @@ input:disabled {
   padding: 1px 5px;
 }
 
+.prow__handle {
+  cursor: grab;
+  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 0 4px;
+  user-select: none;
+  touch-action: none;
+}
+
+.prow__handle:hover {
+  color: var(--ink);
+}
+
+.prow__handle:active {
+  cursor: grabbing;
+}
+
+.prow--dragging {
+  opacity: 0.4;
+}
+
+.prow--drop-target {
+  outline: 2px dashed var(--ink);
+  outline-offset: 4px;
+}
+
 /* No rule under it: the contour already bounds the row, and a line here was
    a second edge inside that boundary. The ramp's own top margin does the
    separating. */
 .prow__head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
 }
 
 .prow__name {
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--tracking-wider);
   padding: 1px 6px;
 }
 
@@ -732,7 +823,7 @@ input:disabled {
 }
 
 .prow .ramp {
-  margin: 10px 0 0;
+  margin: var(--space-5) 0 0;
 }
 
 /* --- toolbox ---------------------------------------------------------- */
@@ -759,20 +850,27 @@ input:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-5);
   border-bottom: 1px solid var(--rule);
-  padding: 6px 16px;
+  padding: var(--space-3) var(--space-7);
 }
 
 .toolbox__controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 20px;
+  gap: var(--space-4) var(--space-8);
   border-bottom: 1px solid var(--rule);
-  padding: 8px 16px;
+  padding: var(--space-4) var(--space-7);
+}
+
+.toolbox__group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
 }
 
 .toolbox .curves {
-  padding: 10px 16px 14px;
+  padding: var(--space-5) var(--space-7) var(--space-6);
 }

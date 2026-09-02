@@ -64,7 +64,7 @@ export function ExportPanel({ ramp, name, shareHref, gamut = 'srgb' }: Props) {
           >
             {copied === 'svg' ? 'SVG copied' : 'Copy SVG'}
           </button>
-          <label className="field">
+          <label className="field field--checkbox">
             <input
               type="checkbox"
               checked={labels}

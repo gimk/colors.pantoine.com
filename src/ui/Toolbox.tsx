@@ -30,76 +30,80 @@ export function Toolbox({ doc, shareHref }: Props) {
       </header>
 
       <div className="toolbox__controls">
-        <label className="field">
-          <span>Name</span>
-          <input
-            type="text"
-            value={selected.name}
-            spellCheck={false}
-            autoComplete="off"
-            onChange={(event) => doc.rename(selected.id, event.target.value)}
+        <div className="toolbox__group">
+          <label className="field">
+            <span>Name</span>
+            <input
+              type="text"
+              value={selected.name}
+              spellCheck={false}
+              autoComplete="off"
+              onChange={(event) => doc.rename(selected.id, event.target.value)}
+            />
+          </label>
+
+          <BaseColorInput
+            value={selected.config.base}
+            resolvedHex={toHex(parsedBase ?? parseToOklch(FALLBACK_BASE)!)}
+            valid={parsedBase !== null}
+            onChange={doc.setBase}
           />
-        </label>
 
-        <BaseColorInput
-          value={selected.config.base}
-          resolvedHex={toHex(parsedBase ?? parseToOklch(FALLBACK_BASE)!)}
-          valid={parsedBase !== null}
-          onChange={doc.setBase}
-        />
+          <label className="field">
+            <span>Base at</span>
+            <select
+              value={selected.config.baseIndex}
+              onChange={(event) => doc.setBaseIndex(Number(event.target.value))}
+              title="Which step carries your base colour. Moving it redistributes lightness across the ramp."
+            >
+              {selected.ramp.map((swatch) => (
+                <option key={swatch.index} value={swatch.index}>
+                  {swatch.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="field">
-          <span>Base at</span>
-          <select
-            value={selected.config.baseIndex}
-            onChange={(event) => doc.setBaseIndex(Number(event.target.value))}
-            title="Which step carries your base colour. Moving it redistributes lightness across the ramp."
+          <button
+            type="button"
+            className={selected.config.baseLocked ? 'is-on' : undefined}
+            aria-pressed={selected.config.baseLocked}
+            onClick={() => doc.setBaseLocked(!selected.config.baseLocked)}
+            title={
+              selected.config.baseLocked
+                ? 'Curve edits are being corrected so they cannot move the base colour'
+                : 'Pin the base colour so curve edits cannot change it'
+            }
           >
-            {selected.ramp.map((swatch) => (
-              <option key={swatch.index} value={swatch.index}>
-                {swatch.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <button
-          type="button"
-          className={selected.config.baseLocked ? 'is-on' : undefined}
-          aria-pressed={selected.config.baseLocked}
-          onClick={() => doc.setBaseLocked(!selected.config.baseLocked)}
-          title={
-            selected.config.baseLocked
-              ? 'Curve edits are being corrected so they cannot move the base colour'
-              : 'Pin the base colour so curve edits cannot change it'
-          }
-        >
-          {selected.config.baseLocked ? 'Base locked' : 'Lock base'}
-        </button>
+            {selected.config.baseLocked ? 'Base locked' : 'Lock base'}
+          </button>
+        </div>
 
         <span className="spacer" />
 
-        <button
-          type="button"
-          disabled={doc.palettes.length < 2}
-          onClick={doc.syncAll}
-          title={
-            doc.palettes.length < 2
-              ? 'Requires at least two palettes in the document'
-              : 'Make all other palettes match this palette’s lightness, chroma, and hue curves'
-          }
-        >
-          Match all curves
-        </button>
+        <div className="toolbox__group">
+          <button
+            type="button"
+            disabled={doc.palettes.length < 2}
+            onClick={doc.syncAll}
+            title={
+              doc.palettes.length < 2
+                ? 'Requires at least two palettes in the document'
+                : 'Make all other palettes match this palette’s lightness, chroma, and hue curves'
+            }
+          >
+            Match all curves
+          </button>
 
-        <button
-          type="button"
-          disabled={!selected.edited}
-          onClick={doc.rederive}
-          title="Throw away every curve edit and rebuild this ramp from the base colour"
-        >
-          Re-derive
-        </button>
+          <button
+            type="button"
+            disabled={!selected.edited}
+            onClick={doc.rederive}
+            title="Throw away every curve edit and rebuild this ramp from the base colour"
+          >
+            Re-derive
+          </button>
+        </div>
       </div>
 
       <div className="curves">

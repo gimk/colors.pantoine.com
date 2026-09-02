@@ -9,7 +9,7 @@ type Props = {
 export function BaseColorInput({ value, resolvedHex, valid, onChange }: Props) {
   return (
     <div className="field">
-      <label className="field" htmlFor="base-color">
+      <label htmlFor="base-color">
         <span>Base</span>
       </label>
       <input

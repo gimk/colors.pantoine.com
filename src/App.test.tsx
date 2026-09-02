@@ -519,13 +519,11 @@ describe('PaletteRow', () => {
     })
   })
 
-  it('will not reorder off the ends of the stack', () => {
-    const first = render({ index: 0, count: 3 })
-    expect(first).toMatch(/disabled[^>]*>Up</)
-    expect(first).not.toMatch(/disabled[^>]*>Down</)
-    const last = render({ index: 2, count: 3 })
-    expect(last).toMatch(/disabled[^>]*>Down</)
-    expect(last).not.toMatch(/disabled[^>]*>Up</)
+  it('provides a drag handle for reordering palettes', () => {
+    const row = render()
+    expect(row).toContain('class="prow__handle"')
+    expect(row).toContain('draggable="true"')
+    expect(row).toContain('title="Drag to reorder palette"')
   })
 
   it('will not delete the only palette there is', () => {
@@ -536,7 +534,8 @@ describe('PaletteRow', () => {
   it('puts every tool away in bare mode, keeping the colours', () => {
     const bare = render({ bare: true })
     expect(bare).not.toContain('prow__head')
-    for (const tool of ['Edit', 'Delete', 'Up', 'Down']) {
+    expect(bare).not.toContain('class="prow__handle"')
+    for (const tool of ['Edit', 'Delete']) {
       expect(bare).not.toContain(`>${tool}</button>`)
     }
     expect(bare.match(/class="swatch"/g)).toHaveLength(view.ramp.length)
@@ -605,3 +604,30 @@ describe('undo and redo', () => {
     expect(html).toContain('Ctrl+Shift+Z')
   })
 })
+
+describe('UI standardization and menu separation', () => {
+  const html = renderToStaticMarkup(<App />)
+
+  it('defines design tokens for spacing and typography in :root', () => {
+    const root = declarations(':root')
+    expect(root).toContain('--space-1')
+    expect(root).toContain('--space-9')
+    expect(root).toContain('--text-base')
+  })
+
+  it('separates controls into distinct groups with brutalist vertical dividers', () => {
+    const controls = html.slice(html.indexOf('class="controls"'), html.indexOf('class="stack"'))
+    expect(controls).toContain('class="controls__group"')
+    expect(controls).toContain('class="divider"')
+  })
+
+  it('groups toolbox attributes and actions into distinct clusters', () => {
+    const toolbox = html.slice(html.indexOf('class="toolbox"'))
+    expect(toolbox).toContain('class="toolbox__group"')
+  })
+
+  it('provides toggle hover states for buttons', () => {
+    expect(declarations('button.is-on:hover:not(:disabled)')).toContain('background: var(--paper)')
+  })
+})
+

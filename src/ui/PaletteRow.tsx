@@ -1,14 +1,14 @@
-import type { MouseEvent } from 'react'
+import { useState, type DragEvent, type MouseEvent } from 'react'
 import type { Format, Gamut } from '../color/oklch'
 import type { PaletteView } from '../state/useDocument'
 import { RampStrip } from './RampStrip'
 
 type Props = {
   palette: PaletteView
-  index: number
   count: number
   selected: boolean
   format: Format
+  index?: number
   gamut?: Gamut
   /** Show the step name, value and contrast cells under each chip. */
   labels?: boolean
@@ -17,13 +17,13 @@ type Props = {
   copiedKey: string | null
   onSelect: () => void
   onRemove: () => void
-  onMove: (by: -1 | 1) => void
+  onMove?: (by: -1 | 1) => void
+  onReorder?: (sourceId: string, targetId: string) => void
   onCopy: (key: string, text: string) => void
 }
 
 export function PaletteRow({
   palette,
-  index,
   count,
   selected,
   format,
@@ -33,9 +33,12 @@ export function PaletteRow({
   copiedKey,
   onSelect,
   onRemove,
-  onMove,
+  onReorder,
   onCopy,
 }: Props) {
+  const [isOver, setIsOver] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+
   // With the tools hidden there is nothing to select into, so every strip goes
   // back to copying. Otherwise the first click on a palette picks it up and
   // brings the toolbox to it; clicks after that copy, as they always did.
@@ -56,18 +59,63 @@ export function PaletteRow({
    */
   const pick = (event: MouseEvent<HTMLElement>) => {
     if (copies) return
-    if ((event.target as HTMLElement).closest('button, input, select, a')) return
+    if ((event.target as HTMLElement).closest('button, input, select, a, .prow__handle')) return
     onSelect()
+  }
+
+  const handleDragStart = (e: DragEvent) => {
+    setIsDragging(true)
+    e.dataTransfer.setData('text/plain', palette.id)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragEnd = () => {
+    setIsDragging(false)
+  }
+
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (!isOver) setIsOver(true)
+  }
+
+  const handleDragLeave = (e: DragEvent) => {
+    // Only clear if leaving the prow container entirely
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsOver(false)
+    }
+  }
+
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault()
+    setIsOver(false)
+    const sourceId = e.dataTransfer.getData('text/plain')
+    if (sourceId && sourceId !== palette.id && onReorder) {
+      onReorder(sourceId, palette.id)
+    }
   }
 
   return (
     <section
-      className={`prow${active ? ' prow--selected' : ''}`}
+      className={`prow${active ? ' prow--selected' : ''}${isOver ? ' prow--drop-target' : ''}${isDragging ? ' prow--dragging' : ''}`}
       onClick={pick}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       aria-current={active ? 'true' : undefined}
     >
       {!bare && (
         <header className="prow__head">
+          <span
+            className="prow__handle"
+            draggable
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            title="Drag to reorder palette"
+            aria-label="Drag to reorder"
+          >
+            ::
+          </span>
           <span className="prow__name">{palette.name}</span>
           {active && <span className="badge prow__badge">Editing</span>}
           <span className="prow__note">
@@ -79,22 +127,6 @@ export function PaletteRow({
               Edit
             </button>
           )}
-          <button
-            type="button"
-            disabled={index === 0}
-            onClick={() => onMove(-1)}
-            title="Move this palette up the stack"
-          >
-            Up
-          </button>
-          <button
-            type="button"
-            disabled={index === count - 1}
-            onClick={() => onMove(1)}
-            title="Move this palette down the stack"
-          >
-            Down
-          </button>
           <button
             type="button"
             disabled={count < 2}

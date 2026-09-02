@@ -55,6 +55,7 @@ export type DocumentAction =
   | { type: 'select'; id: string }
   | { type: 'remove'; id: string }
   | { type: 'move'; id: string; by: -1 | 1 }
+  | { type: 'reorder'; sourceId: string; targetId: string }
   | { type: 'rename'; id: string; name: string }
   | { type: 'setSteps'; value: number }
   | { type: 'setGamut'; value: Gamut }
@@ -353,6 +354,16 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
       if (index < 0 || target < 0 || target >= state.palettes.length) return state
       const palettes = [...state.palettes]
       ;[palettes[index], palettes[target]] = [palettes[target], palettes[index]]
+      return { ...state, palettes }
+    }
+
+    case 'reorder': {
+      const from = indexOfId(state, action.sourceId)
+      const to = indexOfId(state, action.targetId)
+      if (from < 0 || to < 0 || from === to) return state
+      const palettes = [...state.palettes]
+      const [moved] = palettes.splice(from, 1)
+      palettes.splice(to, 0, moved)
       return { ...state, palettes }
     }
 

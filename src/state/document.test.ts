@@ -90,6 +90,20 @@ describe('document', () => {
     expect(run(doc, { type: 'move', id: c, by: 1 })).toBe(doc)
   })
 
+  it('reorders palettes by dragging between source and target ids', () => {
+    const doc = run(createDocument(), { type: 'new' }, { type: 'new' })
+    const [a, b, c] = doc.palettes.map((entry) => entry.id)
+
+    const reordered = run(doc, { type: 'reorder', sourceId: c, targetId: a })
+    expect(reordered.palettes.map((entry) => entry.id)).toEqual([c, a, b])
+
+    const reordered2 = run(reordered, { type: 'reorder', sourceId: a, targetId: b })
+    expect(reordered2.palettes.map((entry) => entry.id)).toEqual([c, b, a])
+
+    expect(run(doc, { type: 'reorder', sourceId: a, targetId: a })).toBe(doc)
+    expect(run(doc, { type: 'reorder', sourceId: a, targetId: 'nope' })).toBe(doc)
+  })
+
   it('deletes a palette and never empties the document', () => {
     const one = createDocument()
     expect(run(one, { type: 'remove', id: one.palettes[0].id })).toBe(one)
