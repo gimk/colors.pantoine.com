@@ -1,3 +1,4 @@
+import css from './styles.css?raw'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { App } from './App'
@@ -85,5 +86,36 @@ describe('RampStrip', () => {
         expect(html).toContain(`>${swatch.label}<`)
       }
     }
+  })
+})
+
+/**
+ * The swatch borders are a cascade problem, not a render one: the base
+ * `button` rule paints a 1px box, so a swatch that does not reset it keeps a
+ * contour around the colour whatever the seamless class removes. No markup
+ * test can see that, so assert it against the stylesheet.
+ */
+describe('swatch borders', () => {
+
+  /** The declarations of the first rule whose selector list ends in `selector`. */
+  const declarations = (selector: string) => {
+    for (const block of css.split('}')) {
+      const open = block.indexOf('{')
+      if (open < 0) continue
+      if (block.slice(0, open).trim().endsWith(selector)) return block.slice(open + 1)
+    }
+    return ''
+  }
+
+  it('resets the border the base button rule would paint', () => {
+    expect(declarations('select')).toContain('border: 1px solid var(--rule)')
+    expect(declarations('.swatch')).toContain('border: none')
+  })
+
+  it('keeps the chip rules on the chip, where seamless can reach them', () => {
+    expect(declarations('.swatch__chip')).toContain('border: 1px solid var(--rule)')
+    expect(declarations('.ramp--seamless .swatch:last-child .swatch__chip')).toContain(
+      'border-color: transparent',
+    )
   })
 })

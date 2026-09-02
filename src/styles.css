@@ -171,6 +171,10 @@ button:disabled {
 }
 
 .swatch {
+  /* The base button rule paints a 1px box of its own. Reset it: every rule in
+     the strip belongs to the chip or the label cell, so the contours touching
+     the colour can be dropped without taking the label grid with them. */
+  border: none;
   flex: 1;
   min-width: 0;
   background: none;
@@ -185,9 +189,6 @@ button.swatch:hover:not(:disabled) {
   color: inherit;
 }
 
-/* Rules sit on the chip and the label cell separately rather than on the
-   whole swatch, so the contours around the colour can be dropped without
-   taking the label grid with them. */
 .swatch__chip {
   position: relative;
   height: 116px;
