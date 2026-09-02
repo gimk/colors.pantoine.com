@@ -1,0 +1,422 @@
+/* Brutalist chrome: black, white, 1px rules, no radii, no shadows.
+   Every drop of colour in this UI belongs to the palette, not the frame. */
+
+:root {
+  --ink: #000;
+  --paper: #fff;
+  --rule: #000;
+  --muted: #767676;
+  --grid: #e4e4e4;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  padding: 4px 6px;
+}
+
+button {
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+button:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+button:disabled {
+  color: var(--muted);
+  border-color: var(--muted);
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.app {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* --- header ---------------------------------------------------------- */
+
+.masthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 2px solid var(--rule);
+  padding-bottom: 8px;
+}
+
+.masthead h1 {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.masthead p {
+  margin: 0;
+  color: var(--muted);
+  max-width: 46ch;
+}
+
+.badge {
+  border: 1px solid var(--rule);
+  padding: 2px 6px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge--solid {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* --- control bar ----------------------------------------------------- */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  border-bottom: 1px solid var(--rule);
+  padding: 10px 0;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.field > label,
+.legend {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.field input[type='text'] {
+  width: 11ch;
+  text-transform: lowercase;
+}
+
+.field input[type='number'] {
+  width: 6ch;
+}
+
+.field input.invalid {
+  border-color: #b00;
+  color: #b00;
+}
+
+/* Native colour picker, squared off and flush with the text field. */
+.picker {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  background: none;
+  cursor: pointer;
+}
+
+.picker::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.picker::-webkit-color-swatch {
+  border: none;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* --- ramp ------------------------------------------------------------ */
+
+.ramp {
+  display: flex;
+  border: 1px solid var(--rule);
+  border-left: none;
+  margin: 20px 0;
+}
+
+.swatch {
+  flex: 1;
+  min-width: 0;
+  border-left: 1px solid var(--rule);
+  background: none;
+  padding: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+}
+
+button.swatch:hover:not(:disabled) {
+  background: none;
+  color: inherit;
+}
+
+.swatch__chip {
+  position: relative;
+  height: 116px;
+}
+
+/* Corner tick: the curves asked for more chroma than sRGB can show. */
+.swatch__clipped {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-top: 9px solid var(--ink);
+  border-left: 9px solid transparent;
+}
+
+.swatch__base {
+  position: absolute;
+  inset: auto 0 0 0;
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  padding: 1px 0;
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.swatch__meta {
+  border-top: 1px solid var(--rule);
+  padding: 5px 6px 6px;
+  display: grid;
+  gap: 1px;
+}
+
+.swatch__label {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.swatch__value {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swatch__sub {
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.swatch__copied {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* --- curve panels ---------------------------------------------------- */
+
+.curves {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.panel {
+  border: 1px solid var(--rule);
+}
+
+.panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--rule);
+  padding: 6px 8px;
+}
+
+.panel__title {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.panel__axis {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.panel__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--rule);
+  padding: 6px 8px;
+}
+
+.panel__row input {
+  width: 8ch;
+}
+
+.graph {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+}
+
+.graph__grid {
+  stroke: var(--grid);
+  stroke-width: 1;
+}
+
+.graph__frame {
+  fill: none;
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+.graph__curve {
+  fill: none;
+  stroke: var(--rule);
+  stroke-width: 1.5;
+}
+
+.graph__tangent {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+
+.graph__dot {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+.graph__dot--base {
+  stroke-width: 2.5;
+}
+
+.graph__handle {
+  fill: var(--paper);
+  stroke: var(--rule);
+  stroke-width: 1.5;
+  cursor: grab;
+}
+
+.graph__handle:hover {
+  fill: var(--ink);
+}
+
+.graph__handle--anchor {
+  cursor: ns-resize;
+}
+
+.graph__label {
+  fill: var(--muted);
+  font-size: 9px;
+  font-family: var(--mono);
+}
+
+/* --- footnote -------------------------------------------------------- */
+
+.footnote {
+  margin: 20px 0 0;
+  border-top: 1px solid var(--rule);
+  padding-top: 8px;
+  color: var(--muted);
+}
+
+/* --- export ---------------------------------------------------------- */
+
+.export__group {
+  border-bottom: 1px solid var(--rule);
+  padding: 8px;
+}
+
+.export__group:last-of-type {
+  border-bottom: none;
+}
+
+.export__group > .legend {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.export__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.panel__row--flush {
+  border-bottom: none;
+  padding: 0 0 8px;
+}
+
+.export__hint {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.field input[type='checkbox'] {
+  width: 13px;
+  padding: 0;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+.panel__row--shapes {
+  gap: 4px;
+}
+
+.panel__row--shapes .legend {
+  margin-right: 4px;
+}
+
+/* --- dark canvas ------------------------------------------------------ */
+
+/* Not a theme so much as a second ground: the same ramp reads differently
+   against black, and a designer needs to judge it both ways. */
+:root[data-canvas='dark'] {
+  --ink: #fff;
+  --paper: #0a0a0a;
+  --rule: #fff;
+  --muted: #8a8a8a;
+  --grid: #262626;
+  color-scheme: dark;
+}

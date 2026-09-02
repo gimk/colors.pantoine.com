@@ -1,0 +1,167 @@
+import { converter, formatHex, parse, toGamut } from 'culori'
+
+export type Oklch = { l: number; c: number; h: number }
+
+const toOklch = converter('oklch')
+const toRgb = converter('rgb')
+
+/**
+ * Half an 8-bit step. culori's own `inGamut` is exact to the last float,
+ * which would put a false "clipped" notch on colours sitting right on the
+ * boundary — precisely the ones a designer pushes a chroma curve toward.
+ * Since the tool's output is 8-bit hex, anything that rounds into a valid
+ * channel is genuinely displayable.
+ */
+const CHANNEL_TOLERANCE = 0.5 / 255
+
+/**
+ * Hold L and H, reduce chroma until the colour fits sRGB.
+ *
+ * Deliberately *not* the CSS Color 4 default. That algorithm accepts a
+ * candidate that is only "roughly" in gamut and lets the final 8-bit clip
+ * finish the job, which measured up to 9° of hue drift on saturated colours
+ * in exchange for about 0.001 of chroma. In a tool whose whole point is
+ * steering hue, an unrequested 9° shift is unacceptable and a hair less
+ * chroma is something the chroma curve can answer for. Passing jnd = 0
+ * makes the search strict, holding hue to within half a degree.
+ */
+const srgbMap = toGamut('rgb', 'oklch', null, 0)
+
+/** Parse anything CSS accepts (hex, rgb(), hsl(), oklch(), named) into OKLCH. */
+export function parseToOklch(input: string): Oklch | null {
+  const parsed = parse(input.trim())
+  if (!parsed) return null
+  const c = toOklch(parsed)
+  if (!c) return null
+  return { l: c.l ?? 0, c: c.c ?? 0, h: c.h ?? 0 }
+}
+
+export function isInSrgb(color: Oklch): boolean {
+  const c = toRgb({ mode: 'oklch', ...color })
+  if (!c) return false
+  const lo = -CHANNEL_TOLERANCE
+  const hi = 1 + CHANNEL_TOLERANCE
+  return c.r >= lo && c.r <= hi && c.g >= lo && c.g <= hi && c.b >= lo && c.b <= hi
+}
+
+/** Nearest in-gamut sRGB hex for an OKLCH colour. */
+export function toHex(color: Oklch): string {
+  return formatHex(srgbMap({ mode: 'oklch', ...color })) ?? '#000000'
+}
+
+/**
+ * Perceptible chroma difference. Below this the gamut mapping took away
+ * something nobody can see, and saying so would only cry wolf on the very
+ * colours a designer deliberately pushes to the edge.
+ */
+export const CHROMA_JND = 0.004
+
+export type Mapped = {
+  hex: string
+  /** Chroma that survived the mapping. */
+  chroma: number
+  /** How much chroma the display could not give back. */
+  chromaLost: number
+  /** True only when the loss is perceptible. */
+  clipped: boolean
+}
+
+/** Map to sRGB once and report what it cost. */
+export function mapToSrgb(color: Oklch): Mapped {
+  const mapped = srgbMap({ mode: 'oklch', ...color })
+  const chroma = toOklch(mapped)?.c ?? 0
+  const chromaLost = Math.max(0, color.c - chroma)
+  return {
+    hex: formatHex(mapped) ?? '#000000',
+    chroma,
+    chromaLost,
+    clipped: chromaLost > CHROMA_JND,
+  }
+}
+
+export function toRgb255(color: Oklch): { r: number; g: number; b: number } {
+  const c = toRgb(srgbMap({ mode: 'oklch', ...color }))
+  return {
+    r: Math.round((c?.r ?? 0) * 255),
+    g: Math.round((c?.g ?? 0) * 255),
+    b: Math.round((c?.b ?? 0) * 255),
+  }
+}
+
+export function normalizeHue(h: number): number {
+  return ((h % 360) + 360) % 360
+}
+
+// --- formatting -------------------------------------------------------------
+
+export type Format = 'hex' | 'oklch' | 'rgb' | 'hsl'
+
+export const FORMATS: Format[] = ['hex', 'oklch', 'rgb', 'hsl']
+
+export function formatColor(color: Oklch, format: Format): string {
+  switch (format) {
+    case 'hex':
+      return toHex(color)
+    case 'oklch': {
+      // Printed from the requested values, not the gamut-mapped ones, so the
+      // string says what the curves asked for. Wide-gamut displays honour it.
+      const l = (color.l * 100).toFixed(1)
+      const c = color.c.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')
+      const h = normalizeHue(color.h).toFixed(2)
+      return `oklch(${l}% ${c} ${h})`
+    }
+    case 'rgb': {
+      const { r, g, b } = toRgb255(color)
+      return `rgb(${r} ${g} ${b})`
+    }
+    case 'hsl': {
+      const { h, s, l } = toHsl(color)
+      return `hsl(${h} ${s}% ${l}%)`
+    }
+  }
+}
+
+/** sRGB HSL, for designers whose downstream tools still speak it. */
+export function toHsl(color: Oklch): { h: number; s: number; l: number } {
+  const { r, g, b } = toRgb255(color)
+  const rn = r / 255
+  const gn = g / 255
+  const bn = b / 255
+  const max = Math.max(rn, gn, bn)
+  const min = Math.min(rn, gn, bn)
+  const d = max - min
+  const l = (max + min) / 2
+  let h = 0
+  if (d !== 0) {
+    if (max === rn) h = ((gn - bn) / d) % 6
+    else if (max === gn) h = (bn - rn) / d + 2
+    else h = (rn - gn) / d + 4
+    h *= 60
+    if (h < 0) h += 360
+  }
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1))
+  return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) }
+}
+
+// --- contrast ---------------------------------------------------------------
+
+function channelLuminance(v: number): number {
+  const n = v / 255
+  return n <= 0.03928 ? n / 12.92 : Math.pow((n + 0.055) / 1.055, 2.4)
+}
+
+/** WCAG 2.1 relative luminance of the gamut-mapped sRGB colour. */
+export function relativeLuminance(color: Oklch): number {
+  const { r, g, b } = toRgb255(color)
+  return (
+    0.2126 * channelLuminance(r) +
+    0.7152 * channelLuminance(g) +
+    0.0722 * channelLuminance(b)
+  )
+}
+
+export function contrastRatio(a: number, b: number): number {
+  const lighter = Math.max(a, b)
+  const darker = Math.min(a, b)
+  return (lighter + 0.05) / (darker + 0.05)
+}
