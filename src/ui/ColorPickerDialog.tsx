@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { formatColor, GAMUTS, gamutLabel, mapToGamut, type Gamut, type Oklch } from '../color/oklch'
 import { ColorPicker, type ColorPickerModel } from './ColorPicker'
 
@@ -21,11 +21,7 @@ type Props = {
 /**
  * The picker, behind the swatch that used to open the operating system's.
  *
- * A modal rather than a popover for a structural reason: the toolbox dock is
- * a `max-height` scroll container, so anything absolutely positioned inside
- * it is clipped at the dock's edge. `showModal` escapes that entirely and
- * brings Escape and focus trapping with it — and the native picker this
- * replaces was an OS modal too, so nothing is lost in feel.
+ * Positioned floating adjacent to the swatch button with a clean, clear backdrop.
  *
  * Edits apply as they are made, like every other control here. There is no
  * cancel because there is already an undo: `setBase` coalesces, so a whole
@@ -39,19 +35,63 @@ export function ColorPickerDialog({
   defaultOpen = false,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const swatch = mapToGamut(color, gamut).displayColor
   const [open, setOpen] = useState(defaultOpen)
   const [model, setModel] = useState<ColorPickerModel>('oklch')
+  const [coords, setCoords] = useState<{ top?: number; bottom?: number; left: number }>({
+    left: 16,
+    bottom: 80,
+  })
+
+  const updatePosition = () => {
+    if (!buttonRef.current || typeof window === 'undefined') return
+    const rect = buttonRef.current.getBoundingClientRect()
+    const pickerWidth = Math.min(420, window.innerWidth - 32)
+    const left = Math.max(16, Math.min(rect.left, window.innerWidth - pickerWidth - 16))
+
+    const spaceAbove = rect.top
+    const spaceBelow = window.innerHeight - rect.bottom
+
+    if (spaceAbove >= 400 || spaceAbove >= spaceBelow) {
+      const bottom = Math.max(8, window.innerHeight - rect.top + 8)
+      setCoords({ bottom, left, top: undefined })
+    } else {
+      const top = Math.max(8, rect.bottom + 8)
+      setCoords({ top, left, bottom: undefined })
+    }
+  }
+
+  useLayoutEffect(() => {
+    if (open) {
+      updatePosition()
+      window.addEventListener('resize', updatePosition)
+      window.addEventListener('scroll', updatePosition, true)
+      return () => {
+        window.removeEventListener('resize', updatePosition)
+        window.removeEventListener('scroll', updatePosition, true)
+      }
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (defaultOpen && ref.current && !ref.current.open) {
+      updatePosition()
+      ref.current.showModal?.()
+    }
+  }, [defaultOpen])
 
   return (
     <>
       <button
+        ref={buttonRef}
         type="button"
         className="picker"
         style={{ background: swatch }}
         aria-label="Pick base colour"
         title={`Pick the base colour in OKLCH — ${gamutLabel(gamut)}`}
         onClick={() => {
+          updatePosition()
           setOpen(true)
           ref.current?.showModal()
         }}
@@ -60,6 +100,13 @@ export function ColorPickerDialog({
       <dialog
         ref={ref}
         className="cdialog"
+        style={{
+          position: 'fixed',
+          margin: 0,
+          left: `${coords.left}px`,
+          top: coords.top != null ? `${coords.top}px` : 'auto',
+          bottom: coords.bottom != null ? `${coords.bottom}px` : 'auto',
+        }}
         aria-labelledby="cpick-title"
         /* Fires for Escape and for the close button alike, so neither route
            leaves the panel mounted behind a shut dialog. */
@@ -81,11 +128,11 @@ export function ColorPickerDialog({
                 <select
                   value={model}
                   onChange={(event) => setModel(event.target.value as ColorPickerModel)}
-                  title="Color model for the picker: OKLCH (perceptual), HSV, or HSL"
+                  title="Color model for the picker: OKLCH (perceptual), OKHSV, or OKHSL"
                 >
                   <option value="oklch">OKLCH</option>
-                  <option value="hsv">HSV</option>
-                  <option value="hsl">HSL</option>
+                  <option value="okhsv">OKHSV</option>
+                  <option value="okhsl">OKHSL</option>
                 </select>
               </label>
               <label className="field">
@@ -96,7 +143,7 @@ export function ColorPickerDialog({
                   title="Which display this palette is designed for. Widening it widens the wedge, and lets every derived chroma curve ask for more."
                 >
                   {GAMUTS.map((option) => (
-                    <option key={option.id}>
+                    <option key={option.id} value={option.id}>
                       {option.label}
                     </option>
                   ))}

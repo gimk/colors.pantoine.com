@@ -6,6 +6,7 @@ import {
   clamp,
   clampCurve,
   curvesEqual,
+  flat,
   sampleCurve,
   type Curve,
   type CurveControl,
@@ -15,6 +16,7 @@ import {
   chromaCurveFor,
   createPalette,
   defaultCurves,
+  FALLBACK_BASE,
   holdBase,
   lightnessCurveFor,
   MAX_STEPS,
@@ -99,18 +101,70 @@ export function paletteReducer(
       if (!parsed) return { ...state, config: { ...config, base: action.value } }
 
       if (!anyEdited(state.edited)) {
+        if (config.baseLocked) {
+          const baseIndex = config.baseIndex
+          const lightness = lightnessCurveFor(
+            parsed,
+            config.steps,
+            baseIndex,
+            config.lightness.start,
+            config.lightness.end,
+          )
+          const chroma = chromaCurveFor(parsed, config.steps, baseIndex, lightness, gamut)
+          const hue = flat(0)
+          return {
+            ...state,
+            config: {
+              ...config,
+              base: action.value,
+              baseIndex,
+              lightness,
+              chroma,
+              hue,
+            },
+          }
+        }
         const fresh = createPalette(action.value, config.steps, gamut)
         return { ...state, config: { ...fresh, baseLocked: config.baseLocked } }
       }
 
-      const moved: PaletteConfig = {
-        ...config,
-        base: action.value,
-        baseIndex: nearestStep(config.lightness, config.steps, parsed.l),
-      }
+      const baseIndex = config.baseLocked
+        ? config.baseIndex
+        : nearestStep(config.lightness, config.steps, parsed.l)
+      const lightness = state.edited.lightness
+        ? config.baseLocked
+          ? holdBase(config.lightness, 'lightness', parsed, config.steps, baseIndex)
+          : config.lightness
+        : lightnessCurveFor(
+            parsed,
+            config.steps,
+            baseIndex,
+            config.lightness.start,
+            config.lightness.end,
+          )
+
+      const chroma = state.edited.chroma
+        ? config.baseLocked
+          ? holdBase(config.chroma, 'chroma', parsed, config.steps, baseIndex)
+          : config.chroma
+        : chromaCurveFor(parsed, config.steps, baseIndex, lightness, gamut)
+
+      const hue = state.edited.hue
+        ? config.baseLocked
+          ? holdBase(config.hue, 'hue', parsed, config.steps, baseIndex)
+          : config.hue
+        : flat(0)
+
       return {
         ...state,
-        config: config.baseLocked ? holdAll(moved, parsed) : moved,
+        config: {
+          ...config,
+          base: action.value,
+          baseIndex,
+          lightness,
+          chroma,
+          hue,
+        },
       }
     }
 
@@ -130,6 +184,7 @@ export function paletteReducer(
     }
 
     case 'setBaseIndex': {
+      if (config.baseLocked) return state
       const baseIndex = clamp(Math.round(action.value), 0, config.steps - 1)
       if (baseIndex === config.baseIndex) return state
 
@@ -222,15 +277,27 @@ export function paletteReducer(
 }
 
 /**
- * A palette restored from a link or from storage counts as edited: its curves
- * are someone's deliberate work, so changing the base must not discard them.
+ * A palette restored from a link or from storage checks which curves
+ * were actually customized against the default curves for this base color.
  */
-export function initialPaletteState(seed: string | PaletteConfig): PaletteState {
+export function initialPaletteState(
+  seed: string | PaletteConfig,
+  gamut: Gamut = 'srgb',
+): PaletteState {
+  if (typeof seed === 'string') {
+    return {
+      config: createPalette(seed, undefined, gamut),
+      edited: { ...NOTHING_EDITED },
+    }
+  }
+  const base = parseToOklch(seed.base) ?? parseToOklch(FALLBACK_BASE)!
+  const defaults = defaultCurves(base, seed.steps, seed.baseIndex, gamut)
   return {
-    config: typeof seed === 'string' ? createPalette(seed) : seed,
-    edited:
-      typeof seed === 'string'
-        ? { ...NOTHING_EDITED }
-        : { lightness: true, chroma: true, hue: true },
+    config: seed,
+    edited: {
+      lightness: !curvesEqual(seed.lightness, defaults.lightness),
+      chroma: !curvesEqual(seed.chroma, defaults.chroma),
+      hue: !curvesEqual(seed.hue, defaults.hue),
+    },
   }
 }

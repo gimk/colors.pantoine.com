@@ -55,8 +55,13 @@ export function Toolbox({ doc, shareHref }: Props) {
             <span>Base at</span>
             <select
               value={selected.config.baseIndex}
+              disabled={selected.config.baseLocked}
               onChange={(event) => doc.setBaseIndex(Number(event.target.value))}
-              title="Which step carries your base colour. Moving it redistributes lightness across the ramp."
+              title={
+                selected.config.baseLocked
+                  ? 'Base position is locked. Unlock base to change which step carries your base colour.'
+                  : 'Which step carries your base colour. Moving it redistributes lightness across the ramp.'
+              }
             >
               {selected.ramp.map((swatch) => (
                 <option key={swatch.index} value={swatch.index}>

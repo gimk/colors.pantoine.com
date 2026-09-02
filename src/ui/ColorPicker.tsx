@@ -52,8 +52,8 @@ const NUDGE = { l: 0.01, c: 0.005, h: 1 }
 const COARSE = 5
 
 const toRgb = converter('rgb')
-const toHsv = converter('hsv')
-const toHsl = converter('hsl')
+const toOkhsv = converter('okhsv')
+const toOkhsl = converter('okhsl')
 const toOklch = converter('oklch')
 
 let offscreenCanvas: HTMLCanvasElement | null = null
@@ -93,7 +93,85 @@ function generateSliceDataUrl(h: number, axis: number): string {
   return offscreenCanvas.toDataURL()
 }
 
-export type ColorPickerModel = 'oklch' | 'hsv' | 'hsl'
+function generateOkhsvDataUrl(h: number): string {
+  if (typeof document === 'undefined') return ''
+  if (!offscreenCanvas) {
+    offscreenCanvas = document.createElement('canvas')
+  }
+  const W = 100
+  const H = 80
+  if (offscreenCanvas.width !== W || offscreenCanvas.height !== H) {
+    offscreenCanvas.width = W
+    offscreenCanvas.height = H
+  }
+  const ctx = offscreenCanvas.getContext('2d')
+  if (!ctx) return ''
+
+  const imgData = ctx.createImageData(W, H)
+  const data = imgData.data
+
+  for (let y = 0; y < H; y++) {
+    const v = 1 - (y + 0.5) / H
+    const rowOffset = y * W * 4
+    for (let x = 0; x < W; x++) {
+      const s = (x + 0.5) / W
+      const rgb = toRgb(toOklch({ mode: 'okhsv', h, s, v }))
+      const idx = rowOffset + x * 4
+      data[idx] = Math.min(255, Math.max(0, Math.round((rgb?.r ?? 0) * 255)))
+      data[idx + 1] = Math.min(255, Math.max(0, Math.round((rgb?.g ?? 0) * 255)))
+      data[idx + 2] = Math.min(255, Math.max(0, Math.round((rgb?.b ?? 0) * 255)))
+      data[idx + 3] = 255
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0)
+  return offscreenCanvas.toDataURL()
+}
+
+function generateOkhslDataUrl(h: number): string {
+  if (typeof document === 'undefined') return ''
+  if (!offscreenCanvas) {
+    offscreenCanvas = document.createElement('canvas')
+  }
+  const W = 100
+  const H = 80
+  if (offscreenCanvas.width !== W || offscreenCanvas.height !== H) {
+    offscreenCanvas.width = W
+    offscreenCanvas.height = H
+  }
+  const ctx = offscreenCanvas.getContext('2d')
+  if (!ctx) return ''
+
+  const imgData = ctx.createImageData(W, H)
+  const data = imgData.data
+
+  for (let y = 0; y < H; y++) {
+    const l = 1 - (y + 0.5) / H
+    const rowOffset = y * W * 4
+    for (let x = 0; x < W; x++) {
+      const s = (x + 0.5) / W
+      const rgb = toRgb(toOklch({ mode: 'okhsl', h, s, l }))
+      const idx = rowOffset + x * 4
+      data[idx] = Math.min(255, Math.max(0, Math.round((rgb?.r ?? 0) * 255)))
+      data[idx + 1] = Math.min(255, Math.max(0, Math.round((rgb?.g ?? 0) * 255)))
+      data[idx + 2] = Math.min(255, Math.max(0, Math.round((rgb?.b ?? 0) * 255)))
+      data[idx + 3] = 255
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0)
+  return offscreenCanvas.toDataURL()
+}
+
+const OK_HUE_HEXES = [
+  '#ff0088', '#ff0068', '#ff0044', '#ff1500', '#ff5a00', '#ff7900', '#ff9000', '#ffa400',
+  '#ffb700', '#ffcb00', '#ffe200', '#feff00', '#d9ff00', '#a9ff00', '#52ff00', '#00ff78',
+  '#00ffa9', '#00ffc9', '#00ffe1', '#00fff6', '#00f5ff', '#00e4ff', '#00d3ff', '#00c2ff',
+  '#00aeff', '#0096ff', '#006cff', '#3000ff', '#5500ff', '#7401ff', '#9301ff', '#b401ff',
+  '#da00ff', '#ff00f7', '#ff00cd', '#ff00a9', '#ff0088',
+]
+
+export type ColorPickerModel = 'oklch' | 'okhsv' | 'okhsl'
 
 type Props = {
   color: Oklch
@@ -133,8 +211,9 @@ export function ColorPicker({
   const cells = sliceCells(color.h, gamut)
   const boundary = gamutBoundary(color.h, gamut)
   const cusp = cuspFor(color.h, gamut)
-
   const [sliceUrl, setSliceUrl] = useState<string>('')
+  const [okhsvUrl, setOkhsvUrl] = useState<string>('')
+  const [okhslUrl, setOkhslUrl] = useState<string>('')
 
   useLayoutEffect(() => {
     setSliceUrl(generateSliceDataUrl(color.h, axis))
@@ -167,8 +246,9 @@ export function ColorPicker({
    * of a lightness step is past what 72 patches can show and this way a fine
    * drag stops rebuilding it at all.
    */
-  const stripL = Math.round(color.l * 50) / 50
-  const stripC = Math.round(color.c * 100) / 100
+  const stripL = Math.max(0.1, Math.min(color.l, 0.9))
+  const stripC = Math.max(0.04, Math.min(color.c, 0.16))
+
   const stops = useMemo(() => hueStops(stripL, stripC, gamut), [stripL, stripC, gamut])
   const stopEls = useMemo(() => {
     const w = plotW / stops.length
@@ -196,32 +276,40 @@ export function ColorPicker({
     [boundary, axis, plotW, plotH],
   )
 
-  const activeHsvHueRef = useRef<number>(0)
-  const activeHslHueRef = useRef<number>(0)
+  const activeOkhsvHueRef = useRef<number>(0)
+  const activeOkhslHueRef = useRef<number>(0)
 
-  const hsv = useMemo(() => {
-    const raw = toHsv({ mode: 'oklch', ...color })
+  const okhsv = useMemo(() => {
+    const raw = toOkhsv({ mode: 'oklch', ...color })
     if (raw?.h != null && !isNaN(raw.h)) {
-      activeHsvHueRef.current = raw.h
+      activeOkhsvHueRef.current = raw.h
     }
     return {
-      h: activeHsvHueRef.current,
+      h: activeOkhsvHueRef.current,
       s: clamp(raw?.s ?? 0, 0, 1),
       v: clamp(raw?.v ?? 0, 0, 1),
     }
   }, [color])
 
-  const hsl = useMemo(() => {
-    const raw = toHsl({ mode: 'oklch', ...color })
+  const okhsl = useMemo(() => {
+    const raw = toOkhsl({ mode: 'oklch', ...color })
     if (raw?.h != null && !isNaN(raw.h)) {
-      activeHslHueRef.current = raw.h
+      activeOkhslHueRef.current = raw.h
     }
     return {
-      h: activeHslHueRef.current,
+      h: activeOkhslHueRef.current,
       s: clamp(raw?.s ?? 0, 0, 1),
       l: clamp(raw?.l ?? 0, 0, 1),
     }
   }, [color])
+
+  useLayoutEffect(() => {
+    if (model === 'okhsv') {
+      setOkhsvUrl(generateOkhsvDataUrl(okhsv.h))
+    } else if (model === 'okhsl') {
+      setOkhslUrl(generateOkhslDataUrl(okhsl.h))
+    }
+  }, [model, okhsv.h, okhsl.h])
 
   let markerX = 0
   let markerY = 0
@@ -232,14 +320,14 @@ export function ColorPicker({
     markerX = PAD.left + clamp(point.x, 0, 1) * plotW
     markerY = PAD.top + clamp(point.y, 0, 1) * plotH
     hueMarkerX = PAD.left + (normalizeHue(color.h) / 360) * plotW
-  } else if (model === 'hsv') {
-    markerX = PAD.left + hsv.s * plotW
-    markerY = PAD.top + (1 - hsv.v) * plotH
-    hueMarkerX = PAD.left + (normalizeHue(hsv.h) / 360) * plotW
+  } else if (model === 'okhsv') {
+    markerX = PAD.left + okhsv.s * plotW
+    markerY = PAD.top + (1 - okhsv.v) * plotH
+    hueMarkerX = PAD.left + (normalizeHue(okhsv.h) / 360) * plotW
   } else {
-    markerX = PAD.left + hsl.s * plotW
-    markerY = PAD.top + (1 - hsl.l) * plotH
-    hueMarkerX = PAD.left + (normalizeHue(hsl.h) / 360) * plotW
+    markerX = PAD.left + okhsl.s * plotW
+    markerY = PAD.top + (1 - okhsl.l) * plotH
+    hueMarkerX = PAD.left + (normalizeHue(okhsl.h) / 360) * plotW
   }
 
   // Where an out-of-gamut request will actually land. Taken exactly rather
@@ -292,14 +380,14 @@ export function ColorPicker({
     if (model === 'oklch') {
       const next = fromSlicePoint(x, y, gamut)
       onChange({ ...color, l: next.l, c: next.c })
-    } else if (model === 'hsv') {
+    } else if (model === 'okhsv') {
       const s = x
       const v = 1 - y
-      emitOklch(toOklch({ mode: 'hsv', h: hsv.h, s, v }))
+      emitOklch(toOklch({ mode: 'okhsv', h: okhsv.h, s, v }))
     } else {
       const s = x
       const l = 1 - y
-      emitOklch(toOklch({ mode: 'hsl', h: hsl.h, s, l }))
+      emitOklch(toOklch({ mode: 'okhsl', h: okhsl.h, s, l }))
     }
   }
 
@@ -311,12 +399,12 @@ export function ColorPicker({
 
     if (model === 'oklch') {
       onChange({ ...color, h: newH })
-    } else if (model === 'hsv') {
-      activeHsvHueRef.current = newH
-      emitOklch(toOklch({ mode: 'hsv', h: newH, s: hsv.s, v: hsv.v }))
+    } else if (model === 'okhsv') {
+      activeOkhsvHueRef.current = newH
+      emitOklch(toOklch({ mode: 'okhsv', h: newH, s: okhsv.s, v: okhsv.v }))
     } else {
-      activeHslHueRef.current = newH
-      emitOklch(toOklch({ mode: 'hsl', h: newH, s: hsl.s, l: hsl.l }))
+      activeOkhslHueRef.current = newH
+      emitOklch(toOklch({ mode: 'okhsl', h: newH, s: okhsl.s, l: okhsl.l }))
     }
   }
 
@@ -363,26 +451,26 @@ export function ColorPicker({
       if (!next) return
       event.preventDefault()
       onChange({ ...next, l: clamp(next.l, 0, 1), c: clamp(next.c, 0, axis) })
-    } else if (model === 'hsv') {
-      let nextS = hsv.s
-      let nextV = hsv.v
-      if (event.key === 'ArrowUp') nextV = clamp(hsv.v + 0.01 * scale, 0, 1)
-      else if (event.key === 'ArrowDown') nextV = clamp(hsv.v - 0.01 * scale, 0, 1)
-      else if (event.key === 'ArrowRight') nextS = clamp(hsv.s + 0.01 * scale, 0, 1)
-      else if (event.key === 'ArrowLeft') nextS = clamp(hsv.s - 0.01 * scale, 0, 1)
+    } else if (model === 'okhsv') {
+      let nextS = okhsv.s
+      let nextV = okhsv.v
+      if (event.key === 'ArrowUp') nextV = clamp(okhsv.v + 0.01 * scale, 0, 1)
+      else if (event.key === 'ArrowDown') nextV = clamp(okhsv.v - 0.01 * scale, 0, 1)
+      else if (event.key === 'ArrowRight') nextS = clamp(okhsv.s + 0.01 * scale, 0, 1)
+      else if (event.key === 'ArrowLeft') nextS = clamp(okhsv.s - 0.01 * scale, 0, 1)
       else return
       event.preventDefault()
-      emitOklch(toOklch({ mode: 'hsv', h: hsv.h, s: nextS, v: nextV }))
+      emitOklch(toOklch({ mode: 'okhsv', h: okhsv.h, s: nextS, v: nextV }))
     } else {
-      let nextS = hsl.s
-      let nextL = hsl.l
-      if (event.key === 'ArrowUp') nextL = clamp(hsl.l + 0.01 * scale, 0, 1)
-      else if (event.key === 'ArrowDown') nextL = clamp(hsl.l - 0.01 * scale, 0, 1)
-      else if (event.key === 'ArrowRight') nextS = clamp(hsl.s + 0.01 * scale, 0, 1)
-      else if (event.key === 'ArrowLeft') nextS = clamp(hsl.s - 0.01 * scale, 0, 1)
+      let nextS = okhsl.s
+      let nextL = okhsl.l
+      if (event.key === 'ArrowUp') nextL = clamp(okhsl.l + 0.01 * scale, 0, 1)
+      else if (event.key === 'ArrowDown') nextL = clamp(okhsl.l - 0.01 * scale, 0, 1)
+      else if (event.key === 'ArrowRight') nextS = clamp(okhsl.s + 0.01 * scale, 0, 1)
+      else if (event.key === 'ArrowLeft') nextS = clamp(okhsl.s - 0.01 * scale, 0, 1)
       else return
       event.preventDefault()
-      emitOklch(toOklch({ mode: 'hsl', h: hsl.h, s: nextS, l: nextL }))
+      emitOklch(toOklch({ mode: 'okhsl', h: okhsl.h, s: nextS, l: nextL }))
     }
   }
 
@@ -396,14 +484,14 @@ export function ColorPicker({
 
     if (model === 'oklch') {
       onChange({ ...color, h: normalizeHue(color.h + delta) })
-    } else if (model === 'hsv') {
-      const newH = normalizeHue(hsv.h + delta)
-      activeHsvHueRef.current = newH
-      emitOklch(toOklch({ mode: 'hsv', h: newH, s: hsv.s, v: hsv.v }))
+    } else if (model === 'okhsv') {
+      const newH = normalizeHue(okhsv.h + delta)
+      activeOkhsvHueRef.current = newH
+      emitOklch(toOklch({ mode: 'okhsv', h: newH, s: okhsv.s, v: okhsv.v }))
     } else {
-      const newH = normalizeHue(hsl.h + delta)
-      activeHslHueRef.current = newH
-      emitOklch(toOklch({ mode: 'hsl', h: newH, s: hsl.s, l: hsl.l }))
+      const newH = normalizeHue(okhsl.h + delta)
+      activeOkhslHueRef.current = newH
+      emitOklch(toOklch({ mode: 'okhsl', h: newH, s: okhsl.s, l: okhsl.l }))
     }
   }
 
@@ -421,9 +509,9 @@ export function ColorPicker({
         aria-label={
           model === 'oklch'
             ? `Lightness and chroma at hue ${readH}`
-            : model === 'hsv'
-              ? `Saturation and value at hue ${hsv.h.toFixed(1)}`
-              : `Saturation and lightness at hue ${hsl.h.toFixed(1)}`
+            : model === 'okhsv'
+              ? `Saturation and value at hue ${okhsv.h.toFixed(1)}`
+              : `Saturation and lightness at hue ${okhsl.h.toFixed(1)}`
         }
         onPointerDown={beginDrag('plot')}
       >
@@ -432,34 +520,6 @@ export function ColorPicker({
             <clipPath id="cpick-wedge">
               <path d={`${edgePath} L ${PAD.left} ${PAD.top} L ${PAD.left} ${PAD.top + plotH} Z`} />
             </clipPath>
-          )}
-
-          {model === 'hsv' && (
-            <>
-              <linearGradient id="hsv-x" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#ffffff" />
-                <stop offset="100%" stopColor={`hsl(${hsv.h}, 100%, 50%)`} />
-              </linearGradient>
-              <linearGradient id="hsv-y" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#000000" stopOpacity="0" />
-                <stop offset="100%" stopColor="#000000" stopOpacity="1" />
-              </linearGradient>
-            </>
-          )}
-
-          {model === 'hsl' && (
-            <>
-              <linearGradient id="hsl-x" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#808080" />
-                <stop offset="100%" stopColor={`hsl(${hsl.h}, 100%, 50%)`} />
-              </linearGradient>
-              <linearGradient id="hsl-y" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
-                <stop offset="50%" stopColor="#ffffff" stopOpacity="0" />
-                <stop offset="50.001%" stopColor="#000000" stopOpacity="0" />
-                <stop offset="100%" stopColor="#000000" stopOpacity="1" />
-              </linearGradient>
-            </>
           )}
         </defs>
 
@@ -505,18 +565,34 @@ export function ColorPicker({
           </>
         )}
 
-        {model === 'hsv' && (
-          <>
-            <rect x={PAD.left} y={PAD.top} width={plotW} height={plotH} fill="url(#hsv-x)" />
-            <rect x={PAD.left} y={PAD.top} width={plotW} height={plotH} fill="url(#hsv-y)" />
-          </>
+        {model === 'okhsv' && (
+          okhsvUrl ? (
+            <image
+              href={okhsvUrl}
+              x={PAD.left}
+              y={PAD.top}
+              width={plotW}
+              height={plotH}
+              preserveAspectRatio="none"
+            />
+          ) : (
+            <rect x={PAD.left} y={PAD.top} width={plotW} height={plotH} fill="#808080" />
+          )
         )}
 
-        {model === 'hsl' && (
-          <>
-            <rect x={PAD.left} y={PAD.top} width={plotW} height={plotH} fill="url(#hsl-x)" />
-            <rect x={PAD.left} y={PAD.top} width={plotW} height={plotH} fill="url(#hsl-y)" />
-          </>
+        {model === 'okhsl' && (
+          okhslUrl ? (
+            <image
+              href={okhslUrl}
+              x={PAD.left}
+              y={PAD.top}
+              width={plotW}
+              height={plotH}
+              preserveAspectRatio="none"
+            />
+          ) : (
+            <rect x={PAD.left} y={PAD.top} width={plotW} height={plotH} fill="#808080" />
+          )
         )}
 
         <rect
@@ -539,16 +615,16 @@ export function ColorPicker({
           aria-label={
             model === 'oklch'
               ? 'Lightness and chroma'
-              : model === 'hsv'
+              : model === 'okhsv'
                 ? 'Saturation and value'
                 : 'Saturation and lightness'
           }
           aria-valuetext={
             model === 'oklch'
               ? `Lightness ${readL} percent, chroma ${readC}`
-              : model === 'hsv'
-                ? `Saturation ${(hsv.s * 100).toFixed(0)} percent, value ${(hsv.v * 100).toFixed(0)} percent`
-                : `Saturation ${(hsl.s * 100).toFixed(0)} percent, lightness ${(hsl.l * 100).toFixed(0)} percent`
+              : model === 'okhsv'
+                ? `Saturation ${(okhsv.s * 100).toFixed(0)} percent, value ${(okhsv.v * 100).toFixed(0)} percent`
+                : `Saturation ${(okhsl.s * 100).toFixed(0)} percent, lightness ${(okhsl.l * 100).toFixed(0)} percent`
           }
           onKeyDown={onPlotKey}
         />
@@ -563,21 +639,21 @@ export function ColorPicker({
         onPointerDown={beginDrag('hue')}
       >
         <defs>
-          <linearGradient id="hue-rainbow" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#ff0000" />
-            <stop offset="16.66%" stopColor="#ffff00" />
-            <stop offset="33.33%" stopColor="#00ff00" />
-            <stop offset="50%" stopColor="#00ffff" />
-            <stop offset="66.66%" stopColor="#0000ff" />
-            <stop offset="83.33%" stopColor="#ff00ff" />
-            <stop offset="100%" stopColor="#ff0000" />
+          <linearGradient id="okhv-hue-rainbow" x1="0" y1="0" x2="1" y2="0">
+            {OK_HUE_HEXES.map((hex, i) => (
+              <stop
+                key={i}
+                offset={`${((i / (OK_HUE_HEXES.length - 1)) * 100).toFixed(2)}%`}
+                stopColor={hex}
+              />
+            ))}
           </linearGradient>
         </defs>
 
         {model === 'oklch' ? (
           stopEls
         ) : (
-          <rect x={PAD.left} y={0.5} width={plotW} height={HUE_H - 1} fill="url(#hue-rainbow)" />
+          <rect x={PAD.left} y={0.5} width={plotW} height={HUE_H - 1} fill="url(#okhv-hue-rainbow)" />
         )}
 
         <rect
@@ -639,89 +715,89 @@ export function ColorPicker({
           </>
         )}
 
-        {model === 'hsv' && (
+        {model === 'okhsv' && (
           <>
             <NumberField
               label="H"
               title="Hue angle, 0 to 360"
-              value={normalizeHue(hsv.h)}
+              value={normalizeHue(okhsv.h)}
               min={0}
               max={360}
               step={1}
               decimals={1}
               onCommit={(value) => {
-                activeHsvHueRef.current = value
-                emitOklch(toOklch({ mode: 'hsv', h: value, s: hsv.s, v: hsv.v }))
+                activeOkhsvHueRef.current = value
+                emitOklch(toOklch({ mode: 'okhsv', h: value, s: okhsv.s, v: okhsv.v }))
               }}
             />
             <NumberField
               label="S"
               title="Saturation, 0 to 100 percent"
-              value={hsv.s * 100}
+              value={okhsv.s * 100}
               min={0}
               max={100}
               step={1}
               decimals={1}
               onCommit={(value) => {
                 const s = value / 100
-                emitOklch(toOklch({ mode: 'hsv', h: hsv.h, s, v: hsv.v }))
+                emitOklch(toOklch({ mode: 'okhsv', h: okhsv.h, s, v: okhsv.v }))
               }}
             />
             <NumberField
               label="V"
               title="Value / Brightness, 0 to 100 percent"
-              value={hsv.v * 100}
+              value={okhsv.v * 100}
               min={0}
               max={100}
               step={1}
               decimals={1}
               onCommit={(value) => {
                 const v = value / 100
-                emitOklch(toOklch({ mode: 'hsv', h: hsv.h, s: hsv.s, v }))
+                emitOklch(toOklch({ mode: 'okhsv', h: okhsv.h, s: okhsv.s, v }))
               }}
             />
           </>
         )}
 
-        {model === 'hsl' && (
+        {model === 'okhsl' && (
           <>
             <NumberField
               label="H"
               title="Hue angle, 0 to 360"
-              value={normalizeHue(hsl.h)}
+              value={normalizeHue(okhsl.h)}
               min={0}
               max={360}
               step={1}
               decimals={1}
               onCommit={(value) => {
-                activeHslHueRef.current = value
-                emitOklch(toOklch({ mode: 'hsl', h: value, s: hsl.s, l: hsl.l }))
+                activeOkhslHueRef.current = value
+                emitOklch(toOklch({ mode: 'okhsl', h: value, s: okhsl.s, l: okhsl.l }))
               }}
             />
             <NumberField
               label="S"
               title="Saturation, 0 to 100 percent"
-              value={hsl.s * 100}
+              value={okhsl.s * 100}
               min={0}
               max={100}
               step={1}
               decimals={1}
               onCommit={(value) => {
                 const s = value / 100
-                emitOklch(toOklch({ mode: 'hsl', h: hsl.h, s, l: hsl.l }))
+                emitOklch(toOklch({ mode: 'okhsl', h: okhsl.h, s, l: okhsl.l }))
               }}
             />
             <NumberField
               label="L"
               title="Lightness, 0 to 100 percent"
-              value={hsl.l * 100}
+              value={okhsl.l * 100}
               min={0}
               max={100}
               step={1}
               decimals={1}
               onCommit={(value) => {
                 const l = value / 100
-                emitOklch(toOklch({ mode: 'hsl', h: hsl.h, s: hsl.s, l }))
+                emitOklch(toOklch({ mode: 'okhsl', h: okhsl.h, s: okhsl.s, l }))
               }}
             />
           </>

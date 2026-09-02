@@ -64,8 +64,28 @@ describe('the OKLCH picker', () => {
     )
     expect(openDialog).toContain('<span>Gamut</span>')
     expect(openDialog).toContain('<select')
+    expect(openDialog).toContain('value="p3"')
+    expect(openDialog).toContain('value="rec2020"')
+    expect(openDialog).toContain('value="oklab"')
     expect(openDialog).toContain('Display P3')
     expect(openDialog).toContain('Rec. 2020')
+    expect(openDialog).toContain('OKLab')
+  })
+
+  it('renders in OKHSV and OKHSL models across all gamuts without crashing', () => {
+    for (const gamut of ['srgb', 'p3', 'a98', 'rec2020', 'oklab'] as const) {
+      for (const model of ['oklch', 'okhsv', 'okhsl'] as const) {
+        const rendered = renderToStaticMarkup(
+          <ColorPicker
+            color={violet}
+            gamut={gamut}
+            model={model}
+            onChange={() => {}}
+          />,
+        )
+        expect(rendered).toContain('cpick')
+      }
+    }
   })
 
   it('draws the slice and the hue strip, and nothing else', () => {
@@ -286,7 +306,7 @@ describe('the cusp, across hues', () => {
 })
 
 describe('classic color models (HSV and HSL)', () => {
-  it('offers a model switcher in the dialog header', () => {
+  it('provides a model dropdown offering OKLCH, OKHSV, and OKHSL', () => {
     const dialog = renderToStaticMarkup(
       <ColorPickerDialog
         color={violet}
@@ -296,42 +316,36 @@ describe('classic color models (HSV and HSL)', () => {
         defaultOpen
       />,
     )
-    expect(dialog).toContain('<span>Model</span>')
     expect(dialog).toContain('OKLCH')
-    expect(dialog).toContain('HSV')
-    expect(dialog).toContain('HSL')
+    expect(dialog).toContain('OKHSV')
+    expect(dialog).toContain('OKHSL')
   })
 
-  it('renders HSV mode with saturation/value gradients and H, S, V numeric fields', () => {
+  it('renders OKHSV mode with saturation/value plane and H, S, V numeric fields', () => {
     const html = renderToStaticMarkup(
-      <ColorPicker color={violet} gamut="srgb" model="hsv" onChange={() => {}} />,
+      <ColorPicker color={violet} gamut="srgb" model="okhsv" onChange={() => {}} />,
     )
-    expect(html).toContain('id="hsv-x"')
-    expect(html).toContain('id="hsv-y"')
-    expect(html).toContain('id="hue-rainbow"')
+    expect(html).toContain('id="okhv-hue-rainbow"')
     expect(html).toContain('>H</span>')
     expect(html).toContain('>S</span>')
     expect(html).toContain('>V</span>')
   })
 
-  it('renders HSL mode with saturation/lightness gradients and H, S, L numeric fields', () => {
+  it('renders OKHSL mode with saturation/lightness plane and H, S, L numeric fields', () => {
     const html = renderToStaticMarkup(
-      <ColorPicker color={violet} gamut="srgb" model="hsl" onChange={() => {}} />,
+      <ColorPicker color={violet} gamut="srgb" model="okhsl" onChange={() => {}} />,
     )
-    expect(html).toContain('id="hsl-x"')
-    expect(html).toContain('id="hsl-y"')
-    expect(html).toContain('id="hue-rainbow"')
+    expect(html).toContain('id="okhv-hue-rainbow"')
     expect(html).toContain('>H</span>')
     expect(html).toContain('>S</span>')
     expect(html).toContain('>L</span>')
   })
 
-  it('positions the marker accurately in HSV and HSL modes', () => {
-    // Pure red in sRGB has H=0, S=1, V=1, L=0.5
-    // In OKLCH: l ≈ 0.628, c ≈ 0.2577, h ≈ 29.23
+  it('positions the marker accurately in OKHSV and OKHSL modes', () => {
+    // Pure red in sRGB has OKHSV: S=1, V=1, H≈29.23; OKHSL: S=1, L≈0.568
     const red = { l: 0.627955, c: 0.257683, h: 29.2339 }
     const hsvHtml = renderToStaticMarkup(
-      <ColorPicker color={red} gamut="srgb" model="hsv" onChange={() => {}} />,
+      <ColorPicker color={red} gamut="srgb" model="okhsv" onChange={() => {}} />,
     )
     // S=1 (far right), V=1 (top)
     const hsvMarker = hsvHtml.match(/class="cpick__marker" cx="([\d.]+)" cy="([\d.]+)"/)!
@@ -339,12 +353,11 @@ describe('classic color models (HSV and HSL)', () => {
     expect(Number(hsvMarker[2])).toBeLessThan(2) // near top edge
 
     const hslHtml = renderToStaticMarkup(
-      <ColorPicker color={red} gamut="srgb" model="hsl" onChange={() => {}} />,
+      <ColorPicker color={red} gamut="srgb" model="okhsl" onChange={() => {}} />,
     )
-    // S=1 (far right), L=0.5 (middle: 240 * 0.5 = 120)
+    // S=1 (far right), L≈0.568 (cy ≈ 103)
     const hslMarker = hslHtml.match(/class="cpick__marker" cx="([\d.]+)" cy="([\d.]+)"/)!
     expect(Number(hslMarker[1])).toBeGreaterThan(250) // near right edge
-    expect(Number(hslMarker[2])).toBeCloseTo(120, 0) // exact vertical middle
+    expect(Number(hslMarker[2])).toBeCloseTo(103.7, 0)
   })
 })
-

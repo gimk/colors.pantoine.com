@@ -15,12 +15,14 @@ describe('gamut detection and mapping', () => {
     expect(isInGamut(vividGreen, 'p3')).toBe(true)
     expect(isInGamut(vividGreen, 'a98')).toBe(true)
     expect(isInGamut(vividGreen, 'rec2020')).toBe(true)
+    expect(isInGamut(vividGreen, 'oklab')).toBe(true)
   })
 
   it('clips colours in sRGB that fit cleanly in Display P3', () => {
     const srgbMapped = mapToGamut(vividGreen, 'srgb')
     const p3Mapped = mapToGamut(vividGreen, 'p3')
     const a98Mapped = mapToGamut(vividGreen, 'a98')
+    const oklabMapped = mapToGamut(vividGreen, 'oklab')
 
     expect(srgbMapped.clipped).toBe(true)
     expect(srgbMapped.chromaLost).toBeGreaterThan(0.004)
@@ -30,19 +32,24 @@ describe('gamut detection and mapping', () => {
 
     expect(a98Mapped.clipped).toBe(false)
     expect(a98Mapped.chromaLost).toBeCloseTo(0, 4)
+
+    expect(oklabMapped.clipped).toBe(false)
+    expect(oklabMapped.chromaLost).toBe(0)
   })
 
   it('formats displayColor appropriately for wide gamuts', () => {
     const srgbMapped = mapToGamut(vividGreen, 'srgb')
     const p3Mapped = mapToGamut(vividGreen, 'p3')
     const a98Mapped = mapToGamut(vividGreen, 'a98')
+    const oklabMapped = mapToGamut(vividGreen, 'oklab')
 
     // sRGB uses plain hex
     expect(srgbMapped.displayColor).toMatch(/^#[0-9a-f]{6}$/i)
 
-    // Wide gamuts use CSS Color 4 color() notation
+    // Wide gamuts use CSS Color 4 color() notation or oklab()
     expect(p3Mapped.displayColor).toContain('color(display-p3')
     expect(a98Mapped.displayColor).toContain('color(a98-rgb')
+    expect(oklabMapped.displayColor).toContain('oklab(')
   })
 
   it('reflects gamut choice in generated swatches clipping flags', () => {
@@ -119,7 +126,7 @@ describe('color() output', () => {
 
   /** Copied by hand, so the boundary's float dust must not be printed. */
   it('rounds the channels it prints', () => {
-    for (const gamut of ['srgb', 'p3', 'a98', 'rec2020'] as const) {
+    for (const gamut of ['srgb', 'p3', 'a98', 'rec2020', 'oklab'] as const) {
       for (const channel of toColorCss({ l: 0.7, c: 0.42, h: 150 }, gamut).match(/[\d.]+/g) ?? []) {
         expect(channel.replace(/^\d+\.?/, '').length).toBeLessThanOrEqual(4)
       }
@@ -151,5 +158,22 @@ describe('chroma derivation follows the gamut', () => {
     expect(createPalette('#00ff66', 11, 'rec2020').chroma).not.toEqual(
       createPalette('#00ff66', 11, 'srgb').chroma,
     )
+  })
+})
+
+describe('OKLab gamut', () => {
+  it('treats wide chroma colors as unclipped and formats with oklab()', () => {
+    const color: Oklch = { l: 0.7, c: 0.35, h: 200 }
+    const mapped = mapToGamut(color, 'oklab')
+    expect(mapped.clipped).toBe(false)
+    expect(mapped.chromaLost).toBe(0)
+    expect(mapped.displayColor).toMatch(/^oklab\(/)
+    expect(toColorCss(color, 'oklab')).toMatch(/^oklab\(/)
+  })
+
+  it('allows palettes to generate unclipped swatches in oklab gamut', () => {
+    const config = createPalette('#00ff66', 11, 'oklab')
+    const ramp = generateRamp(config, 'oklab')
+    expect(ramp.every((s) => !s.clipped)).toBe(true)
   })
 })

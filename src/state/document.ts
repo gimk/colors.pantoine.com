@@ -1,5 +1,5 @@
 import { CHANNEL_ORDER, clamp, curvesEqual, type Curve } from '../color/curve'
-import { normalizeHue, toHex, type Gamut } from '../color/oklch'
+import { normalizeHue, parseGamut, toHex, type Gamut } from '../color/oklch'
 import {
   chromaCurveFor,
   createPalette,
@@ -93,9 +93,9 @@ function makeEntry(
     }
   }
   // A config seed arrives fully formed, from a link or from storage, so
-  // `steps` and `gamut` have nothing to derive and are deliberately unused:
+  // `steps` has nothing to derive and is deliberately unused:
   // overriding its curves here would discard someone's saved work.
-  return { id: makeId(), name, state: initialPaletteState(seed) }
+  return { id: makeId(), name, state: initialPaletteState(seed, gamut) }
 }
 
 export function createDocument(
@@ -107,7 +107,7 @@ export function createDocument(
   const globalSteps = seeds.length ? seeds[0].config.steps : DEFAULT_STEPS
   const palettes = seeds.length
     ? seeds.map((seed) => {
-        const entry = makeEntry(seed.config, seed.name)
+        const entry = makeEntry(seed.config, seed.name, undefined, gamut)
         if (entry.state.config.steps !== globalSteps) {
           entry.state = paletteReducer(
             entry.state,
@@ -291,12 +291,13 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
     }
 
     case 'setGamut': {
-      if (action.value === state.gamut) return state
+      const nextGamut = parseGamut(action.value)
+      if (!nextGamut || nextGamut === state.gamut) return state
       const palettes = state.palettes.map((entry) => {
-        const next = paletteReducer(entry.state, { type: 'regamut' }, action.value)
+        const next = paletteReducer(entry.state, { type: 'regamut' }, nextGamut)
         return next === entry.state ? entry : { ...entry, state: next }
       })
-      return { ...state, gamut: action.value, palettes }
+      return { ...state, gamut: nextGamut, palettes }
     }
     case 'setSteps': {
       const steps = clamp(Math.round(action.value), MIN_STEPS, MAX_STEPS)

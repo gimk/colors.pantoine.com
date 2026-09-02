@@ -37,6 +37,7 @@ export const AXIS_MAX: Record<Gamut, number> = {
   p3: 0.37,
   a98: 0.39,
   rec2020: 0.46,
+  oklab: 0.50,
 }
 
 export function axisMaxChroma(gamut: Gamut): number {

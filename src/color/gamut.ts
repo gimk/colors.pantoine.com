@@ -13,6 +13,9 @@ const PRECISION = 1e-4
  */
 export function maxChromaFor(l: number, h: number, gamut: Gamut = 'srgb'): number {
   if (l <= 0 || l >= 1) return 0
+  if (gamut === 'oklab') {
+    return Math.sin(l * Math.PI) * 0.48
+  }
   if (isInGamut({ l, c: CHROMA_CEILING, h }, gamut)) return CHROMA_CEILING
 
   let lo = 0

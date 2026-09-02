@@ -520,21 +520,23 @@ button.swatch:hover:not(:disabled) {
 
 /* --- colour picker --------------------------------------------------- */
 
-/* A modal, not a popover: the toolbox dock is a `max-height` scroll
-   container, so anything absolutely positioned inside it is clipped at the
-   dock's edge. Padding stays at zero for the same reason as the help
-   dialog — the panel then covers the box, so a click on the dialog itself
-   can only be the backdrop. */
+/* Floating dialog positioned adjacent to the picker button.
+   Zero dark backdrop overlay so the canvas and swatches remain fully visible. */
 .cdialog {
+  position: fixed;
+  margin: 0;
+  inset: auto;
   border: 1px solid var(--rule);
   padding: 0;
   background: var(--paper);
   color: var(--ink);
   width: min(420px, calc(100vw - 32px));
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.2), 0 0 0 1px var(--rule);
+  z-index: 100;
 }
 
 .cdialog::backdrop {
-  background: rgb(0 0 0 / 0.55);
+  background: transparent;
 }
 
 /* Every child here is a fixed height, and has to stay that way. The dialog
@@ -891,7 +893,8 @@ button.is-primary:hover:not(:disabled) {
   fill: var(--muted);
 }
 
-input:disabled {
+input:disabled,
+select:disabled {
   color: var(--muted);
   border-color: var(--muted);
   cursor: not-allowed;

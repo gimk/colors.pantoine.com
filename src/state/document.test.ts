@@ -242,6 +242,54 @@ describe('committing an endpoint', () => {
   })
 })
 
+describe('setting base color', () => {
+  it('updates lightness and chroma curves when setting a new base color with baseLocked off', () => {
+    const doc = createDocument()
+    const initialConfig = doc.palettes[0].state.config
+    expect(initialConfig.baseLocked).toBe(false)
+
+    // Set a light yellow base color
+    const yellow = '#facc15'
+    const updated = run(doc, {
+      type: 'palette',
+      action: { type: 'setBase', value: yellow },
+    })
+    const newConfig = updated.palettes[0].state.config
+    expect(newConfig.base).toBe(yellow)
+    // Lightness and chroma must be derived for the new yellow base, not left untouched
+    expect(newConfig.lightness).not.toEqual(initialConfig.lightness)
+    expect(newConfig.chroma).not.toEqual(initialConfig.chroma)
+  })
+
+  it('locks base position so setBaseIndex is ignored and setBase retains baseIndex', () => {
+    const doc = createDocument()
+    // Lock the base
+    const locked = run(doc, {
+      type: 'palette',
+      action: { type: 'setBaseLocked', value: true },
+    })
+    const initialIndex = locked.palettes[0].state.config.baseIndex
+    expect(locked.palettes[0].state.config.baseLocked).toBe(true)
+
+    // Attempt to change baseIndex while locked
+    const attemptedIndex = (initialIndex + 2) % locked.palettes[0].state.config.steps
+    const afterIndexChange = run(locked, {
+      type: 'palette',
+      action: { type: 'setBaseIndex', value: attemptedIndex },
+    })
+    // Must remain at initialIndex
+    expect(afterIndexChange.palettes[0].state.config.baseIndex).toBe(initialIndex)
+
+    // Set a very dark base color that would normally shift baseIndex to the dark end
+    const afterDarkBase = run(locked, {
+      type: 'palette',
+      action: { type: 'setBase', value: '#050505' },
+    })
+    // Must remain at initialIndex
+    expect(afterDarkBase.palettes[0].state.config.baseIndex).toBe(initialIndex)
+  })
+})
+
 describe('the document gamut', () => {
   it('is sRGB unless a link or a save says otherwise', () => {
     expect(createDocument().gamut).toBe('srgb')

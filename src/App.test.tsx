@@ -43,12 +43,13 @@ describe('App', () => {
     expect(html).toContain('aria-pressed="false"')
   })
 
-  it('offers a gamut dropdown with sRGB, Display P3, Adobe RGB, and Rec. 2020', () => {
+  it('offers a gamut dropdown with sRGB, Display P3, Adobe RGB, Rec. 2020, and OKLab', () => {
     const select = html.match(/Gamut<\/span>.*?<\/select>/s)?.[0] ?? ''
     expect(select).toContain('sRGB')
     expect(select).toContain('Display P3')
     expect(select).toContain('Adobe RGB')
     expect(select).toContain('Rec. 2020')
+    expect(select).toContain('OKLab')
   })
 
   /**
