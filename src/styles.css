@@ -258,22 +258,25 @@ select {
   color: #b00;
 }
 
-/* Native colour picker, squared off and flush with the text field. */
+/* The swatch that opens the picker, squared off and flush with the text
+   field. A button rather than an `input[type=color]`: the system picker
+   speaks sRGB hex only, so on a wide-gamut document it cannot express the
+   colour being designed for.
+
+   Its background is set inline to the colour in hand, which outranks the
+   button hover rule — inverting a colour swatch would misreport it — so the
+   hover affordance is an outline instead. */
 .picker {
   width: 26px;
   height: 26px;
   padding: 0;
   border: 1px solid var(--rule);
-  background: none;
   cursor: pointer;
 }
 
-.picker::-webkit-color-swatch-wrapper {
-  padding: 2px;
-}
-
-.picker::-webkit-color-swatch {
-  border: none;
+.picker:hover {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
 }
 
 .spacer {
@@ -513,6 +516,196 @@ button.swatch:hover:not(:disabled) {
   fill: var(--muted);
   font-size: var(--text-2xs);
   font-family: var(--mono);
+}
+
+/* --- colour picker --------------------------------------------------- */
+
+/* A modal, not a popover: the toolbox dock is a `max-height` scroll
+   container, so anything absolutely positioned inside it is clipped at the
+   dock's edge. Padding stays at zero for the same reason as the help
+   dialog — the panel then covers the box, so a click on the dialog itself
+   can only be the backdrop. */
+.cdialog {
+  border: 1px solid var(--rule);
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  width: min(420px, calc(100vw - 32px));
+}
+
+.cdialog::backdrop {
+  background: rgb(0 0 0 / 0.55);
+}
+
+/* Every child here is a fixed height, and has to stay that way. The dialog
+   is centred, so anything that appears or vanishes mid-drag — a clipping
+   warning was the first attempt — re-centres the whole modal and shifts the
+   plot out from under the pointer. Out-of-gamut is reported inside the plot
+   instead, where it costs no layout. */
+.cpick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  box-sizing: border-box;
+}
+
+body.is-dragging-plot,
+body.is-dragging-plot * {
+  cursor: crosshair !important;
+  user-select: none !important;
+}
+
+body.is-dragging-hue,
+body.is-dragging-hue * {
+  cursor: ew-resize !important;
+  user-select: none !important;
+}
+
+/* Blocks, so the width the wrapper measures is the width these are given.
+   `touch-action: none` because both drags are ours: without it a drag on a
+   touchscreen scrolls the dialog instead of moving the marker.
+   All child markers and overlays have pointer-events: none so the pointer target
+   and cursor never oscillate or blink during a drag. */
+.cpick__plot,
+.cpick__hue {
+  display: block;
+  width: 100%;
+  touch-action: none;
+  user-select: none;
+}
+
+.cpick__plot {
+  cursor: crosshair;
+}
+
+.cpick__hue {
+  cursor: ew-resize;
+}
+
+.cpick__plot *,
+.cpick__hue * {
+  pointer-events: none;
+}
+
+.cpick__frame {
+  fill: none;
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+/* The exact gamut edge, drawn over the staircase of rows that approximates
+   it — the whole reason the slice is worth showing. */
+.cpick__edge {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+
+/* Always sits on the most saturated colour there is at this hue, so a paper
+   ring reads against it on either canvas. */
+.cpick__cusp {
+  fill: none;
+  stroke: var(--paper);
+  stroke-width: 2;
+}
+
+.cpick__spill {
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+
+.cpick__lands {
+  fill: none;
+  stroke: var(--paper);
+  stroke-width: 2;
+}
+
+/* Two rings, paper under ink, so the marker holds up on any colour beneath
+   it — including the near-white and near-black corners of the slice. */
+.cpick__halo {
+  fill: none;
+  stroke: var(--paper);
+  stroke-width: 3;
+}
+
+.cpick__marker {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.cpick__fields {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.cpick__fields .field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.cpick__fields .field input.number {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+/* The colour as a full-width band with its values beneath, rather than a
+   swatch beside them: it gives the pick real presence, and it leaves the
+   corner label room for the longest gamut name there is. */
+.cpick__out {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rule);
+  width: 100%;
+}
+
+.cpick__preview {
+  position: relative;
+  height: 48px;
+  border-bottom: 1px solid var(--rule);
+  width: 100%;
+}
+
+/* Ink on paper, as the ramp's own base label is: it lands on a colour the
+   eye is judging, so it cannot be a tint of one. */
+.cpick__clipped {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 1px 5px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cpick__values {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-2) var(--space-4);
+}
+
+.cpick__values code {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.cpick__hex {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  flex-shrink: 0;
 }
 
 /* --- export ---------------------------------------------------------- */

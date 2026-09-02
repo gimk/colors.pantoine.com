@@ -1,5 +1,5 @@
 import { CHANNEL_ORDER, type Curve, type CurveControl } from '../color/curve'
-import { parseToOklch, toHex } from '../color/oklch'
+import { parseToOklch } from '../color/oklch'
 import { FALLBACK_BASE, type CurveKey } from '../color/presets'
 import type { DocumentApi } from '../state/useDocument'
 import { BaseColorInput } from './BaseColorInput'
@@ -44,9 +44,11 @@ export function Toolbox({ doc, shareHref }: Props) {
 
           <BaseColorInput
             value={selected.config.base}
-            resolvedHex={toHex(parsedBase ?? parseToOklch(FALLBACK_BASE)!)}
+            color={parsedBase ?? parseToOklch(FALLBACK_BASE)!}
+            gamut={doc.gamut}
             valid={parsedBase !== null}
             onChange={doc.setBase}
+            onGamut={doc.setGamut}
           />
 
           <label className="field">

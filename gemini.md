@@ -49,7 +49,9 @@ colors.pantoine.com/
 │   │   ├── oklch.ts            # Culori wrappers, strict gamut mapping, WCAG 2.1 contrast, formatting
 │   │   ├── presets.ts          # Default curve generators, adaptive fitting, base pinning
 │   │   ├── ramp.ts             # PaletteConfig -> Swatch[] generation, clipping & duplicate detection
-│   │   └── shapes.ts           # One-click curve presets (Flat, Linear, Arc, Ease)
+│   │   ├── shapes.ts           # One-click curve presets (Flat, Linear, Arc, Ease)
+│   │   ├── slice.test.ts       # Tests for the constant-hue slice: boundary, cusp, axis, cells
+│   │   └── slice.ts            # Constant-hue slice geometry for the picker (wedge, cusp, hue strip)
 │   ├── export/                 # Export engines (Code, Tokens, Canvas, SVG)
 │   │   ├── export.test.ts      # Unit tests for text serializers & SVG generators
 │   │   ├── formats.ts          # Hex, OKLCH, CSS Vars, Tailwind, SCSS, JSON token formats
@@ -64,7 +66,10 @@ colors.pantoine.com/
 │   │   ├── url.ts              # Compact URL hash encoder/decoder (multi-palette separated by '~')
 │   │   └── useDocument.ts      # React hook coordinating state, history, and WeakMap ramp caching
 │   ├── ui/                     # Brutalist React UI components
-│   │   ├── BaseColorInput.tsx  # Text input + native color picker for base color
+│   │   ├── BaseColorInput.tsx  # Text input + swatch that opens the OKLCH picker
+│   │   ├── ColorPicker.test.tsx  # Tests for slice geometry, gamut wedge, and clipping readout
+│   │   ├── ColorPicker.tsx     # OKLCH picker: L/C slice with drawn gamut wedge, hue strip, fields
+│   │   ├── ColorPickerDialog.tsx # Modal wrapper and the swatch that opens it
 │   │   ├── CurveEditor.tsx     # Interactive SVG curve editor (tangent handles, keyboard controls)
 │   │   ├── CurvePanel.tsx      # Channel box with numeric endpoints, shapes, and curve editor
 │   │   ├── ExportPanel.tsx     # Copy/download buttons for text, PNG, SVG, and share link
@@ -103,6 +108,14 @@ colors.pantoine.com/
   - Computes the Bernstein basis $[(1-t)^3, 3(1-t)^2 t, 3(1-t) t^2, t^3]$ used for closed-form solving in curve fitting.
 - **`gamut.ts`**:
   - `maxChromaFor(l, h, gamut)`: Performs binary search up to precision $10^{-4}$ against `isInGamut` to determine the maximum achievable chroma for any given lightness and hue in the target gamut (sRGB, P3, Adobe RGB, Rec. 2020).
+- **`slice.ts`**:
+  - Geometry for the constant-hue slice the picker draws. Pure and unit-scaled (x and y in $[0, 1]$, lightness 1 at the top), so the component owns the pixels and this owns the colour.
+  - `AXIS_MAX`: the widest chroma each gamut reaches anywhere — sRGB `0.33`, P3 `0.37`, Adobe RGB `0.39`, Rec. 2020 `0.46` — measured by sweeping `maxChromaFor` across every hue and lightness. **Fixed per gamut, not normalised per hue**: the axis has to mean the same thing as the hue turns, or the wedge would breathe and the marker would slide sideways while the colour held still. The cost is genuine dead space (cyan's cusp is $0.161$, magenta's $0.294$), and that asymmetry is itself information.
+  - `gamutBoundary(h, gamut)`: 97 samples of `maxChromaFor` tracing the wedge outline from black up to white.
+  - `cuspFor(h, gamut)`: the hue's most saturated colour, found by ternary search refining around the widest sample. The cusp is a corner where two gamut faces meet, so it falls between samples and a coarse peak understates it.
+  - `sliceCells(h, gamut)`: the painted body, as 22 rows of 28 cells with each row **fitted** to the gamut width at its own lightness rather than a uniform grid clipped to the wedge. Every cell is therefore inside the gamut — its colour is exact rather than something the mapper had to talk down — and no half-cell fringe is left where a clip would have cut through. The exact boundary is stroked over the resulting staircase.
+  - `boundaryChromaAt(l, h, gamut)`: the exact, unquantised ceiling. Used for the out-of-gamut indicator, which sits on the edge by definition and where a degree of error would show.
+  - **Caching**: a slice costs a measured 1.8 ms in sRGB and 6.2 ms in Rec. 2020 to build — far too much to repeat per frame. Entries are keyed to the **nearest degree**, since the wedge changes shape far more slowly than that; this caps a full hue sweep at 360 builds per gamut and lets a pass back over the same hues come out of the cache. A lightness or chroma drag holds the hue still and so runs entirely out of it. The marker and the readout always use the exact hue — only the painted body is shared between neighbours.
 - **`curve.ts` & `presets.ts`**:
   - Channels:
     - **Lightness**: Range $[0, 1]$, step $0.005$, default bounds $0.97 \to 0.16$.
@@ -160,9 +173,13 @@ colors.pantoine.com/
 - **Per-Channel & Document-Wide Curve Sync**: "Apply all" button in each channel panel (Lightness, Chroma, Hue shift) to sync individual curves across all palettes, plus a "Match all curves" button in the toolbox to sync all three curves at once. Applying a curve a palette already has returns the same state, so it does not become an undo entry.
 - **Color Gamut Selector**: Dropdown switching the whole document between **sRGB**, **Display P3**, **Adobe RGB**, and **Rec. 2020**. It steers derivation as well as preview: chroma ceilings, corner clipping triangles, and tooltips all follow it, and it travels in the share link and the autosave.
 - **Numeric Fields (`NumberField`)**: `type="text"` with `inputMode="decimal"`, not `type="number"`. A number input's value sanitiser discards anything that is not a valid float, so a comma decimal ("0,85") arrived as an empty string and the digits were lost on blur; its spinner also clipped visible digits. Arrow-key stepping (shift for a coarser nudge) is implemented here as a result. Blur commits, but only a change the field can actually display — an unguarded commit would mark the channel hand-edited and push an undo entry merely for tabbing past it.
-- **Ramp Dividers**: Toggleable "Hide dividers / Show dividers" to evaluate color steps meeting edge-to-edge without boundary illusion interference.
 - **Canvas Contrast**: Light / Dark ground toggle (`data-canvas="dark"` on `document.documentElement`).
 - **Bare Mode**: "Hide tools" button to review swatches cleanly across multiple palettes without editor clutter.
+- **OKLCH Base Color Picker (`ColorPicker`)**: Replaces `input[type="color"]`, which speaks sRGB hex only and so cannot express a base on a wide-gamut document. Two views: the **constant-hue slice** (lightness up, chroma across, with the gamut drawn as the curved wedge it is and its cusp marked) and a **hue strip** painted at the lightness and chroma in hand, so it goes visibly flat across hues that cannot hold the chroma being asked for. Three `NumberField`s carry L, C and H, and the readout gives `oklch()` with the sRGB hex beneath it.
+  - The slice **respects the document gamut**: switching to Rec. 2020 widens the wedge, since peak chroma runs $0.322$ in sRGB against $0.454$ in Rec. 2020.
+  - Out-of-gamut requests are **shown, not forbidden**, consistent with how curve values are treated everywhere else: a dashed spill line and a ring mark where the colour will actually land, both carrying the resolved chroma in their tooltips. Reported **inside the plot only** — every child of `.cpick` is a fixed height on purpose, because the dialog is centred and a notice appearing mid-drag re-centres the modal and pulls the plot out from under the pointer.
+  - A **modal `<dialog>`** rather than a popover for a structural reason — the toolbox dock is a `max-height` scroll container, so anything absolutely positioned inside it is clipped at the dock edge. `showModal` escapes that and brings Escape and focus trapping for free.
+  - **Picking emits `oklch(...)`** into the base field rather than a hex, which is lossless and would otherwise silently discard a wide-gamut pick. Edits apply live and there is no cancel, because `setBase` coalesces: a whole session at the picker steps back in one undo.
 - **Base Color Placement & Lock**: Dropdown to choose which step carries the base color, plus a "Lock base" toggle.
 - **Squeezed Steps Notice**: Warns when severe compression causes duplicate hex colors in consecutive steps.
 - **Keyboard Shortcuts**:
@@ -180,7 +197,7 @@ colors.pantoine.com/
 |---|---|
 | `npm install` | Install project dependencies |
 | `npm run dev` | Start Vite local development server |
-| `npm test` | Run Vitest test suite (runs 124+ tests across 8 suites) |
+| `npm test` | Run Vitest test suite (runs 240+ tests across 10 suites) |
 | `npm run build` | TypeScript compile check (`tsc -b`) and Vite production build (`dist/`) |
 | `npm run preview` | Preview production build locally |
 
@@ -204,9 +221,10 @@ colors.pantoine.com/
 - Base color pinning / locking (`baseLocked` and `holdBase`).
 - Document-level undo/redo with action coalescing.
 - Local storage persistence with smart link-merging.
-- Seamless ramp view & bare display modes.
+- Bare display mode.
 - **Wide Gamut Selection (Display P3, Adobe RGB, Rec. 2020)**: Real-time clipping re-evaluation, CSS Color 4 preview, gamut-aware chroma ceilings driving derivation, `color()` copy and CSS export, and the gamut carried in the share link and autosave.
 - **Global Step Count**: Unified step count across all palettes in the document.
+- **OKLCH Color Picker**: Constant-hue slice with the gamut wedge drawn and its cusp marked, a live hue strip, numeric L/C/H, and an out-of-gamut readout — replacing the sRGB-only system picker.
 - **Per-Channel & All-in-One Curve Sync**: "Apply all" buttons on Lightness, Chroma, and Hue shift curve panels, alongside "Match all curves" in the toolbox.
 
 ### Potential Future Enhancements

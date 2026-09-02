@@ -1,12 +1,20 @@
+import type { Gamut, Oklch } from '../color/oklch'
+import { ColorPickerDialog } from './ColorPickerDialog'
+
 type Props = {
   value: string
-  /** The parsed colour as a hex, for the native picker. */
-  resolvedHex: string
+  /**
+   * The parsed colour, for the picker. Resolved by the caller so a field
+   * mid-edit — or holding nonsense — still opens on something pickable.
+   */
+  color: Oklch
+  gamut: Gamut
   valid: boolean
   onChange: (value: string) => void
+  onGamut: (gamut: Gamut) => void
 }
 
-export function BaseColorInput({ value, resolvedHex, valid, onChange }: Props) {
+export function BaseColorInput({ value, color, gamut, valid, onChange, onGamut }: Props) {
   return (
     <div className="field">
       <label htmlFor="base-color">
@@ -23,13 +31,7 @@ export function BaseColorInput({ value, resolvedHex, valid, onChange }: Props) {
         aria-invalid={!valid}
         onChange={(event) => onChange(event.target.value)}
       />
-      <input
-        type="color"
-        className="picker"
-        aria-label="Pick base colour"
-        value={resolvedHex}
-        onChange={(event) => onChange(event.target.value)}
-      />
+      <ColorPickerDialog color={color} gamut={gamut} onChange={onChange} onGamut={onGamut} />
     </div>
   )
 }

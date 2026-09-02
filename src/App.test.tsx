@@ -106,7 +106,10 @@ describe('App', () => {
   })
 
   it('paints the default ramp with real colours, not placeholders', () => {
-    const fills = html.match(/background:#[0-9a-f]{6}/g) ?? []
+    // Scoped to the chips: the picker's own swatch and preview are painted
+    // the same way, and counting every fill on the page would tally those.
+    const fills =
+      html.match(/class="swatch__chip" style="background:#[0-9a-f]{6}/g) ?? []
     expect(fills.length).toBe(DEFAULT_STEPS)
     expect(new Set(fills).size).toBe(DEFAULT_STEPS)
   })
@@ -335,7 +338,9 @@ describe('the curve graphs', () => {
   const html = renderToStaticMarkup(<App />)
 
   it('is wider than it is tall, and sized in real pixels', () => {
-    const boxes = html.match(/viewBox="0 0 (\d+) (\d+)"/g) ?? []
+    // Matched on the class, not on every viewBox: the picker draws two of
+    // its own, and its slice is deliberately near-square.
+    const boxes = html.match(/class="graph" viewBox="0 0 (\d+) (\d+)"/g) ?? []
     expect(boxes).toHaveLength(3)
     for (const box of boxes) {
       const [, w, h] = box.match(/viewBox="0 0 (\d+) (\d+)"/)!
@@ -431,6 +436,28 @@ describe('the palette stack', () => {
 
   it('says that palettes are saved and that a link carries all of them', () => {
     expect(html).toContain('saved in this browser')
+  })
+
+  /**
+   * The system picker is sRGB hex and nothing else, so on a wide-gamut
+   * document it cannot express the colour being designed for — and it says
+   * nothing about where the chroma runs out.
+   */
+  it('picks the base in OKLCH rather than handing it to the system picker', () => {
+    expect(html).not.toContain('type="color"')
+    expect(html).toContain('class="picker"')
+    expect(html).toContain('aria-label="Pick base colour"')
+  })
+
+  /**
+   * A closed `<dialog>` renders its children all the same, and the slice is
+   * some six hundred rects — not worth paying for at mount on a panel a
+   * session may never open. So the dialog is mounted and empty.
+   */
+  it('builds no slice until the picker is asked for', () => {
+    expect(html).toContain('<dialog class="cdialog"')
+    expect(html).not.toMatch(/<dialog class="cdialog"[^>]*\bopen\b/)
+    expect(html).not.toContain('cpick__plot')
   })
 })
 
