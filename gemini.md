@@ -14,8 +14,8 @@
    - Handle heights can move anywhere within the channel bounds, allowing non-monotonic curves (peaks, dips, humps, arcing hue).
    - Hue is stored as a **delta** ($\Delta H \in [-90^\circ, +90^\circ]$) relative to the base color's hue, preserving curvature when re-basing.
 3. **Gamut-Aware Adaptive Defaults**:
-   - The sRGB gamut is irregular: yellow can support high chroma only when light, whereas blue supports high chroma when dark.
-   - The default chroma curve samples the sRGB chroma ceiling across lightness steps and fits a curve that maintains a proportional fraction of the ceiling.
+   - Every RGB gamut is irregular: yellow can support high chroma only when light, whereas blue supports high chroma when dark.
+   - The default chroma curve samples the chroma ceiling of the **document's target gamut** across lightness steps and fits a curve that maintains a proportional fraction of the ceiling. Widening the gamut therefore changes the shape of every derived curve, not just the preview.
 4. **Base Color as a Strict Fit Constraint**:
    - The base color is not bent into place after curve fitting (which causes severe distortion and gamut clipping); it is incorporated directly as a Lagrange multiplier constraint during least-squares curve fitting.
 5. **Strict Gamut Mapping**:
@@ -93,8 +93,9 @@ colors.pantoine.com/
   - Leverages `culori` for color model conversions (`oklch`, `rgb`, `p3`, `a98`, `rec2020`).
   - Supports multiple target gamuts: **sRGB** (`rgb`), **Display P3** (`p3`), **Adobe RGB** (`a98`), and **Rec. 2020** (`rec2020`).
   - `CHANNEL_TOLERANCE = 0.5 / 255`: Prevents false clipping warnings for values that round cleanly into 8-bit channels.
-  - `mapToGamut(color, gamut)`: Strict gamut reduction using culori's `toGamut(mode, 'oklch', null, 0)` holding hue fixed. Emits `displayColor` using CSS Color 4 `color(display-p3 ...)` / `color(a98-rgb ...)` for wide gamut preview, alongside 8-bit sRGB `hex`.
-  - Exposes `culoriInGamut(color, gamut)` wrapping culori's `inGamut(mode)` and `isInGamut(color, gamut)` with channel tolerance.
+  - `mapToGamut(color, gamut)`: Strict gamut reduction using culori's `toGamut(mode, 'oklch', null, 0)` holding hue fixed. Emits `displayColor` using CSS Color 4 `color(display-p3 ...)` / `color(a98-rgb ...)` for wide gamut preview, and `chroma` / `chromaLost` / `clipped` measured against that gamut.
+  - `hex` is **always the strict sRGB map of the request**, never `formatHex` of a wide-gamut value: clamping P3 channels into 8-bit is precisely the hue-drifting clip the `jnd = 0` search exists to avoid, and `hex` is what every text and image export writes. A wide-gamut palette therefore exports a faithful sRGB rendition, and `toColorCss` / the `color()` formats carry the wide-gamut colour itself.
+  - `isInGamut(color, gamut)` applies the channel tolerance above; `settle()` rounds mapped channels to 4 places so a copied `color()` does not print the boundary's float dust.
   - Computes WCAG 2.1 relative luminance and contrast against black (`L=0`) and white (`L=1`).
 - **`bezier.ts`**:
   - Evaluates $y(x)$ for cubic Bézier curves where anchors are fixed at $x=0$ and $x=1$.
@@ -116,8 +117,9 @@ colors.pantoine.com/
 ### 3.2 State Management & Persistence (`src/state/`)
 
 - **Document Model (`document.ts`)**:
-  - A Document is a list of `PaletteEntry` items (`{ id, name, state }`) with a `selectedId`.
+  - A Document is a list of `PaletteEntry` items (`{ id, name, state }`) with a `selectedId` and a `gamut`.
   - **Global Steps**: The step count is unified document-wide across all palettes. Modifying steps updates every palette in the document stack simultaneously, and new palettes inherit the current document step count.
+  - **Global Gamut**: The target gamut is document state, not a view preference, because it decides how much chroma every derived curve may ask for. `setGamut` rebuilds each palette's chroma curve only where it was still derived (`regamut`), leaving hand-edited curves alone — the same rule `setBaseIndex` follows. `paletteReducer` takes the gamut as its third argument so every derivation sees the one in force.
   - Adding a palette (`new`) offsets the base hue by $72^\circ$ around the color wheel to help build harmonious color schemes.
   - Moving/reordering with `move(-1 | 1)` and deletion (guarded so at least one palette always remains).
 - **Undo / Redo with Smart Coalescing (`history.ts`)**:
@@ -127,22 +129,25 @@ colors.pantoine.com/
 - **Serialization & URL Encoding (`url.ts`)**:
   - Encodes palettes as readable query params: `c` (base hex), `n` (name), `s` (steps), `b` (baseIndex), `x` (locked), `l` (lightness curve), `k` (chroma curve), `h` (hue curve).
   - Joins multiple palettes using `~` (URI unreserved character).
+  - The document gamut rides in a leading `g=<gamut>` segment, omitted at the sRGB default. It carries no palette key, so `decodeDocument` drops it exactly as it drops any unreadable segment — which is what lets an older reader open a newer link. `decodeGamut` reads it back, defaulting to sRGB.
+  - `restoreBaseColor` re-attaches the stripped `#` only for a bare hex string (3, 4, 6 or 8 hex digits), so an `oklch()`, `rgb()`, `hsl()`, `color()` or named base survives the round trip.
   - Fully backwards-compatible with single-palette URL hashes.
 - **LocalStorage Autosave (`storage.ts`)**:
-  - Saved under key `colors.pantoine.com/v1`.
-  - When loading from a shared link, foreign palettes are merged into existing local storage without erasing prior user work.
+  - Saved under key `colors.pantoine.com/v1`, as the same hash string a share link carries — so the gamut is stored with it and there is one deserialiser to trust.
+  - When loading from a shared link, foreign palettes are merged into existing local storage without erasing prior user work. A link that brings new palettes also brings its gamut, since otherwise its colours would not be the ones the sender saw.
 - **Performance Caching (`useDocument.ts`)**:
-  - Ramps are derived and cached using a `WeakMap<PaletteConfig, Swatch[]>`. Because `PaletteConfig` is treated as immutable, re-renders and undo/redo operations avoid re-computing gamut mappings.
+  - Ramps are derived and cached using a `WeakMap<PaletteConfig, Map<Gamut, Swatch[]>>`. Because `PaletteConfig` is treated as immutable, re-renders and undo/redo operations avoid re-computing gamut mappings, and switching gamut back and forth re-uses both sets.
 
 ### 3.3 Export Engine (`src/export/`)
 
 - **Code & Tokens (`formats.ts`)**:
   - Hex list (`txt`)
   - OKLCH list (`txt`)
-  - CSS custom properties (`css`, in Hex or OKLCH)
+  - CSS custom properties (`css`, in Hex, OKLCH, or `color()`)
   - Tailwind object scale (`js`)
   - SCSS map (`scss`)
-  - JSON containing detailed step data (Hex, OKLCH, L/C/H components, clipping flag, WCAG contrast ratios).
+  - JSON containing detailed step data (Hex, `color()` display value, OKLCH, L/C/H components, clipping flag, WCAG contrast ratios) plus the document `gamut` — named because `clipped` is relative to it while `hex` is not.
+  - Every hex-valued format is sRGB whatever the document gamut, so the `color()` CSS format is the one that ships what a wide-gamut palette actually shows.
 - **Images & Vector Graphics (`image.ts`)**:
   - **PNG**: Rendered on an integer-aligned HTML `<canvas>` without borders or gaps, ensuring accurate pipetting/eyedropping in external design software. Optional label strip. Directly copyable to clipboard as `image/png` or downloadable.
   - **SVG**: Generates SVG with individual named `<rect>` elements (`{palette}-{label}`) ready for pasting directly as editable layers into Figma.
@@ -151,9 +156,10 @@ colors.pantoine.com/
 
 ## 4. UI Features & Interactions
 
-- **Global Step Count**: Control in the top header bar and toolbox to adjust the number of steps (3–21) across all palettes simultaneously.
-- **Per-Channel & Document-Wide Curve Sync**: "Apply to all" button in each channel panel (Lightness, Chroma, Hue shift) to sync individual curves across all palettes, plus a "Match all curves" button in the toolbox to sync all three curves at once.
-- **Color Gamut Selector**: Dropdown to switch evaluation and preview between **sRGB**, **Display P3**, **Adobe RGB**, and **Rec. 2020**. Corner clipping triangles and tooltips dynamically update to reflect the active gamut.
+- **Global Step Count**: One control in the top header bar — where the document-level controls live — adjusting the number of steps (5–21) across all palettes simultaneously. Not duplicated in the toolbox: two fields driving one value read as though the palette under the toolbox had a count of its own.
+- **Per-Channel & Document-Wide Curve Sync**: "Apply all" button in each channel panel (Lightness, Chroma, Hue shift) to sync individual curves across all palettes, plus a "Match all curves" button in the toolbox to sync all three curves at once. Applying a curve a palette already has returns the same state, so it does not become an undo entry.
+- **Color Gamut Selector**: Dropdown switching the whole document between **sRGB**, **Display P3**, **Adobe RGB**, and **Rec. 2020**. It steers derivation as well as preview: chroma ceilings, corner clipping triangles, and tooltips all follow it, and it travels in the share link and the autosave.
+- **Numeric Fields (`NumberField`)**: `type="text"` with `inputMode="decimal"`, not `type="number"`. A number input's value sanitiser discards anything that is not a valid float, so a comma decimal ("0,85") arrived as an empty string and the digits were lost on blur; its spinner also clipped visible digits. Arrow-key stepping (shift for a coarser nudge) is implemented here as a result. Blur commits, but only a change the field can actually display — an unguarded commit would mark the channel hand-edited and push an undo entry merely for tabbing past it.
 - **Ramp Dividers**: Toggleable "Hide dividers / Show dividers" to evaluate color steps meeting edge-to-edge without boundary illusion interference.
 - **Canvas Contrast**: Light / Dark ground toggle (`data-canvas="dark"` on `document.documentElement`).
 - **Bare Mode**: "Hide tools" button to review swatches cleanly across multiple palettes without editor clutter.
@@ -199,9 +205,9 @@ colors.pantoine.com/
 - Document-level undo/redo with action coalescing.
 - Local storage persistence with smart link-merging.
 - Seamless ramp view & bare display modes.
-- **Wide Gamut Selection (Display P3, Adobe RGB, Rec. 2020)**: Real-time clipping re-evaluation, CSS Color 4 preview, and gamut-aware chroma ceilings.
+- **Wide Gamut Selection (Display P3, Adobe RGB, Rec. 2020)**: Real-time clipping re-evaluation, CSS Color 4 preview, gamut-aware chroma ceilings driving derivation, `color()` copy and CSS export, and the gamut carried in the share link and autosave.
 - **Global Step Count**: Unified step count across all palettes in the document.
-- **Per-Channel & All-in-One Curve Sync**: "Apply to all" buttons on Lightness, Chroma, and Hue shift curve panels, alongside "Match all curves" in the toolbox.
+- **Per-Channel & All-in-One Curve Sync**: "Apply all" buttons on Lightness, Chroma, and Hue shift curve panels, alongside "Match all curves" in the toolbox.
 
 ### Potential Future Enhancements
 - **APCA Contrast**: Advanced Perceptual Contrast Algorithm calculations alongside existing WCAG 2.1 ratios.

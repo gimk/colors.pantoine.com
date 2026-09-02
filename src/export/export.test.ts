@@ -65,6 +65,44 @@ describe('text formats', () => {
   })
 })
 
+/**
+ * Every hex output is sRGB, whatever the palette is being viewed in, so a
+ * wide-gamut document needs one text format that can carry what is on
+ * screen — and the JSON has to name the gamut, because `clipped` is
+ * relative to it while `hex` is not.
+ */
+describe('text formats under a wide gamut', () => {
+  const wide = generateRamp(config, 'rec2020')
+
+  it('writes the same hex as an sRGB export', () => {
+    expect(format('hex').build(wide, 'brand', 'rec2020')).toBe(
+      format('hex').build(ramp, 'brand'),
+    )
+  })
+
+  it('offers CSS custom properties in color() notation', () => {
+    const css = format('css-display').build(wide, 'brand', 'rec2020')
+    for (const swatch of wide) {
+      expect(css).toContain(`--brand-${swatch.label}: ${swatch.displayColor};`)
+    }
+    expect(css).toContain('color(rec2020')
+  })
+
+  it('falls back to hex in that format when the palette is sRGB', () => {
+    expect(format('css-display').build(ramp, 'brand')).toBe(
+      format('css-hex').build(ramp, 'brand'),
+    )
+  })
+
+  it('names the gamut in the JSON, so clipped can be read', () => {
+    const parsed = JSON.parse(format('json').build(wide, 'brand', 'rec2020'))
+    expect(parsed.gamut).toBe('rec2020')
+    expect(parsed.steps[5].hex).toBe(wide[5].hex)
+    expect(parsed.steps[5].display).toBe(wide[5].displayColor)
+    expect(JSON.parse(format('json').build(ramp, 'brand')).gamut).toBe('srgb')
+  })
+})
+
 describe('svg export', () => {
   const svg = toSvg(ramp, { size: 64, labels: false }, 'Brand Purple')
 

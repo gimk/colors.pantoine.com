@@ -37,18 +37,6 @@ select {
   padding: 4px 6px;
 }
 
-/* Hide browser native spin buttons that steal space and clip digits */
-input[type='number']::-webkit-inner-spin-button,
-input[type='number']::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-input[type='number'] {
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-
 button {
   cursor: pointer;
   text-transform: uppercase;
@@ -72,21 +60,35 @@ button:disabled {
   outline-offset: 1px;
 }
 
+/* Full width, and the padding lives on the sections rather than here, so the
+   two sticky bars can span the window edge to edge and stay opaque while the
+   palettes scroll behind them.
+
+   At least a windowful tall, as a column, with the stack taking the slack.
+   `position: sticky` only has somewhere to stick while its container runs past
+   the foot of the window: with a short stack the shell ended above the fold
+   and the dock came to rest in the middle of the screen, over a band of bare
+   body. Growing the stack instead pins the dock to the bottom at any length,
+   and the spare room reads as empty canvas above it — which is where the next
+   palette goes. */
 .app {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* --- header ---------------------------------------------------------- */
 
 .masthead {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
+  align-items: center;
+  gap: 10px;
   border-bottom: 2px solid var(--rule);
-  padding-bottom: 8px;
+  padding: 10px 16px;
 }
 
 .masthead h1 {
@@ -97,10 +99,45 @@ button:disabled {
   margin: 0;
 }
 
-.masthead p {
-  margin: 0;
+/* Square, so the glyph sits centred: the base button rule's letter-spacing
+   pushes a single character off to the left. */
+.help__open {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  letter-spacing: 0;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Native <dialog>: `showModal` gives focus trapping, Escape, and an inert
+   background for nothing. No padding of its own, so the panel covers its box
+   entirely and a click landing on the dialog itself can only be the
+   backdrop. */
+.help {
+  border: 1px solid var(--rule);
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  width: min(60ch, calc(100vw - 32px));
+}
+
+.help::backdrop {
+  background: rgb(0 0 0 / 0.55);
+}
+
+.help__body {
+  padding: 12px;
+}
+
+.help__body p {
+  margin: 0 0 8px;
   color: var(--muted);
-  max-width: 46ch;
+  line-height: 1.55;
+}
+
+.help__body p:last-child {
+  margin-bottom: 0;
 }
 
 .badge {
@@ -118,13 +155,20 @@ button:disabled {
 
 /* --- control bar ----------------------------------------------------- */
 
+/* Pinned to the top of the window: undo, the step count and the gamut are
+   wanted at any scroll position, and the stack can be long. Opaque, or the
+   ramps would read through it. */
 .controls {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 20px;
   border-bottom: 1px solid var(--rule);
-  padding: 10px 0;
+  padding: 10px 16px;
+  background: var(--paper);
 }
 
 .field {
@@ -145,9 +189,13 @@ button:disabled {
   text-transform: lowercase;
 }
 
-.field input[type='number'] {
+/* Numeric fields are text inputs — a number input's own sanitiser eats a
+   comma decimal, and its spinner clipped the digits — so they are named
+   rather than selected by type. */
+.field input.number {
   width: 8ch;
   min-width: 58px;
+  text-transform: none;
 }
 
 .field input.invalid {
@@ -203,24 +251,13 @@ button.swatch:hover:not(:disabled) {
   color: inherit;
 }
 
+/* No rules around the chips, deliberately and permanently. A 1px black line
+   changes how the eye reads the two colours it separates, which is exactly
+   the judgement this tool exists to support — so the steps meet edge to edge
+   and nothing stands between them. */
 .swatch__chip {
   position: relative;
   height: 116px;
-  border: 1px solid var(--rule);
-  border-right: none;
-  border-bottom: none;
-}
-
-.swatch:last-child .swatch__chip {
-  border-right: 1px solid var(--rule);
-}
-
-/* A 1px black line changes how the eye reads the two colours it separates,
-   so being able to drop it matters for judging a ramp. Held as transparent
-   rather than removed, so toggling does not reflow the strip. */
-.ramp--seamless .swatch__chip,
-.ramp--seamless .swatch:last-child .swatch__chip {
-  border-color: transparent;
 }
 
 /* Corner tick: the curves asked for more chroma than sRGB can show. */
@@ -281,6 +318,22 @@ button.swatch:hover:not(:disabled) {
   text-transform: uppercase;
 }
 
+/* Where the copy is acknowledged once the label cells are away. Centred in
+   the chip and boxed, so it lands on any colour: a knocked-out word alone
+   would vanish against a step of its own lightness. */
+.swatch__flash {
+  position: absolute;
+  inset: 50% 0 auto;
+  transform: translateY(-50%);
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 2px 0;
+  background: var(--ink);
+  color: var(--paper);
+}
+
 /* --- curve panels ---------------------------------------------------- */
 
 .curves {
@@ -324,8 +377,10 @@ button.swatch:hover:not(:disabled) {
   flex-wrap: wrap;
 }
 
-.panel__row input {
+.panel__row input,
+.panel__row .field input.number {
   width: 7ch;
+  min-width: 0;
 }
 
 .panel__row .field {
@@ -404,15 +459,6 @@ button.swatch:hover:not(:disabled) {
   font-family: var(--mono);
 }
 
-/* --- footnote -------------------------------------------------------- */
-
-.footnote {
-  margin: 20px 0 0;
-  border-top: 1px solid var(--rule);
-  padding-top: 8px;
-  color: var(--muted);
-}
-
 /* --- export ---------------------------------------------------------- */
 
 .export__group {
@@ -446,6 +492,77 @@ button.swatch:hover:not(:disabled) {
   font-size: 10px;
 }
 
+/* The export panel is a column, and the drawer takes whatever height is left
+   in it rather than asking for more.
+
+   Opening the drawer used to grow the grid row, which pushed the dock taller
+   and stretched the three curve panels beside it over empty space. Capped
+   here instead: the cap only bites when the row would otherwise exceed it,
+   which tracks the curve panels' own height — a 190px graph plus two rows and
+   a head. Past that the drawer scrolls. */
+.export {
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+}
+
+.export > .drawer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.drawer__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* --- drawer ----------------------------------------------------------- */
+
+/* Situational exports, folded away. The marker is a plain +/− because the
+   chrome has no other glyphs in it — a disclosure triangle would be the only
+   drawn shape in the whole frame. */
+.drawer > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid var(--rule);
+  padding: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.drawer > summary::-webkit-details-marker {
+  display: none;
+}
+
+.drawer > summary::after {
+  content: '+';
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.drawer[open] > summary {
+  border-bottom: 1px solid var(--rule);
+}
+
+.drawer[open] > summary::after {
+  content: '–';
+}
+
+.drawer > summary:hover {
+  background: var(--ink);
+}
+
+.drawer > summary:hover .legend,
+.drawer > summary:hover::after {
+  color: var(--paper);
+}
+
 .field input[type='checkbox'] {
   width: 13px;
   padding: 0;
@@ -465,13 +582,19 @@ button.swatch:hover:not(:disabled) {
 /* --- dark canvas ------------------------------------------------------ */
 
 /* Not a theme so much as a second ground: the same ramp reads differently
-   against black, and a designer needs to judge it both ways. */
+   against black, and a designer needs to judge it both ways.
+
+   Pulled back from pure #fff on pure #000. At full contrast the white rules
+   glared, and every one of them borders a colour the eye is trying to judge —
+   the frame was competing with the palette. An off-white on a soft near-black,
+   with lines a clear step below the text, keeps the chrome legible and lets
+   the swatches be the brightest thing on screen. */
 :root[data-canvas='dark'] {
-  --ink: #fff;
-  --paper: #0a0a0a;
-  --rule: #fff;
-  --muted: #8a8a8a;
-  --grid: #262626;
+  --ink: #e6e6e8;
+  --paper: #17171a;
+  --rule: #7a7a82;
+  --muted: #9a9aa2;
+  --grid: #2b2b30;
   color-scheme: dark;
 }
 
@@ -480,6 +603,19 @@ button.swatch:hover:not(:disabled) {
 button.is-on {
   background: var(--ink);
   color: var(--paper);
+}
+
+/* Filled standing, not as a state: the one control in the bar that adds to
+   the document rather than adjusting it. `is-on` would be the wrong word for
+   it — nothing is toggled. */
+button.is-primary {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+button.is-primary:hover:not(:disabled) {
+  background: var(--paper);
+  color: var(--ink);
 }
 
 .graph__lock {
@@ -510,12 +646,17 @@ input:disabled {
    the ramp in and out of duplicate steps, and in flow that reflowed the whole
    page mid-gesture — the graph moved under the pointer. Fixed position costs
    nothing in layout, and pointer-events: none means that even where it lands
-   over a graph or a swatch it cannot swallow the drag. */
+   over a graph or a swatch it cannot swallow the drag.
+
+   Held against the right edge and centred vertically, which is the one place
+   neither sticky bar can reach: the dock owns the foot of the window and the
+   controls own the head. */
 .notice {
   position: fixed;
   right: 16px;
-  bottom: 16px;
-  z-index: 10;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 25;
   max-width: min(46ch, calc(100vw - 32px));
   margin: 0;
   border: 1px solid var(--rule);
@@ -528,18 +669,21 @@ input:disabled {
 
 /* --- palette stack ---------------------------------------------------- */
 
+/* Takes the slack in the shell, so the dock below it is always flush with the
+   foot of the window. Palettes stay top-aligned; the spare room falls below
+   them, where the next one goes. */
 .stack {
-  margin: 20px 0 0;
-}
-
-.stack__item + .stack__item {
-  margin-top: 24px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 16px;
 }
 
 /* With the tools away the stack closes up: nothing between the palettes but
    the gap needed to tell one from the next. */
-.app--bare .stack__item + .stack__item {
-  margin-top: 10px;
+.app--bare .stack {
+  gap: 10px;
 }
 
 /* An unselected palette advertises that clicking it brings the toolbox. */
@@ -547,26 +691,40 @@ input:disabled {
   cursor: pointer;
 }
 
+/* A contour around the whole row.
+
+   An outline rather than a border, which settles both problems the earlier
+   markers had: it is painted outside the box model, so it cannot move the
+   ramp as the selection travels down the stack and needs no reserved space
+   on the rows without it — and the offset holds it clear of the end chips,
+   so no colour gains a black neighbour. */
+.prow--selected {
+  outline: 2px solid var(--ink);
+  outline-offset: 5px;
+}
+
+/* The state in words, next to the contour that shows it. Sized under the
+   name it sits beside, so it cannot set the height of the header row and
+   nudge the ramp down. */
+.prow__badge {
+  font-size: 9px;
+  padding: 1px 5px;
+}
+
+/* No rule under it: the contour already bounds the row, and a line here was
+   a second edge inside that boundary. The ramp's own top margin does the
+   separating. */
 .prow__head {
   display: flex;
   align-items: center;
   gap: 6px;
-  border-bottom: 1px solid var(--rule);
-  padding-bottom: 5px;
 }
 
-/* Padding is on the name at all times and only the colours swap, so marking
-   the selection cannot move the ramp underneath it. */
 .prow__name {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   padding: 1px 6px;
-}
-
-.prow--selected .prow__name {
-  background: var(--ink);
-  color: var(--paper);
 }
 
 .prow__note {
@@ -579,12 +737,22 @@ input:disabled {
 
 /* --- toolbox ---------------------------------------------------------- */
 
-/* The heavy top rule joins the toolbox to the palette it is editing: the two
-   read as one block, which is what tells you which ramp the controls act on. */
+/* Docked to the foot of the window, horizontal and always visible, so the
+   curves stay reachable however far down the stack you are. The heavy top
+   rule is what separates it from the palettes scrolling behind it.
+
+   Height is capped rather than fixed: the dock takes what its contents need,
+   and scrolls internally past that, so a short window still leaves most of
+   itself to the palettes. */
 .toolbox {
-  border: 1px solid var(--rule);
-  border-top-width: 4px;
-  margin-top: 10px;
+  position: sticky;
+  bottom: 0;
+  z-index: 15;
+  border-top: 4px solid var(--rule);
+  background: var(--paper);
+  max-height: 62vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .toolbox__head {
@@ -593,7 +761,7 @@ input:disabled {
   justify-content: space-between;
   gap: 10px;
   border-bottom: 1px solid var(--rule);
-  padding: 6px 8px;
+  padding: 6px 16px;
 }
 
 .toolbox__controls {
@@ -602,9 +770,9 @@ input:disabled {
   align-items: center;
   gap: 8px 20px;
   border-bottom: 1px solid var(--rule);
-  padding: 8px;
+  padding: 8px 16px;
 }
 
 .toolbox .curves {
-  padding: 8px;
+  padding: 10px 16px 14px;
 }

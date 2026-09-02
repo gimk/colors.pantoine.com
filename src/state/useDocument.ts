@@ -78,13 +78,18 @@ export type DocumentApi = {
   rederive: () => void
   syncChannel: (key: CurveKey) => void
   syncAll: () => void
+  /** The gamut the document is designed for, and what every ramp is mapped to. */
+  gamut: Gamut
+  setGamut: (value: Gamut) => void
 }
 
-type Seed = { seeds: PaletteSeed[]; selected: number }
+type Seed = { seeds: PaletteSeed[]; selected: number; gamut?: Gamut }
 
-export function useDocument(seed: Seed, gamut: Gamut = 'srgb'): DocumentApi {
+export function useDocument(seed: Seed): DocumentApi {
   const [history, dispatch] = useReducer(historyReducer, seed, (initial) =>
-    initHistory<DocumentState>(createDocument(initial.seeds, initial.selected)),
+    initHistory<DocumentState>(
+      createDocument(initial.seeds, initial.selected, initial.gamut ?? 'srgb'),
+    ),
   )
 
   const state = history.present
@@ -101,10 +106,10 @@ export function useDocument(seed: Seed, gamut: Gamut = 'srgb'): DocumentApi {
         id: entry.id,
         name: entry.name,
         config: entry.state.config,
-        ramp: rampFor(entry.state.config, gamut),
+        ramp: rampFor(entry.state.config, state.gamut),
         edited: anyEdited(entry.state.edited),
       })),
-    [state.palettes, gamut],
+    [state.palettes, state.gamut],
   )
 
   const selectedId = selectedEntry(state).id
@@ -159,5 +164,7 @@ export function useDocument(seed: Seed, gamut: Gamut = 'srgb'): DocumentApi {
     rederive: useCallback(() => send({ type: 'palette', action: { type: 'rederive' } }), [send]),
     syncChannel: useCallback((key: CurveKey) => send({ type: 'syncChannel', key }), [send]),
     syncAll: useCallback(() => send({ type: 'syncAll' }), [send]),
+    gamut: state.gamut,
+    setGamut: useCallback((value: Gamut) => send({ type: 'setGamut', value }), [send]),
   }
 }

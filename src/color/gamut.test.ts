@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { maxChromaFor } from './gamut'
-import { isInGamut, mapToGamut, type Oklch } from './oklch'
-import { createPalette } from './presets'
-import { generateRamp } from './ramp'
+import { formatColor, isInGamut, mapToGamut, toColorCss, toHex, type Oklch } from './oklch'
+import { chromaCurveFor, createPalette } from './presets'
+import { countDuplicateSteps, generateRamp } from './ramp'
+import { sampleCurve } from './curve'
 
 describe('gamut detection and mapping', () => {
   // At L=0.8, C=0.28, H=140 (a vivid green), the color is noticeably outside sRGB
@@ -65,5 +66,90 @@ describe('gamut detection and mapping', () => {
 
     expect(p3Ceiling).toBeGreaterThan(srgbCeiling)
     expect(a98Ceiling).toBeGreaterThan(srgbCeiling)
+  })
+})
+
+/**
+ * A wide-gamut colour has no hex. `hex` is therefore the sRGB rendition, and
+ * it has to be reached by the same strict map as everything else — clipping
+ * the channels of a P3 value instead drifts the hue, and `hex` is what every
+ * text and image export writes.
+ */
+describe('hex under a wide gamut', () => {
+  const config = {
+    ...createPalette('#0066ff'),
+    chroma: { start: 0.3, end: 0.3, h1: { x: 1 / 3, y: 0.3 }, h2: { x: 2 / 3, y: 0.3 } },
+  }
+
+  it('is the sRGB map of the request, whatever the target gamut', () => {
+    const srgb = generateRamp(config, 'srgb')
+    for (const gamut of ['p3', 'a98', 'rec2020'] as const) {
+      expect(generateRamp(config, gamut).map((s) => s.hex)).toEqual(srgb.map((s) => s.hex))
+    }
+  })
+
+  it('agrees with the value a click copies', () => {
+    for (const swatch of generateRamp(config, 'rec2020')) {
+      expect(swatch.hex).toBe(formatColor(swatch.oklch, 'hex'))
+      expect(swatch.hex).toBe(toHex(swatch.oklch))
+    }
+  })
+
+  /** Clipping collapses distinct steps, so a clipped hex over-reports them. */
+  it('does not invent squeezed steps for the warning to report', () => {
+    const srgb = countDuplicateSteps(generateRamp(config, 'srgb'))
+    expect(countDuplicateSteps(generateRamp(config, 'rec2020'))).toBe(srgb)
+  })
+
+  it('still shows the wide-gamut colour on screen', () => {
+    const ramp = generateRamp(config, 'p3')
+    expect(ramp.some((s) => s.displayColor.startsWith('color(display-p3'))).toBe(true)
+    expect(generateRamp(config, 'srgb').every((s) => s.displayColor === s.hex)).toBe(true)
+  })
+})
+
+describe('color() output', () => {
+  it('is the one format that can carry a wide-gamut colour', () => {
+    const green: Oklch = { l: 0.8, c: 0.28, h: 140 }
+    expect(formatColor(green, 'color()', 'p3')).toBe(toColorCss(green, 'p3'))
+    expect(formatColor(green, 'color()', 'p3')).toMatch(/^color\(display-p3 /)
+    expect(formatColor(green, 'color()', 'rec2020')).toMatch(/^color\(rec2020 /)
+    expect(formatColor(green, 'color()')).toMatch(/^color\(srgb /)
+  })
+
+  /** Copied by hand, so the boundary's float dust must not be printed. */
+  it('rounds the channels it prints', () => {
+    for (const gamut of ['srgb', 'p3', 'a98', 'rec2020'] as const) {
+      for (const channel of toColorCss({ l: 0.7, c: 0.42, h: 150 }, gamut).match(/[\d.]+/g) ?? []) {
+        expect(channel.replace(/^\d+\.?/, '').length).toBeLessThanOrEqual(4)
+      }
+    }
+  })
+})
+
+/**
+ * The ceiling is the whole point of the gamut choice: chroma curves hold a
+ * fraction of what the display can give, so a wider gamut has to reach the
+ * derivation, not just the rendering.
+ */
+describe('chroma derivation follows the gamut', () => {
+  const base = { l: 0.8, c: 0.2, h: 140 }
+  const lightnessOf = (gamut: 'srgb' | 'rec2020') =>
+    createPalette('#00ff66', 11, gamut).lightness
+
+  it('asks for more chroma in Rec. 2020 than in sRGB', () => {
+    const lightness = lightnessOf('srgb')
+    const srgb = chromaCurveFor(base, 11, 5, lightness, 'srgb')
+    const wide = chromaCurveFor(base, 11, 5, lightness, 'rec2020')
+
+    const peak = (curve: typeof srgb) =>
+      Math.max(...Array.from({ length: 11 }, (_, i) => sampleCurve(curve, i / 10)))
+    expect(peak(wide)).toBeGreaterThan(peak(srgb))
+  })
+
+  it('reaches createPalette, so a new palette is built for the right display', () => {
+    expect(createPalette('#00ff66', 11, 'rec2020').chroma).not.toEqual(
+      createPalette('#00ff66', 11, 'srgb').chroma,
+    )
   })
 })

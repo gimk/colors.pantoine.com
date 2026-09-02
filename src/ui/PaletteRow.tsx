@@ -10,7 +10,8 @@ type Props = {
   selected: boolean
   format: Format
   gamut?: Gamut
-  seamless: boolean
+  /** Show the step name, value and contrast cells under each chip. */
+  labels?: boolean
   /** Tools are hidden: the stack is being looked at, not edited. */
   bare: boolean
   copiedKey: string | null
@@ -27,7 +28,7 @@ export function PaletteRow({
   selected,
   format,
   gamut = 'srgb',
-  seamless,
+  labels = true,
   bare,
   copiedKey,
   onSelect,
@@ -39,6 +40,14 @@ export function PaletteRow({
   // back to copying. Otherwise the first click on a palette picks it up and
   // brings the toolbox to it; clicks after that copy, as they always did.
   const copies = selected || bare
+
+  /**
+   * The palette the toolbox is editing — which is nothing, with the tools
+   * away. Everything that marks the selection hangs off this, so the band,
+   * the badge and the swatch annotations cannot disagree about which row is
+   * live.
+   */
+  const active = selected && !bare
 
   /**
    * Clicking the palette selects it — anywhere but on a control, so the
@@ -53,13 +62,14 @@ export function PaletteRow({
 
   return (
     <section
-      className={`prow${selected && !bare ? ' prow--selected' : ''}`}
+      className={`prow${active ? ' prow--selected' : ''}`}
       onClick={pick}
-      aria-current={selected && !bare ? 'true' : undefined}
+      aria-current={active ? 'true' : undefined}
     >
       {!bare && (
         <header className="prow__head">
           <span className="prow__name">{palette.name}</span>
+          {active && <span className="badge prow__badge">Editing</span>}
           <span className="prow__note">
             {palette.ramp.length} steps · {palette.config.base}
           </span>
@@ -100,8 +110,9 @@ export function PaletteRow({
         ramp={palette.ramp}
         format={format}
         gamut={gamut}
+        labels={labels}
+        markers={active}
         copiedKey={copiedKey}
-        seamless={seamless}
         idPrefix={palette.id}
         swatchTitle={copies ? undefined : () => `Edit ${palette.name}`}
         onCopy={copies ? onCopy : onSelect}

@@ -10,7 +10,14 @@ import {
   type DocumentState,
 } from './document'
 import { restoreDocument, saveDocument } from './storage'
-import { decodeDocument, decodePalette, encodeDocument, encodePalette, restoreBaseColor } from './url'
+import {
+  decodeDocument,
+  decodeGamut,
+  decodePalette,
+  encodeDocument,
+  encodePalette,
+  restoreBaseColor,
+} from './url'
 
 const run = (state: DocumentState, ...actions: DocumentAction[]) =>
   actions.reduce(documentReducer, state)
@@ -199,6 +206,112 @@ describe('document', () => {
   })
 })
 
+/**
+ * Why `commitValue` has to guard the unchanged case: an endpoint commit is
+ * always an edit, whatever value it carries. There is nothing to compare
+ * against down here — a curve that has been corrected to hold a locked base
+ * legitimately comes back with the endpoint the caller asked for — so the
+ * field is the only place that knows the designer did not move anything.
+ */
+describe('committing an endpoint', () => {
+  it('counts as hand-editing the channel, even at the value it already had', () => {
+    const before = createDocument()
+    const { start } = before.palettes[0].state.config.lightness
+    expect(before.palettes[0].state.edited.lightness).toBe(false)
+
+    const after = run(before, {
+      type: 'palette',
+      action: { type: 'setEndpoint', key: 'lightness', end: 'start', value: start },
+    })
+    expect(after).not.toBe(before)
+    expect(after.palettes[0].state.edited.lightness).toBe(true)
+  })
+})
+
+describe('the document gamut', () => {
+  it('is sRGB unless a link or a save says otherwise', () => {
+    expect(createDocument().gamut).toBe('srgb')
+    expect(createDocument([], -1, 'p3').gamut).toBe('p3')
+  })
+
+  it('survives every action that rebuilds the stack', () => {
+    const doc = run(createDocument([], -1, 'rec2020'), { type: 'new' }, { type: 'new' })
+    expect(doc.gamut).toBe('rec2020')
+    expect(run(doc, { type: 'remove', id: doc.palettes[0].id }).gamut).toBe('rec2020')
+    expect(run(doc, { type: 'setSteps', value: 9 }).gamut).toBe('rec2020')
+  })
+
+  it('builds a new palette for the gamut the document is in', () => {
+    const wide = run(createDocument([], -1, 'rec2020'), { type: 'new' })
+    const narrow = run(createDocument(), { type: 'new' })
+    expect(wide.palettes[1].state.config.chroma).not.toEqual(
+      narrow.palettes[1].state.config.chroma,
+    )
+  })
+
+  /**
+   * The same rule `setBaseIndex` already follows: a derived chroma curve is
+   * a fraction of a ceiling, so a new ceiling makes it stale, while an
+   * edited curve is the designer's and is left alone.
+   */
+  it('rebuilds an underived chroma curve, and leaves an edited one', () => {
+    const before = createDocument()
+    const after = run(before, { type: 'setGamut', value: 'rec2020' })
+    expect(after.gamut).toBe('rec2020')
+    expect(after.palettes[0].state.config.chroma).not.toEqual(
+      before.palettes[0].state.config.chroma,
+    )
+
+    const byHand = run(before, {
+      type: 'palette',
+      action: { type: 'setCurve', key: 'chroma', curve: flat(0.09) },
+    })
+    const kept = run(byHand, { type: 'setGamut', value: 'rec2020' })
+    expect(kept.palettes[0].state.config.chroma).toEqual(
+      byHand.palettes[0].state.config.chroma,
+    )
+  })
+
+  it('declines a gamut it is already in', () => {
+    const doc = run(createDocument(), { type: 'setGamut', value: 'p3' })
+    expect(run(doc, { type: 'setGamut', value: 'p3' })).toBe(doc)
+  })
+})
+
+/**
+ * Applying a curve a palette already has is not an edit. The reducers report
+ * "nothing happened" by identity, and history records an entry for any new
+ * state, so a second click of Apply all must hand back the same object.
+ */
+describe('syncing curves twice', () => {
+  const twice = (action: DocumentAction) => {
+    const doc = run(createDocument(), { type: 'new' }, action)
+    return [doc, run(doc, action)] as const
+  }
+
+  it('changes nothing the second time, for one channel or all three', () => {
+    for (const action of [
+      { type: 'syncChannel', key: 'hue' },
+      { type: 'syncChannel', key: 'chroma' },
+      { type: 'syncAll' },
+    ] as DocumentAction[]) {
+      const [once, again] = twice(action)
+      expect(again).toBe(once)
+    }
+  })
+
+  it('still applies the first time', () => {
+    const doc = run(
+      createDocument(),
+      { type: 'new' },
+      { type: 'palette', action: { type: 'setCurve', key: 'hue', curve: flat(12) } },
+    )
+    const synced = run(doc, { type: 'syncChannel', key: 'hue' })
+    expect(synced).not.toBe(doc)
+    expect(synced.palettes[0].state.config.hue).toEqual(flat(12))
+  })
+})
+
 describe('document links', () => {
   const seeds = [
     { name: 'brand', config: createPalette('#7c3aed') },
@@ -237,6 +350,30 @@ describe('document links', () => {
   it('returns nothing for an empty hash', () => {
     expect(decodeDocument('')).toEqual([])
     expect(decodeDocument('#')).toEqual([])
+  })
+
+  /**
+   * The gamut decides how much chroma every curve asked for, so a link
+   * without it would open someone else's palette as different colours.
+   */
+  it('carries the gamut, without disturbing the palettes', () => {
+    const hash = `#${encodeDocument(seeds, 'rec2020')}`
+    expect(decodeGamut(hash)).toBe('rec2020')
+    expect(decodeDocument(hash).map((entry) => entry.name)).toEqual(['brand', 'accent', 'grey'])
+  })
+
+  it('says nothing at the default, so an ordinary link is unchanged', () => {
+    expect(encodeDocument(seeds, 'srgb')).toBe(encodeDocument(seeds))
+    expect(decodeGamut(`#${encodeDocument(seeds)}`)).toBe('srgb')
+  })
+
+  it('reads a link made before there was a gamut as sRGB', () => {
+    expect(decodeGamut(`#${encodePalette(seeds[0].config, 'brand')}`)).toBe('srgb')
+    expect(decodeGamut('')).toBe('srgb')
+  })
+
+  it('ignores a gamut that is not one of ours', () => {
+    expect(decodeGamut(`#g=cmyk~${encodePalette(seeds[0].config, 'brand')}`)).toBe('srgb')
   })
 
   it('adds # only when necessary when reloading base color from save', () => {
@@ -293,6 +430,19 @@ describe('saving', () => {
     const back = restoreDocument('')
     expect(back.seeds.map((entry) => entry.name)).toEqual(['brand', 'accent'])
     expect(back.selected).toBe(1)
+    expect(back.gamut).toBe('srgb')
+  })
+
+  it('reopens in the gamut it was saved in', () => {
+    stubStorage()
+    saveDocument([brand, accent], 1, 'p3')
+    expect(restoreDocument('').gamut).toBe('p3')
+  })
+
+  it('opens a link in the gamut it was made in, not the one saved', () => {
+    stubStorage()
+    saveDocument([brand], 0, 'srgb')
+    expect(restoreDocument(`#${encodeDocument([accent], 'rec2020')}`).gamut).toBe('rec2020')
   })
 
   it('opens a shared link on its own when there is nothing saved', () => {

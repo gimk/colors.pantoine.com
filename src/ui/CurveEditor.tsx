@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { toSvgPath, type Point } from '../color/bezier'
 import {
   clamp,
@@ -9,11 +9,22 @@ import {
 } from '../color/curve'
 import type { Swatch } from '../color/ramp'
 
-const VIEW_W = 340
-const VIEW_H = 250
+/**
+ * The graph is as wide as it is given and a fixed height tall.
+ *
+ * A fixed aspect ratio cannot work in a full-width dock: three panels across
+ * a wide screen are 500-1000px each, and a portrait viewBox scaled to that
+ * width comes out taller than the dock. So the viewBox is measured in real
+ * pixels — one user unit per pixel — which keeps strokes and handles circular
+ * at any width while the plot spreads into whatever space it has. Wide and
+ * short also suits the curves: x is the ramp, and the ramp is what you read.
+ */
+const GRAPH_H = 190
+
+/** Before measurement, and on the server, where there is nothing to measure. */
+const FALLBACK_W = 520
+
 const PAD = { top: 14, right: 14, bottom: 22, left: 42 }
-const PLOT_W = VIEW_W - PAD.left - PAD.right
-const PLOT_H = VIEW_H - PAD.top - PAD.bottom
 
 /** Which control the pointer or keyboard is moving. */
 type Target = CurveControl
@@ -38,6 +49,23 @@ export function CurveEditor({ curve, channel, swatches, lockedIndex, onChange }:
   const dragging = useRef<Target | null>(null)
   const span = channel.max - channel.min
 
+  // Measured on the svg itself, which is safe from a feedback loop: its width
+  // comes from the panel, never from the viewBox this sets.
+  const [viewW, setViewW] = useState(FALLBACK_W)
+  useLayoutEffect(() => {
+    const svg = svgRef.current
+    if (!svg || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver((entries) => {
+      const next = Math.round(entries[0].contentRect.width)
+      if (next > 0) setViewW(next)
+    })
+    observer.observe(svg)
+    return () => observer.disconnect()
+  }, [])
+
+  const plotW = viewW - PAD.left - PAD.right
+  const plotH = GRAPH_H - PAD.top - PAD.bottom
+
   const last = Math.max(swatches.length - 1, 1)
   const lockedX = lockedIndex === undefined ? null : lockedIndex / last
   // An anchor that carries the locked base cannot move at all — there is
@@ -46,8 +74,8 @@ export function CurveEditor({ curve, channel, swatches, lockedIndex, onChange }:
     lockedX === null ? null : lockedX <= 0 ? 'start' : lockedX >= 1 ? 'end' : null
 
   const toPx = (x: number, y: number): Point => ({
-    x: PAD.left + x * PLOT_W,
-    y: PAD.top + (1 - (y - channel.min) / span) * PLOT_H,
+    x: PAD.left + x * plotW,
+    y: PAD.top + (1 - (y - channel.min) / span) * plotH,
   })
 
   /** Client pixels to curve space, clamped into the channel box. */
@@ -55,11 +83,11 @@ export function CurveEditor({ curve, channel, swatches, lockedIndex, onChange }:
     const svg = svgRef.current
     if (!svg) return { x: 0, y: 0 }
     const rect = svg.getBoundingClientRect()
-    const vx = ((clientX - rect.left) / rect.width) * VIEW_W
-    const vy = ((clientY - rect.top) / rect.height) * VIEW_H
+    const vx = ((clientX - rect.left) / rect.width) * viewW
+    const vy = ((clientY - rect.top) / rect.height) * GRAPH_H
     return {
-      x: clamp((vx - PAD.left) / PLOT_W, 0, 1),
-      y: clamp(channel.max - ((vy - PAD.top) / PLOT_H) * span, channel.min, channel.max),
+      x: clamp((vx - PAD.left) / plotW, 0, 1),
+      y: clamp(channel.max - ((vy - PAD.top) / plotH) * span, channel.min, channel.max),
     }
   }
 
@@ -162,7 +190,7 @@ export function CurveEditor({ curve, channel, swatches, lockedIndex, onChange }:
     <svg
       ref={svgRef}
       className="graph"
-      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+      viewBox={`0 0 ${viewW} ${GRAPH_H}`}
       role="group"
       aria-label={`${channel.label} curve`}
     >
@@ -170,10 +198,10 @@ export function CurveEditor({ curve, channel, swatches, lockedIndex, onChange }:
         <line
           key={`v${g}`}
           className="graph__grid"
-          x1={PAD.left + g * PLOT_W}
+          x1={PAD.left + g * plotW}
           y1={PAD.top}
-          x2={PAD.left + g * PLOT_W}
-          y2={PAD.top + PLOT_H}
+          x2={PAD.left + g * plotW}
+          y2={PAD.top + plotH}
         />
       ))}
       {GRIDLINES.map((g) => (
@@ -181,26 +209,26 @@ export function CurveEditor({ curve, channel, swatches, lockedIndex, onChange }:
           key={`h${g}`}
           className="graph__grid"
           x1={PAD.left}
-          y1={PAD.top + g * PLOT_H}
-          x2={PAD.left + PLOT_W}
-          y2={PAD.top + g * PLOT_H}
+          y1={PAD.top + g * plotH}
+          x2={PAD.left + plotW}
+          y2={PAD.top + g * plotH}
         />
       ))}
 
-      <rect className="graph__frame" x={PAD.left} y={PAD.top} width={PLOT_W} height={PLOT_H} />
+      <rect className="graph__frame" x={PAD.left} y={PAD.top} width={plotW} height={plotH} />
 
       <text className="graph__label" x={PAD.left - 6} y={PAD.top + 4} textAnchor="end">
         {show(channel.max)}
         {channel.unit}
       </text>
-      <text className="graph__label" x={PAD.left - 6} y={PAD.top + PLOT_H} textAnchor="end">
+      <text className="graph__label" x={PAD.left - 6} y={PAD.top + plotH} textAnchor="end">
         {show(channel.min)}
         {channel.unit}
       </text>
-      <text className="graph__label" x={PAD.left} y={VIEW_H - 7}>
+      <text className="graph__label" x={PAD.left} y={GRAPH_H - 7}>
         first step
       </text>
-      <text className="graph__label" x={PAD.left + PLOT_W} y={VIEW_H - 7} textAnchor="end">
+      <text className="graph__label" x={PAD.left + plotW} y={GRAPH_H - 7} textAnchor="end">
         last step
       </text>
 

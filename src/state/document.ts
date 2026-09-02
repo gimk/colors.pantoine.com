@@ -1,5 +1,5 @@
-import { clamp, type Curve } from '../color/curve'
-import { normalizeHue, toHex } from '../color/oklch'
+import { CHANNEL_ORDER, clamp, curvesEqual, type Curve } from '../color/curve'
+import { normalizeHue, toHex, type Gamut } from '../color/oklch'
 import {
   chromaCurveFor,
   createPalette,
@@ -17,6 +17,7 @@ import {
   nearestStep,
   NOTHING_EDITED,
   paletteReducer,
+  type Edited,
   type PaletteAction,
   type PaletteState,
 } from './paletteReducer'
@@ -38,6 +39,13 @@ export type PaletteEntry = {
 export type DocumentState = {
   palettes: PaletteEntry[]
   selectedId: string
+  /**
+   * Which display gamut the whole document is being designed for. Document
+   * state rather than a view preference: it decides how much chroma every
+   * derived curve is allowed to ask for, so it is part of the work, and it
+   * travels in the link and in storage with everything else.
+   */
+  gamut: Gamut
 }
 
 export type DocumentAction =
@@ -49,6 +57,7 @@ export type DocumentAction =
   | { type: 'move'; id: string; by: -1 | 1 }
   | { type: 'rename'; id: string; name: string }
   | { type: 'setSteps'; value: number }
+  | { type: 'setGamut'; value: Gamut }
   | { type: 'syncChannel'; key: CurveKey }
   | { type: 'syncAll' }
 
@@ -66,36 +75,52 @@ const makeId = () => `p${++nextId}`
 
 export type PaletteSeed = { name: string; config: PaletteConfig }
 
-function makeEntry(seed: string | PaletteConfig, name: string, steps?: number): PaletteEntry {
+function makeEntry(
+  seed: string | PaletteConfig,
+  name: string,
+  steps?: number,
+  gamut: Gamut = 'srgb',
+): PaletteEntry {
   if (typeof seed === 'string') {
     return {
       id: makeId(),
       name,
       state: {
-        config: createPalette(seed, steps ?? DEFAULT_STEPS),
+        config: createPalette(seed, steps ?? DEFAULT_STEPS, gamut),
         edited: { ...NOTHING_EDITED },
       },
     }
   }
+  // A config seed arrives fully formed, from a link or from storage, so
+  // `steps` and `gamut` have nothing to derive and are deliberately unused:
+  // overriding its curves here would discard someone's saved work.
   return { id: makeId(), name, state: initialPaletteState(seed) }
 }
 
-export function createDocument(seeds: PaletteSeed[] = [], selected = -1): DocumentState {
+export function createDocument(
+  seeds: PaletteSeed[] = [],
+  selected = -1,
+  gamut: Gamut = 'srgb',
+): DocumentState {
   // A document has a unified global step count across all palettes.
   const globalSteps = seeds.length ? seeds[0].config.steps : DEFAULT_STEPS
   const palettes = seeds.length
     ? seeds.map((seed) => {
         const entry = makeEntry(seed.config, seed.name)
         if (entry.state.config.steps !== globalSteps) {
-          entry.state = paletteReducer(entry.state, { type: 'setSteps', value: globalSteps })
+          entry.state = paletteReducer(
+            entry.state,
+            { type: 'setSteps', value: globalSteps },
+            gamut,
+          )
         }
         return entry
       })
-    : [makeEntry(FALLBACK_BASE, 'brand', globalSteps)]
+    : [makeEntry(FALLBACK_BASE, 'brand', globalSteps, gamut)]
   // Default to the last one: that is the working palette, the one the toolbox
   // opens under, with the finished ones stacked above it.
   const index = selected >= 0 && selected < palettes.length ? selected : palettes.length - 1
-  return { palettes, selectedId: palettes[index].id }
+  return { palettes, selectedId: palettes[index].id, gamut }
 }
 
 export const selectedEntry = (state: DocumentState): PaletteEntry =>
@@ -130,10 +155,31 @@ const cloneCurve = (curve: Curve): Curve => ({
   h2: { ...curve.h2 },
 })
 
+/**
+ * The entry it was handed, when the sync would have changed nothing.
+ *
+ * Applying a curve a palette already has must not count as an edit: the
+ * reducers report "nothing happened" by identity, and without this every
+ * click of Apply all would push an undo entry over an unchanged document.
+ */
+function settled(
+  targetEntry: PaletteEntry,
+  config: PaletteConfig,
+  edited: Edited,
+): PaletteEntry {
+  const before = targetEntry.state
+  const unchanged =
+    config.baseIndex === before.config.baseIndex &&
+    CHANNEL_ORDER.every((key) => curvesEqual(config[key], before.config[key])) &&
+    CHANNEL_ORDER.every((key) => edited[key] === before.edited[key])
+  return unchanged ? targetEntry : { ...targetEntry, state: { config, edited } }
+}
+
 function applyChannelSync(
   targetEntry: PaletteEntry,
   key: CurveKey,
   sourceCurve: Curve,
+  gamut: Gamut,
 ): PaletteEntry {
   const { config, edited } = targetEntry.state
   const base = resolveBase(config)
@@ -146,24 +192,16 @@ function applyChannelSync(
       : curveCopy
 
     const finalChroma = !edited.chroma
-      ? chromaCurveFor(base, config.steps, baseIndex, finalLightness)
+      ? chromaCurveFor(base, config.steps, baseIndex, finalLightness, gamut)
       : config.baseLocked
         ? holdBase(config.chroma, 'chroma', base, config.steps, baseIndex)
         : config.chroma
 
-    return {
-      ...targetEntry,
-      state: {
-        ...targetEntry.state,
-        edited: { ...edited, lightness: true },
-        config: {
-          ...config,
-          baseIndex,
-          lightness: finalLightness,
-          chroma: finalChroma,
-        },
-      },
-    }
+    return settled(
+      targetEntry,
+      { ...config, baseIndex, lightness: finalLightness, chroma: finalChroma },
+      { ...edited, lightness: true },
+    )
   }
 
   if (key === 'chroma') {
@@ -171,17 +209,7 @@ function applyChannelSync(
       ? holdBase(curveCopy, 'chroma', base, config.steps, config.baseIndex)
       : curveCopy
 
-    return {
-      ...targetEntry,
-      state: {
-        ...targetEntry.state,
-        edited: { ...edited, chroma: true },
-        config: {
-          ...config,
-          chroma: finalChroma,
-        },
-      },
-    }
+    return settled(targetEntry, { ...config, chroma: finalChroma }, { ...edited, chroma: true })
   }
 
   // key === 'hue'
@@ -189,17 +217,7 @@ function applyChannelSync(
     ? holdBase(curveCopy, 'hue', base, config.steps, config.baseIndex)
     : curveCopy
 
-  return {
-    ...targetEntry,
-    state: {
-      ...targetEntry.state,
-      edited: { ...edited, hue: true },
-      config: {
-        ...config,
-        hue: finalHue,
-      },
-    },
-  }
+  return settled(targetEntry, { ...config, hue: finalHue }, { ...edited, hue: true })
 }
 
 function applyAllSync(targetEntry: PaletteEntry, sourceConfig: PaletteConfig): PaletteEntry {
@@ -222,20 +240,30 @@ function applyAllSync(targetEntry: PaletteEntry, sourceConfig: PaletteConfig): P
     ? holdBase(hCopy, 'hue', base, config.steps, baseIndex)
     : hCopy
 
-  return {
-    ...targetEntry,
-    state: {
-      ...targetEntry.state,
-      edited: { lightness: true, chroma: true, hue: true },
-      config: {
-        ...config,
-        baseIndex,
-        lightness: finalLightness,
-        chroma: finalChroma,
-        hue: finalHue,
-      },
+  return settled(
+    targetEntry,
+    {
+      ...config,
+      baseIndex,
+      lightness: finalLightness,
+      chroma: finalChroma,
+      hue: finalHue,
     },
-  }
+    { lightness: true, chroma: true, hue: true },
+  )
+}
+
+/**
+ * The state it was handed, when every entry came back untouched.
+ *
+ * `map` always allocates, so a document-wide pass has to be checked entry by
+ * entry: history records an entry for any new state object, and a pass that
+ * changed nothing should not be undoable.
+ */
+function sameStack(state: DocumentState, palettes: PaletteEntry[]): DocumentState {
+  return palettes.every((entry, index) => entry === state.palettes[index])
+    ? state
+    : { ...state, palettes }
 }
 
 export function documentReducer(state: DocumentState, action: DocumentAction): DocumentState {
@@ -245,9 +273,11 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
       const current = selectedEntry(state)
       const sourceCurve = current.state.config[action.key]
       const palettes = state.palettes.map((entry) =>
-        entry.id === current.id ? entry : applyChannelSync(entry, action.key, sourceCurve),
+        entry.id === current.id
+          ? entry
+          : applyChannelSync(entry, action.key, sourceCurve, state.gamut),
       )
-      return { ...state, palettes }
+      return sameStack(state, palettes)
     }
 
     case 'syncAll': {
@@ -256,17 +286,26 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
       const palettes = state.palettes.map((entry) =>
         entry.id === current.id ? entry : applyAllSync(entry, current.state.config),
       )
-      return { ...state, palettes }
+      return sameStack(state, palettes)
+    }
+
+    case 'setGamut': {
+      if (action.value === state.gamut) return state
+      const palettes = state.palettes.map((entry) => {
+        const next = paletteReducer(entry.state, { type: 'regamut' }, action.value)
+        return next === entry.state ? entry : { ...entry, state: next }
+      })
+      return { ...state, gamut: action.value, palettes }
     }
     case 'setSteps': {
       const steps = clamp(Math.round(action.value), MIN_STEPS, MAX_STEPS)
       if (state.palettes.every((entry) => entry.state.config.steps === steps)) return state
 
       const palettes = state.palettes.map((entry) => {
-        const next = paletteReducer(entry.state, { type: 'setSteps', value: steps })
+        const next = paletteReducer(entry.state, { type: 'setSteps', value: steps }, state.gamut)
         return next === entry.state ? entry : { ...entry, state: next }
       })
-      return { ...state, palettes }
+      return sameStack(state, palettes)
     }
 
     case 'palette': {
@@ -274,7 +313,7 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
         return documentReducer(state, { type: 'setSteps', value: action.action.value })
       }
       const current = selectedEntry(state)
-      const next = paletteReducer(current.state, action.action)
+      const next = paletteReducer(current.state, action.action, state.gamut)
       if (next === current.state) return state
       return replaceEntry(state, current.id, (entry) => ({ ...entry, state: next }))
     }
@@ -286,8 +325,9 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
         steppedBase(currentConfig),
         `palette ${state.palettes.length + 1}`,
         currentSteps,
+        state.gamut,
       )
-      return { palettes: [...state.palettes, entry], selectedId: entry.id }
+      return { ...state, palettes: [...state.palettes, entry], selectedId: entry.id }
     }
 
     case 'select':
@@ -304,7 +344,7 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
         action.id === state.selectedId
           ? palettes[Math.min(index, palettes.length - 1)].id
           : state.selectedId
-      return { palettes, selectedId }
+      return { ...state, palettes, selectedId }
     }
 
     case 'move': {
@@ -346,7 +386,9 @@ export function coalesceKey(action: DocumentAction): string | null {
       // single click that deserves its own entry.
       return edit.moved ? `curve:${edit.key}:${edit.moved}` : null
     case 'setEndpoint':
-      // Start and End commit on every keystroke, not on blur.
+      // Start and End commit on every keystroke that parses, and again on
+      // blur if the field ends up somewhere new, so a typed value is one
+      // entry rather than one per character.
       return `endpoint:${edit.key}:${edit.end}`
     case 'setBase':
       return 'base'

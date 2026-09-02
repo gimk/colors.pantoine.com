@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { FORMATS, GAMUTS, gamutLabel, parseToOklch, type Format, type Gamut } from './color/oklch'
+import { FORMATS, GAMUTS, parseToOklch, type Format, type Gamut } from './color/oklch'
 import { baseIndexFor, MAX_STEPS, MIN_STEPS } from './color/presets'
 import { countDuplicateSteps } from './color/ramp'
 import { restoreDocument, saveDocument } from './state/storage'
 import { documentUrl, encodeDocument } from './state/url'
 import { useDocument, type PaletteView } from './state/useDocument'
+import { NumberField } from './ui/NumberField'
+import { HelpDialog } from './ui/HelpDialog'
 import { PaletteRow } from './ui/PaletteRow'
 import { Toolbox } from './ui/Toolbox'
 import { useCopy } from './ui/useCopy'
@@ -21,11 +23,11 @@ const seedsOf = (palettes: PaletteView[]) =>
 
 export function App() {
   const [session] = useState(readSession)
-  const [gamut, setGamut] = useState<Gamut>('srgb')
-  const doc = useDocument(session, gamut)
+  const doc = useDocument(session)
+  const { gamut } = doc
   const [format, setFormat] = useState<Format>('hex')
   const [dark, setDark] = useState(false)
-  const [seamless, setSeamless] = useState(false)
+  const [labels, setLabels] = useState(true)
   const [bare, setBare] = useState(false)
   const { copy, copied } = useCopy()
 
@@ -55,12 +57,12 @@ export function App() {
   // history entry for every pixel of a curve drag.
   useEffect(() => {
     const seeds = seedsOf(doc.palettes)
-    const hash = `#${encodeDocument(seeds)}`
+    const hash = `#${encodeDocument(seeds, gamut)}`
     if (window.location.hash !== hash) {
       window.history.replaceState(null, '', hash)
     }
-    saveDocument(seeds, doc.selectedIndex)
-  }, [doc.palettes, doc.selectedIndex])
+    saveDocument(seeds, doc.selectedIndex, gamut)
+  }, [doc.palettes, doc.selectedIndex, gamut])
 
   const { selected } = doc
   const parsedBase = parseToOklch(selected.config.base)
@@ -69,22 +71,30 @@ export function App() {
     ? baseIndexFor(parsedBase, selected.config.steps)
     : selected.config.baseIndex
 
-  const shareHref = typeof window === 'undefined' ? '' : documentUrl(seedsOf(doc.palettes))
+  const shareHref =
+    typeof window === 'undefined' ? '' : documentUrl(seedsOf(doc.palettes), gamut)
 
   return (
     <div className={`app${bare ? ' app--bare' : ''}`}>
       <header className="masthead">
-        <div>
-          <h1>colors.pantoine.com — tints &amp; shades</h1>
-          <p>
-            Every step is computed in OKLCH, so the ramp is perceptually even and
-            lightness, chroma and hue are yours to shape.
-          </p>
-        </div>
+        <h1>colors.pantoine.com — tints &amp; shades</h1>
+        <span className="spacer" />
         <span className="badge badge--solid">OKLCH</span>
+        <HelpDialog gamut={gamut} />
       </header>
 
       <div className="controls">
+        {/* First in the bar and filled solid: it is the one thing here that
+            adds to the document rather than adjusting it. */}
+        <button
+          type="button"
+          className="is-primary"
+          onClick={doc.newPalette}
+          title="Add a palette below this one and bring the toolbox to it"
+        >
+          + New palette
+        </button>
+
         <button
           type="button"
           disabled={!doc.canUndo}
@@ -103,14 +113,6 @@ export function App() {
           Redo
         </button>
 
-        <button
-          type="button"
-          onClick={doc.newPalette}
-          title="Add a palette below this one and bring the toolbox to it"
-        >
-          New palette
-        </button>
-
         <label className="field">
           <span>Click copies</span>
           <select value={format} onChange={(event) => setFormat(event.target.value as Format)}>
@@ -124,7 +126,11 @@ export function App() {
 
         <label className="field">
           <span>Gamut</span>
-          <select value={gamut} onChange={(event) => setGamut(event.target.value as Gamut)}>
+          <select
+            value={gamut}
+            onChange={(event) => doc.setGamut(event.target.value as Gamut)}
+            title="Which display the palette is designed for. Widening it lets every derived chroma curve ask for more."
+          >
             {GAMUTS.map((option) => (
               <option key={option.id} value={option.id}>
                 {option.label}
@@ -133,25 +139,27 @@ export function App() {
           </select>
         </label>
 
-        <label className="field" title="Number of steps across all palettes">
-          <span>Steps</span>
-          <input
-            type="number"
-            min={MIN_STEPS}
-            max={MAX_STEPS}
-            value={doc.selected.config.steps}
-            onChange={(event) => doc.setSteps(Number(event.target.value))}
-          />
-        </label>
+        <NumberField
+          label="Steps"
+          title="Number of steps, across every palette in the document"
+          value={selected.config.steps}
+          min={MIN_STEPS}
+          max={MAX_STEPS}
+          step={1}
+          decimals={0}
+          onCommit={doc.setSteps}
+        />
 
         <span className="spacer" />
 
         <button
           type="button"
-          onClick={() => setSeamless((on) => !on)}
-          title="A rule beside a colour changes how you read it. Drop them to see the steps meet."
+          className={!labels ? 'is-on' : undefined}
+          aria-pressed={!labels}
+          onClick={() => setLabels((on) => !on)}
+          title="Drop the step names, values and contrast figures, and look at nothing but the colours"
         >
-          {seamless ? 'Show dividers' : 'Hide dividers'}
+          {labels ? 'Hide labels' : 'Show labels'}
         </button>
 
         <button
@@ -175,41 +183,30 @@ export function App() {
 
       <div className="stack">
         {doc.palettes.map((palette, index) => (
-          <div key={palette.id} className="stack__item">
-            <PaletteRow
-              palette={palette}
-              index={index}
-              count={doc.palettes.length}
-              selected={palette.id === selected.id}
-              format={format}
-              gamut={gamut}
-              seamless={seamless}
-              bare={bare}
-              copiedKey={copied}
-              onSelect={() => doc.select(palette.id)}
-              onRemove={() => doc.remove(palette.id)}
-              onMove={(by) => doc.move(palette.id, by)}
-              onCopy={copy}
-            />
-            {/* The toolbox follows the selection down the stack, so the
-                controls are always next to the ramp they act on. */}
-            {!bare && palette.id === selected.id && (
-              <Toolbox doc={doc} shareHref={shareHref} />
-            )}
-          </div>
+          <PaletteRow
+            key={palette.id}
+            palette={palette}
+            index={index}
+            count={doc.palettes.length}
+            selected={palette.id === selected.id}
+            format={format}
+            gamut={gamut}
+            labels={labels}
+            bare={bare}
+            copiedKey={copied}
+            onSelect={() => doc.select(palette.id)}
+            onRemove={() => doc.remove(palette.id)}
+            onMove={(by) => doc.move(palette.id, by)}
+            onCopy={copy}
+          />
         ))}
       </div>
 
-      {!bare && (
-        <p className="footnote">
-          Click a swatch to copy it, or click another palette to bring the toolbox to
-          it. Drag the round handles, or focus one and use the arrow keys (hold shift
-          for bigger steps). A notched corner means the curve asked for more chroma
-          than {gamutLabel(gamut)} can show, and the colour was mapped to the nearest one it can —
-          hue held, chroma reduced. Your palettes are saved in this browser, and the
-          address bar holds all of them, so a link carries the whole set.
-        </p>
-      )}
+      {/* Docked, not trailing the selection down the stack. Last in the tree
+          so `position: sticky; bottom` pins it to the foot of the window while
+          the palettes scroll behind, and it names the palette it is editing
+          since it is no longer beside it. */}
+      {!bare && <Toolbox doc={doc} shareHref={shareHref} />}
 
       {/* Out of flow, and last in the tree. It comes and goes mid-drag as the
           ramp squeezes and relaxes, so anything in flow here would shove the

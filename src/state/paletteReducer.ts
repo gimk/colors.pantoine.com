@@ -5,11 +5,12 @@ import {
   CHANNELS,
   clamp,
   clampCurve,
+  curvesEqual,
   sampleCurve,
   type Curve,
   type CurveControl,
 } from '../color/curve'
-import { parseToOklch, type Oklch } from '../color/oklch'
+import { parseToOklch, type Gamut, type Oklch } from '../color/oklch'
 import {
   chromaCurveFor,
   createPalette,
@@ -48,6 +49,8 @@ export type PaletteAction =
   | { type: 'setEndpoint'; key: CurveKey; end: 'start' | 'end'; value: number }
   | { type: 'resetCurve'; key: CurveKey }
   | { type: 'rederive' }
+  /** The document's gamut changed under this palette. */
+  | { type: 'regamut' }
 
 export const anyEdited = (edited: Edited) => CURVE_KEYS.some((key) => edited[key])
 
@@ -75,7 +78,16 @@ function holdAll(config: PaletteConfig, base: Oklch): PaletteConfig {
   return next
 }
 
-export function paletteReducer(state: PaletteState, action: PaletteAction): PaletteState {
+/**
+ * `gamut` is threaded in rather than read from a module global because it
+ * belongs to the document: every derivation that samples a chroma ceiling
+ * needs the one the designer is actually looking at.
+ */
+export function paletteReducer(
+  state: PaletteState,
+  action: PaletteAction,
+  gamut: Gamut = 'srgb',
+): PaletteState {
   const { config } = state
   const base = resolveBase(config)
 
@@ -87,7 +99,7 @@ export function paletteReducer(state: PaletteState, action: PaletteAction): Pale
       if (!parsed) return { ...state, config: { ...config, base: action.value } }
 
       if (!anyEdited(state.edited)) {
-        const fresh = createPalette(action.value, config.steps)
+        const fresh = createPalette(action.value, config.steps, gamut)
         return { ...state, config: { ...fresh, baseLocked: config.baseLocked } }
       }
 
@@ -106,7 +118,7 @@ export function paletteReducer(state: PaletteState, action: PaletteAction): Pale
       const steps = clamp(Math.round(action.value), MIN_STEPS, MAX_STEPS)
       if (steps === config.steps) return state
       if (!anyEdited(state.edited)) {
-        const fresh = createPalette(config.base, steps)
+        const fresh = createPalette(config.base, steps, gamut)
         return { ...state, config: { ...fresh, baseLocked: config.baseLocked } }
       }
       // Hold the base's relative position on the ramp.
@@ -137,7 +149,7 @@ export function paletteReducer(state: PaletteState, action: PaletteAction): Pale
       // it is only re-pinned to keep the base colour exact.
       const chroma = state.edited.chroma
         ? holdBase(config.chroma, 'chroma', base, config.steps, baseIndex)
-        : chromaCurveFor(base, config.steps, baseIndex, lightness)
+        : chromaCurveFor(base, config.steps, baseIndex, lightness, gamut)
 
       const hue = config.baseLocked
         ? holdBase(config.hue, 'hue', base, config.steps, baseIndex)
@@ -181,15 +193,26 @@ export function paletteReducer(state: PaletteState, action: PaletteAction): Pale
     }
 
     case 'resetCurve': {
-      const fresh = defaultCurves(base, config.steps, config.baseIndex)
+      const fresh = defaultCurves(base, config.steps, config.baseIndex, gamut)
       return {
         edited: { ...state.edited, [action.key]: false },
         config: { ...config, [action.key]: fresh[action.key] },
       }
     }
 
+    case 'regamut': {
+      // A gamut change makes an underived chroma curve stale in exactly the
+      // way moving the base does: its targets are a fraction of a ceiling
+      // that has just changed shape. An edited curve is the designer's and is
+      // left alone — Re-derive is how they ask for it to be rebuilt.
+      if (state.edited.chroma) return state
+      const chroma = chromaCurveFor(base, config.steps, config.baseIndex, config.lightness, gamut)
+      if (curvesEqual(chroma, config.chroma)) return state
+      return { ...state, config: { ...config, chroma } }
+    }
+
     case 'rederive': {
-      const fresh = createPalette(config.base, config.steps)
+      const fresh = createPalette(config.base, config.steps, gamut)
       return {
         edited: { ...NOTHING_EDITED },
         config: { ...fresh, baseLocked: config.baseLocked },

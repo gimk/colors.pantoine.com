@@ -1,6 +1,6 @@
 import { CHANNEL_ORDER, type Curve, type CurveControl } from '../color/curve'
 import { parseToOklch, toHex } from '../color/oklch'
-import { FALLBACK_BASE, MAX_STEPS, MIN_STEPS, type CurveKey } from '../color/presets'
+import { FALLBACK_BASE, type CurveKey } from '../color/presets'
 import type { DocumentApi } from '../state/useDocument'
 import { BaseColorInput } from './BaseColorInput'
 import { CurvePanel } from './CurvePanel'
@@ -47,17 +47,6 @@ export function Toolbox({ doc, shareHref }: Props) {
           valid={parsedBase !== null}
           onChange={doc.setBase}
         />
-
-        <label className="field" title="Number of steps across all palettes in the document">
-          <span>Steps</span>
-          <input
-            type="number"
-            min={MIN_STEPS}
-            max={MAX_STEPS}
-            value={selected.config.steps}
-            onChange={(event) => doc.setSteps(Number(event.target.value))}
-          />
-        </label>
 
         <label className="field">
           <span>Base at</span>
@@ -131,7 +120,12 @@ export function Toolbox({ doc, shareHref }: Props) {
           />
         ))}
 
-        <ExportPanel ramp={selected.ramp} name={selected.name} shareHref={shareHref} />
+        <ExportPanel
+          ramp={selected.ramp}
+          name={selected.name}
+          gamut={doc.gamut}
+          shareHref={shareHref}
+        />
       </div>
     </section>
   )
