@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import type { PaletteConfig } from '../color/presets'
 import type { Swatch } from '../color/ramp'
 import { TEXT_FORMATS } from '../export/formats'
 import {
@@ -10,17 +9,16 @@ import {
   toSvg,
   type ImageOptions,
 } from '../export/image'
-import { shareUrl } from '../state/url'
 import { useCopy } from './useCopy'
 
 type Props = {
   ramp: Swatch[]
-  config: PaletteConfig
+  /** Link that reopens the whole document, curves intact. */
+  shareHref: string
   name: string
-  onName: (name: string) => void
 }
 
-export function ExportPanel({ ramp, config, name, onName }: Props) {
+export function ExportPanel({ ramp, name, shareHref }: Props) {
   const { copy, copied } = useCopy()
   const [sizeId, setSizeId] = useState(SIZE_PRESETS[1].id)
   const [labels, setLabels] = useState(false)
@@ -42,21 +40,10 @@ export function ExportPanel({ ramp, config, name, onName }: Props) {
       </header>
 
       <div className="panel__row">
-        <label className="field">
-          <span>Name</span>
-          <input
-            type="text"
-            value={name}
-            spellCheck={false}
-            autoComplete="off"
-            onChange={(event) => onName(event.target.value)}
-          />
-        </label>
-        <span className="spacer" />
         <button
           type="button"
-          onClick={() => copy('share', shareUrl(config, name))}
-          title="A link that reopens this palette with every curve intact"
+          onClick={() => copy('share', shareHref)}
+          title="A link that reopens every palette here, with every curve intact"
         >
           {copied === 'share' ? 'Link copied' : 'Copy link'}
         </button>

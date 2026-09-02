@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { App } from './App'
 import { createPalette, DEFAULT_STEPS } from './color/presets'
 import { generateRamp } from './color/ramp'
+import { PaletteRow } from './ui/PaletteRow'
 import { RampStrip } from './ui/RampStrip'
 
 /**
@@ -134,5 +135,113 @@ describe('squeeze warning', () => {
 
   it('is opaque, since it sits over the ramp', () => {
     expect(rule).toContain('background: var(--paper)')
+  })
+})
+
+describe('the palette stack', () => {
+  const html = renderToStaticMarkup(<App />)
+
+  it('opens with one palette and one toolbox under it', () => {
+    expect(html.match(/class="prow[ "]/g)).toHaveLength(1)
+    expect(html.match(/class="toolbox"/g)).toHaveLength(1)
+  })
+
+  it('offers document-level actions in the top bar', () => {
+    expect(html).toContain('New palette')
+    expect(html).toContain('Hide tools')
+    expect(html).toContain('Hide dividers')
+  })
+
+  it('keeps the base settings in the toolbox, not the top bar', () => {
+    // They belong to a palette, not the document: with a stack of ramps, a
+    // base field far from the one it drives would be ambiguous.
+    const bar = html.slice(html.indexOf('class="controls"'), html.indexOf('class="stack"'))
+    for (const control of ['Base at', 'Lock base', 'Re-derive']) {
+      expect(bar).not.toContain(control)
+      expect(html).toContain(control)
+    }
+  })
+
+  it('says that palettes are saved and that a link carries all of them', () => {
+    expect(html).toContain('saved in this browser')
+  })
+})
+
+describe('PaletteRow', () => {
+  const config = createPalette('#7c3aed')
+  const view = {
+    id: 'p1',
+    name: 'brand',
+    config,
+    ramp: generateRamp(config),
+    edited: false,
+  }
+
+  const render = (over: Partial<Parameters<typeof PaletteRow>[0]> = {}) =>
+    renderToStaticMarkup(
+      <PaletteRow
+        palette={view}
+        index={0}
+        count={2}
+        selected={false}
+        format="hex"
+        seamless={false}
+        bare={false}
+        copiedKey={null}
+        onSelect={() => {}}
+        onRemove={() => {}}
+        onMove={() => {}}
+        onCopy={() => {}}
+        {...over}
+      />,
+    )
+
+  it('offers Edit only on the palettes that are not being edited', () => {
+    expect(render()).toContain('>Edit</button>')
+    expect(render({ selected: true })).not.toContain('>Edit</button>')
+  })
+
+  it('marks the selected palette without moving anything', () => {
+    expect(render({ selected: true })).toContain('prow prow--selected')
+    expect(render()).toContain('class="prow"')
+  })
+
+  it('will not reorder off the ends of the stack', () => {
+    const first = render({ index: 0, count: 3 })
+    expect(first).toMatch(/disabled[^>]*>Up</)
+    expect(first).not.toMatch(/disabled[^>]*>Down</)
+    const last = render({ index: 2, count: 3 })
+    expect(last).toMatch(/disabled[^>]*>Down</)
+    expect(last).not.toMatch(/disabled[^>]*>Up</)
+  })
+
+  it('will not delete the only palette there is', () => {
+    expect(render({ count: 1 })).toMatch(/disabled[^>]*>Delete</)
+    expect(render({ count: 2 })).not.toMatch(/disabled[^>]*>Delete</)
+  })
+
+  it('puts every tool away in bare mode, keeping the colours', () => {
+    const bare = render({ bare: true })
+    expect(bare).not.toContain('prow__head')
+    for (const tool of ['Edit', 'Delete', 'Up', 'Down']) {
+      expect(bare).not.toContain(`>${tool}</button>`)
+    }
+    expect(bare.match(/class="swatch"/g)).toHaveLength(view.ramp.length)
+  })
+})
+
+/**
+ * Selecting a palette must not move it. The marker swaps colours on a name
+ * that is padded either way, so the ramp underneath cannot shift as the
+ * selection travels down the stack.
+ */
+describe('selection marker', () => {
+  it('changes colour only, never geometry', () => {
+    expect(declarations('.prow__name')).toContain('padding:')
+    const marked = declarations('.prow--selected .prow__name')
+    expect(marked).toContain('background: var(--ink)')
+    for (const property of ['padding', 'margin', 'border', 'font-size']) {
+      expect(marked).not.toContain(property)
+    }
   })
 })

@@ -1,4 +1,6 @@
-import { useCallback, useMemo, useReducer } from 'react'
+/* The reducer for one palette. Lifted out of the hook so a document can
+   hold several and apply it to whichever one is being edited. */
+
 import {
   CHANNELS,
   clamp,
@@ -19,15 +21,15 @@ import {
   type CurveKey,
   type PaletteConfig,
 } from '../color/presets'
-import { generateRamp, resolveBase, type Swatch } from '../color/ramp'
+import { resolveBase } from '../color/ramp'
 
 const CURVE_KEYS: CurveKey[] = ['lightness', 'chroma', 'hue']
 
-type Edited = Record<CurveKey, boolean>
+export type Edited = Record<CurveKey, boolean>
 
-const NOTHING_EDITED: Edited = { lightness: false, chroma: false, hue: false }
+export const NOTHING_EDITED: Edited = { lightness: false, chroma: false, hue: false }
 
-type State = {
+export type PaletteState = {
   config: PaletteConfig
   /**
    * Tracked per channel, not as one flag, so moving the base to a different
@@ -37,7 +39,7 @@ type State = {
   edited: Edited
 }
 
-type Action =
+export type PaletteAction =
   | { type: 'setBase'; value: string }
   | { type: 'setSteps'; value: number }
   | { type: 'setBaseIndex'; value: number }
@@ -47,7 +49,7 @@ type Action =
   | { type: 'resetCurve'; key: CurveKey }
   | { type: 'rederive' }
 
-const anyEdited = (edited: Edited) => CURVE_KEYS.some((key) => edited[key])
+export const anyEdited = (edited: Edited) => CURVE_KEYS.some((key) => edited[key])
 
 /** Step whose current lightness sits closest to `l`. */
 function nearestStep(curve: Curve, steps: number, l: number): number {
@@ -73,7 +75,7 @@ function holdAll(config: PaletteConfig, base: Oklch): PaletteConfig {
   return next
 }
 
-function reducer(state: State, action: Action): State {
+export function paletteReducer(state: PaletteState, action: PaletteAction): PaletteState {
   const { config } = state
   const base = resolveBase(config)
 
@@ -196,55 +198,16 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-export type PaletteApi = {
-  config: PaletteConfig
-  ramp: Swatch[]
-  edited: boolean
-  setBase: (value: string) => void
-  setSteps: (value: number) => void
-  setBaseIndex: (value: number) => void
-  setBaseLocked: (value: boolean) => void
-  setCurve: (key: CurveKey, curve: Curve, moved?: CurveControl) => void
-  setEndpoint: (key: CurveKey, end: 'start' | 'end', value: number) => void
-  resetCurve: (key: CurveKey) => void
-  rederive: () => void
-}
-
-export function usePalette(initial: string | PaletteConfig): PaletteApi {
-  const [state, dispatch] = useReducer(reducer, initial, (seed) => ({
+/**
+ * A palette restored from a link or from storage counts as edited: its curves
+ * are someone's deliberate work, so changing the base must not discard them.
+ */
+export function initialPaletteState(seed: string | PaletteConfig): PaletteState {
+  return {
     config: typeof seed === 'string' ? createPalette(seed) : seed,
-    // A palette restored from a shared link counts as edited: its curves are
-    // someone's deliberate work, so changing the base must not discard them.
     edited:
       typeof seed === 'string'
         ? { ...NOTHING_EDITED }
         : { lightness: true, chroma: true, hue: true },
-  }))
-
-  const ramp = useMemo(() => generateRamp(state.config), [state.config])
-
-  return {
-    config: state.config,
-    ramp,
-    edited: anyEdited(state.edited),
-    setBase: useCallback((value: string) => dispatch({ type: 'setBase', value }), []),
-    setSteps: useCallback((value: number) => dispatch({ type: 'setSteps', value }), []),
-    setBaseIndex: useCallback((value: number) => dispatch({ type: 'setBaseIndex', value }), []),
-    setBaseLocked: useCallback(
-      (value: boolean) => dispatch({ type: 'setBaseLocked', value }),
-      [],
-    ),
-    setCurve: useCallback(
-      (key: CurveKey, curve: Curve, moved?: CurveControl) =>
-        dispatch({ type: 'setCurve', key, curve, moved }),
-      [],
-    ),
-    setEndpoint: useCallback(
-      (key: CurveKey, end: 'start' | 'end', value: number) =>
-        dispatch({ type: 'setEndpoint', key, end, value }),
-      [],
-    ),
-    resetCurve: useCallback((key: CurveKey) => dispatch({ type: 'resetCurve', key }), []),
-    rederive: useCallback(() => dispatch({ type: 'rederive' }), []),
   }
 }

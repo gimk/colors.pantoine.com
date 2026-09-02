@@ -492,3 +492,86 @@ input:disabled {
   line-height: 1.5;
   pointer-events: none;
 }
+
+/* --- palette stack ---------------------------------------------------- */
+
+.stack {
+  margin: 20px 0 0;
+}
+
+.stack__item + .stack__item {
+  margin-top: 24px;
+}
+
+/* With the tools away the stack closes up: nothing between the palettes but
+   the gap needed to tell one from the next. */
+.app--bare .stack__item + .stack__item {
+  margin-top: 10px;
+}
+
+/* An unselected palette advertises that clicking it brings the toolbox. */
+.prow:not(.prow--selected) {
+  cursor: pointer;
+}
+
+.prow__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 5px;
+}
+
+/* Padding is on the name at all times and only the colours swap, so marking
+   the selection cannot move the ramp underneath it. */
+.prow__name {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 1px 6px;
+}
+
+.prow--selected .prow__name {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.prow__note {
+  color: var(--muted);
+}
+
+.prow .ramp {
+  margin: 10px 0 0;
+}
+
+/* --- toolbox ---------------------------------------------------------- */
+
+/* The heavy top rule joins the toolbox to the palette it is editing: the two
+   read as one block, which is what tells you which ramp the controls act on. */
+.toolbox {
+  border: 1px solid var(--rule);
+  border-top-width: 4px;
+  margin-top: 10px;
+}
+
+.toolbox__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--rule);
+  padding: 6px 8px;
+}
+
+.toolbox__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  border-bottom: 1px solid var(--rule);
+  padding: 8px;
+}
+
+.toolbox .curves {
+  padding: 8px;
+}

@@ -81,7 +81,29 @@ export function decodePalette(hash: string): DecodedPalette | null {
   return { config, name: params.get(KEYS.name) || 'brand' }
 }
 
-export function shareUrl(config: PaletteConfig, name: string): string {
+/**
+ * A document is its palettes joined by `~`, which is unreserved in a URI so it
+ * survives every share path untouched. Each segment is exactly the
+ * single-palette encoding above, which means links made before there was more
+ * than one palette still open — as a document of one.
+ */
+const SEPARATOR = '~'
+
+export function encodeDocument(palettes: DecodedPalette[]): string {
+  return palettes.map((entry) => encodePalette(entry.config, entry.name)).join(SEPARATOR)
+}
+
+/** Segments that do not decode are dropped rather than failing the whole link. */
+export function decodeDocument(hash: string): DecodedPalette[] {
+  const raw = hash.replace(/^#/, '')
+  if (!raw) return []
+  return raw
+    .split(SEPARATOR)
+    .map((segment) => decodePalette(segment))
+    .filter((entry): entry is DecodedPalette => entry !== null)
+}
+
+export function documentUrl(palettes: DecodedPalette[]): string {
   const { origin, pathname } = window.location
-  return `${origin}${pathname}#${encodePalette(config, name)}`
+  return `${origin}${pathname}#${encodeDocument(palettes)}`
 }

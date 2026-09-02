@@ -7,15 +7,27 @@ type Props = {
   copiedKey: string | null
   /** Drop the rules between and around the colour chips. */
   seamless?: boolean
+  /** Namespaces the copy keys, so two strips cannot flash "copied" together. */
+  idPrefix?: string
+  /** Overrides the tooltip when a click does something other than copy. */
+  swatchTitle?: (value: string) => string
   onCopy: (key: string, text: string) => void
 }
 
-export function RampStrip({ ramp, format, copiedKey, seamless, onCopy }: Props) {
+export function RampStrip({
+  ramp,
+  format,
+  copiedKey,
+  seamless,
+  idPrefix = 'swatch',
+  swatchTitle,
+  onCopy,
+}: Props) {
   return (
     <div className={`ramp${seamless ? ' ramp--seamless' : ''}`}>
       {ramp.map((swatch) => {
         const value = formatColor(swatch.oklch, format)
-        const key = `swatch-${swatch.index}`
+        const key = `${idPrefix}-${swatch.index}`
         const isCopied = copiedKey === key
 
         return (
@@ -24,7 +36,7 @@ export function RampStrip({ ramp, format, copiedKey, seamless, onCopy }: Props) 
             type="button"
             className="swatch"
             onClick={() => onCopy(key, value)}
-            title={`Copy ${value}`}
+            title={swatchTitle ? swatchTitle(value) : `Copy ${value}`}
           >
             <span className="swatch__chip" style={{ background: swatch.hex }}>
               {swatch.clipped && (

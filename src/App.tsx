@@ -1,52 +1,59 @@
 import { useEffect, useState } from 'react'
-import { CHANNEL_ORDER } from './color/curve'
-import { FORMATS, parseToOklch, toHex, type Format } from './color/oklch'
-import { baseIndexFor, FALLBACK_BASE, MAX_STEPS, MIN_STEPS } from './color/presets'
+import { FORMATS, parseToOklch, type Format } from './color/oklch'
+import { baseIndexFor } from './color/presets'
 import { countDuplicateSteps } from './color/ramp'
-import { usePalette } from './state/usePalette'
-import { decodePalette, encodePalette } from './state/url'
-import { BaseColorInput } from './ui/BaseColorInput'
-import { CurvePanel } from './ui/CurvePanel'
-import { ExportPanel } from './ui/ExportPanel'
-import { RampStrip } from './ui/RampStrip'
+import { restoreDocument, saveDocument } from './state/storage'
+import { documentUrl, encodeDocument } from './state/url'
+import { useDocument, type PaletteView } from './state/useDocument'
+import { PaletteRow } from './ui/PaletteRow'
+import { Toolbox } from './ui/Toolbox'
 import { useCopy } from './ui/useCopy'
 
 /** Read once, at mount. Guarded so the tree also renders without a DOM. */
-function readSharedPalette() {
-  if (typeof window === 'undefined') return null
-  return decodePalette(window.location.hash)
+function readSession() {
+  if (typeof window === 'undefined') return { seeds: [], selected: 0 }
+  return restoreDocument(window.location.hash)
 }
 
+/** What the address bar and storage both hold: every palette, in order. */
+const seedsOf = (palettes: PaletteView[]) =>
+  palettes.map((entry) => ({ config: entry.config, name: entry.name }))
+
 export function App() {
-  const [restored] = useState(readSharedPalette)
-  const palette = usePalette(restored?.config ?? FALLBACK_BASE)
-  const [name, setName] = useState(restored?.name ?? 'brand')
+  const [session] = useState(readSession)
+  const doc = useDocument(session)
   const [format, setFormat] = useState<Format>('hex')
   const [dark, setDark] = useState(false)
   const [seamless, setSeamless] = useState(false)
+  const [bare, setBare] = useState(false)
   const { copy, copied } = useCopy()
 
   useEffect(() => {
     document.documentElement.dataset.canvas = dark ? 'dark' : 'light'
   }, [dark])
 
-  // Keep the address bar in step with the palette, without stacking up a
+  // Keep the address bar and the saved document in step, without stacking up a
   // history entry for every pixel of a curve drag.
   useEffect(() => {
-    const hash = `#${encodePalette(palette.config, name)}`
+    const seeds = seedsOf(doc.palettes)
+    const hash = `#${encodeDocument(seeds)}`
     if (window.location.hash !== hash) {
       window.history.replaceState(null, '', hash)
     }
-  }, [palette.config, name])
+    saveDocument(seeds, doc.selectedIndex)
+  }, [doc.palettes, doc.selectedIndex])
 
-  const parsedBase = parseToOklch(palette.config.base)
-  const duplicates = countDuplicateSteps(palette.ramp)
+  const { selected } = doc
+  const parsedBase = parseToOklch(selected.config.base)
+  const duplicates = countDuplicateSteps(selected.ramp)
   const measuredIndex = parsedBase
-    ? baseIndexFor(parsedBase, palette.config.steps)
-    : palette.config.baseIndex
+    ? baseIndexFor(parsedBase, selected.config.steps)
+    : selected.config.baseIndex
+
+  const shareHref = typeof window === 'undefined' ? '' : documentUrl(seedsOf(doc.palettes))
 
   return (
-    <div className="app">
+    <div className={`app${bare ? ' app--bare' : ''}`}>
       <header className="masthead">
         <div>
           <h1>colors.pantoine.com — tints &amp; shades</h1>
@@ -59,51 +66,12 @@ export function App() {
       </header>
 
       <div className="controls">
-        <BaseColorInput
-          value={palette.config.base}
-          resolvedHex={toHex(parsedBase ?? parseToOklch(FALLBACK_BASE)!)}
-          valid={parsedBase !== null}
-          onChange={palette.setBase}
-        />
-
-        <label className="field">
-          <span>Steps</span>
-          <input
-            type="number"
-            min={MIN_STEPS}
-            max={MAX_STEPS}
-            value={palette.config.steps}
-            onChange={(event) => palette.setSteps(Number(event.target.value))}
-          />
-        </label>
-
-        <label className="field">
-          <span>Base at</span>
-          <select
-            value={palette.config.baseIndex}
-            onChange={(event) => palette.setBaseIndex(Number(event.target.value))}
-            title="Which step carries your base colour. Moving it redistributes lightness across the ramp."
-          >
-            {palette.ramp.map((swatch) => (
-              <option key={swatch.index} value={swatch.index}>
-                {swatch.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
         <button
           type="button"
-          className={palette.config.baseLocked ? 'is-on' : undefined}
-          aria-pressed={palette.config.baseLocked}
-          onClick={() => palette.setBaseLocked(!palette.config.baseLocked)}
-          title={
-            palette.config.baseLocked
-              ? 'Curve edits are being corrected so they cannot move the base colour'
-              : 'Pin the base colour so curve edits cannot change it'
-          }
+          onClick={doc.newPalette}
+          title="Add a palette below this one and bring the toolbox to it"
         >
-          {palette.config.baseLocked ? 'Base locked' : 'Lock base'}
+          New palette
         </button>
 
         <label className="field">
@@ -129,69 +97,70 @@ export function App() {
 
         <button
           type="button"
+          className={bare ? 'is-on' : undefined}
+          aria-pressed={bare}
+          onClick={() => setBare((on) => !on)}
+          title="Put every tool away and look at nothing but the palettes"
+        >
+          {bare ? 'Show tools' : 'Hide tools'}
+        </button>
+
+        <button
+          type="button"
           onClick={() => setDark((on) => !on)}
           title="Judge the ramp against the other ground"
         >
           {dark ? 'Light canvas' : 'Dark canvas'}
         </button>
-
-        <button
-          type="button"
-          disabled={!palette.edited}
-          onClick={palette.rederive}
-          title="Throw away every curve edit and rebuild the ramp from the base colour"
-        >
-          Re-derive
-        </button>
       </div>
 
-      <RampStrip
-        ramp={palette.ramp}
-        format={format}
-        copiedKey={copied}
-        seamless={seamless}
-        onCopy={copy}
-      />
-
-      <div className="curves">
-        {CHANNEL_ORDER.map((key) => (
-          <CurvePanel
-            key={key}
-            channelKey={key}
-            curve={palette.config[key]}
-            swatches={palette.ramp}
-            lockedIndex={palette.config.baseLocked ? palette.config.baseIndex : undefined}
-            onChange={(curve, moved) => palette.setCurve(key, curve, moved)}
-            onEndpoint={(end, value) => palette.setEndpoint(key, end, value)}
-            onReset={() => palette.resetCurve(key)}
-          />
+      <div className="stack">
+        {doc.palettes.map((palette, index) => (
+          <div key={palette.id} className="stack__item">
+            <PaletteRow
+              palette={palette}
+              index={index}
+              count={doc.palettes.length}
+              selected={palette.id === selected.id}
+              format={format}
+              seamless={seamless}
+              bare={bare}
+              copiedKey={copied}
+              onSelect={() => doc.select(palette.id)}
+              onRemove={() => doc.remove(palette.id)}
+              onMove={(by) => doc.move(palette.id, by)}
+              onCopy={copy}
+            />
+            {/* The toolbox follows the selection down the stack, so the
+                controls are always next to the ramp they act on. */}
+            {!bare && palette.id === selected.id && (
+              <Toolbox doc={doc} shareHref={shareHref} />
+            )}
+          </div>
         ))}
-
-        <ExportPanel
-          ramp={palette.ramp}
-          config={palette.config}
-          name={name}
-          onName={setName}
-        />
       </div>
 
-      <p className="footnote">
-        Click a swatch to copy it. Drag the round handles, or focus one and use the
-        arrow keys (hold shift for bigger steps). A notched corner means the curve
-        asked for more chroma than sRGB can show, and the colour was mapped to the
-        nearest one it can — hue held, chroma reduced.
-      </p>
+      {!bare && (
+        <p className="footnote">
+          Click a swatch to copy it, or click another palette to bring the toolbox to
+          it. Drag the round handles, or focus one and use the arrow keys (hold shift
+          for bigger steps). A notched corner means the curve asked for more chroma
+          than sRGB can show, and the colour was mapped to the nearest one it can —
+          hue held, chroma reduced. Your palettes are saved in this browser, and the
+          address bar holds all of them, so a link carries the whole set.
+        </p>
+      )}
 
       {/* Out of flow, and last in the tree. It comes and goes mid-drag as the
           ramp squeezes and relaxes, so anything in flow here would shove the
           curve you are dragging up and down under the pointer. */}
-      {duplicates > 0 && (
+      {!bare && duplicates > 0 && (
         <p className="notice" role="status">
           {duplicates === 1 ? '1 step is' : `${duplicates} steps are`} identical to
-          the one before. Holding the base at{' '}
-          <strong>{palette.ramp[palette.config.baseIndex]?.label}</strong> squeezes
+          the one before in “{selected.name}”. Holding the base at{' '}
+          <strong>{selected.ramp[selected.config.baseIndex]?.label}</strong> squeezes
           the ramp toward one end — move it nearer{' '}
-          <strong>{palette.ramp[measuredIndex]?.label}</strong>, where this colour&rsquo;s
+          <strong>{selected.ramp[measuredIndex]?.label}</strong>, where this colour&rsquo;s
           own lightness sits, or widen the lightness Start and End.
         </p>
       )}
