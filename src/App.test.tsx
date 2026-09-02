@@ -245,3 +245,19 @@ describe('selection marker', () => {
     }
   })
 })
+
+describe('undo and redo', () => {
+  const html = renderToStaticMarkup(<App />)
+
+  it('offers both, greyed out until there is something to step through', () => {
+    const bar = html.slice(html.indexOf('class="controls"'), html.indexOf('class="stack"'))
+    for (const label of ['Undo', 'Redo']) {
+      expect(bar).toMatch(new RegExp(`disabled[^>]*>\s*${label}`))
+    }
+  })
+
+  it('names the shortcut, since that is how it will actually be used', () => {
+    expect(html).toContain('Ctrl+Z')
+    expect(html).toContain('Ctrl+Shift+Z')
+  })
+})

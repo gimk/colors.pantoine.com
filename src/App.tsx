@@ -32,6 +32,24 @@ export function App() {
     document.documentElement.dataset.canvas = dark ? 'dark' : 'light'
   }, [dark])
 
+  // Ctrl/Cmd+Z and Ctrl+Shift+Z (or Ctrl+Y) on the document.
+  const { undo, redo } = doc
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return
+      const key = event.key.toLowerCase()
+      if (key !== 'z' && key !== 'y') return
+      // Inside a field the shortcut belongs to the field: someone fixing a
+      // typo in a hex expects the browser's own text undo, not the document's.
+      if ((event.target as HTMLElement | null)?.closest('input, select, textarea')) return
+      event.preventDefault()
+      if (key === 'y' || event.shiftKey) redo()
+      else undo()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [undo, redo])
+
   // Keep the address bar and the saved document in step, without stacking up a
   // history entry for every pixel of a curve drag.
   useEffect(() => {
@@ -66,6 +84,24 @@ export function App() {
       </header>
 
       <div className="controls">
+        <button
+          type="button"
+          disabled={!doc.canUndo}
+          onClick={undo}
+          title="Undo the last edit (Ctrl+Z)"
+        >
+          Undo
+        </button>
+
+        <button
+          type="button"
+          disabled={!doc.canRedo}
+          onClick={redo}
+          title="Redo (Ctrl+Shift+Z)"
+        >
+          Redo
+        </button>
+
         <button
           type="button"
           onClick={doc.newPalette}

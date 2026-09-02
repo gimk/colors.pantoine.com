@@ -136,3 +136,43 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
       return replaceEntry(state, action.id, (entry) => ({ ...entry, name: action.name }))
   }
 }
+
+/**
+ * Which edits belong to the same undo entry.
+ *
+ * A drag and a burst of typing are each one thing the designer did, however
+ * many actions they dispatched. Everything discrete — a click, a preset, a
+ * choice from a select — begins an entry of its own.
+ */
+export function coalesceKey(action: DocumentAction): string | null {
+  if (action.type !== 'palette') {
+    // Renaming is the one document-level edit typed a character at a time.
+    return action.type === 'rename' ? `rename:${action.id}` : null
+  }
+
+  const edit = action.action
+  switch (edit.type) {
+    case 'setCurve':
+      // A drag and an arrow-key nudge both name the control they moved. A
+      // shape preset arrives through the same action naming none, and is a
+      // single click that deserves its own entry.
+      return edit.moved ? `curve:${edit.key}:${edit.moved}` : null
+    case 'setEndpoint':
+      // Start and End commit on every keystroke, not on blur.
+      return `endpoint:${edit.key}:${edit.end}`
+    case 'setBase':
+      return 'base'
+    case 'setSteps':
+      return 'steps'
+    default:
+      return null
+  }
+}
+
+/**
+ * Selecting a palette moves the toolbox; it does not change the document.
+ * Undo should step back through edits, not retrace where you were looking —
+ * and each snapshot carries its own selection, so undoing an edit still
+ * returns you to the palette it was made on.
+ */
+export const isTransient = (action: DocumentAction) => action.type === 'select'

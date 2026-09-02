@@ -3,12 +3,16 @@ import type { Curve, CurveControl } from '../color/curve'
 import type { CurveKey, PaletteConfig } from '../color/presets'
 import { generateRamp, type Swatch } from '../color/ramp'
 import {
+  coalesceKey,
   createDocument,
   documentReducer,
+  isTransient,
   selectedEntry,
+  type DocumentAction,
   type DocumentState,
   type PaletteSeed,
 } from './document'
+import { canRedo, canUndo, initHistory, withHistory } from './history'
 import { anyEdited } from './paletteReducer'
 
 /**
@@ -16,8 +20,9 @@ import { anyEdited } from './paletteReducer'
  *
  * Configs are immutable and replaced on every edit, so identity is a sound
  * key, and it means a drag on one palette does not re-map every step of every
- * other palette in the stack through the gamut. A WeakMap so retired configs
- * are collectable.
+ * other palette in the stack through the gamut. It also makes undo instant:
+ * the snapshot holds the very configs whose ramps are already cached. A
+ * WeakMap so retired configs are collectable.
  */
 const ramps = new WeakMap<PaletteConfig, Swatch[]>()
 
@@ -28,6 +33,11 @@ function rampFor(config: PaletteConfig): Swatch[] {
   ramps.set(config, ramp)
   return ramp
 }
+
+const historyReducer = withHistory(documentReducer, {
+  coalesce: coalesceKey,
+  transient: isTransient,
+})
 
 /** One palette as the UI needs it: its config, its colours, its identity. */
 export type PaletteView = {
@@ -43,6 +53,10 @@ export type DocumentApi = {
   selected: PaletteView
   /** Index of the selected palette in the stack, for persisting the selection. */
   selectedIndex: number
+  undo: () => void
+  redo: () => void
+  canUndo: boolean
+  canRedo: boolean
   newPalette: () => void
   select: (id: string) => void
   remove: (id: string) => void
@@ -61,10 +75,16 @@ export type DocumentApi = {
 type Seed = { seeds: PaletteSeed[]; selected: number }
 
 export function useDocument(seed: Seed): DocumentApi {
-  const [state, dispatch] = useReducer(
-    documentReducer,
-    seed,
-    (initial): DocumentState => createDocument(initial.seeds, initial.selected),
+  const [history, dispatch] = useReducer(historyReducer, seed, (initial) =>
+    initHistory<DocumentState>(createDocument(initial.seeds, initial.selected)),
+  )
+
+  const state = history.present
+
+  /** Every edit goes through here, stamped so coalescing stays pure. */
+  const send = useCallback(
+    (action: DocumentAction) => dispatch({ type: 'do', action, at: Date.now() }),
+    [],
   )
 
   const palettes = useMemo(
@@ -89,44 +109,45 @@ export function useDocument(seed: Seed): DocumentApi {
     palettes,
     selected: palettes[selectedIndex],
     selectedIndex,
-    newPalette: useCallback(() => dispatch({ type: 'new' }), []),
-    select: useCallback((id: string) => dispatch({ type: 'select', id }), []),
-    remove: useCallback((id: string) => dispatch({ type: 'remove', id }), []),
-    move: useCallback((id: string, by: -1 | 1) => dispatch({ type: 'move', id, by }), []),
-    rename: useCallback(
-      (id: string, name: string) => dispatch({ type: 'rename', id, name }),
-      [],
-    ),
+    canUndo: canUndo(history),
+    canRedo: canRedo(history),
+    undo: useCallback(() => dispatch({ type: 'undo' }), []),
+    redo: useCallback(() => dispatch({ type: 'redo' }), []),
+    newPalette: useCallback(() => send({ type: 'new' }), [send]),
+    select: useCallback((id: string) => send({ type: 'select', id }), [send]),
+    remove: useCallback((id: string) => send({ type: 'remove', id }), [send]),
+    move: useCallback((id: string, by: -1 | 1) => send({ type: 'move', id, by }), [send]),
+    rename: useCallback((id: string, name: string) => send({ type: 'rename', id, name }), [send]),
     setBase: useCallback(
-      (value: string) => dispatch({ type: 'palette', action: { type: 'setBase', value } }),
-      [],
+      (value: string) => send({ type: 'palette', action: { type: 'setBase', value } }),
+      [send],
     ),
     setSteps: useCallback(
-      (value: number) => dispatch({ type: 'palette', action: { type: 'setSteps', value } }),
-      [],
+      (value: number) => send({ type: 'palette', action: { type: 'setSteps', value } }),
+      [send],
     ),
     setBaseIndex: useCallback(
-      (value: number) => dispatch({ type: 'palette', action: { type: 'setBaseIndex', value } }),
-      [],
+      (value: number) => send({ type: 'palette', action: { type: 'setBaseIndex', value } }),
+      [send],
     ),
     setBaseLocked: useCallback(
-      (value: boolean) => dispatch({ type: 'palette', action: { type: 'setBaseLocked', value } }),
-      [],
+      (value: boolean) => send({ type: 'palette', action: { type: 'setBaseLocked', value } }),
+      [send],
     ),
     setCurve: useCallback(
       (key: CurveKey, curve: Curve, moved?: CurveControl) =>
-        dispatch({ type: 'palette', action: { type: 'setCurve', key, curve, moved } }),
-      [],
+        send({ type: 'palette', action: { type: 'setCurve', key, curve, moved } }),
+      [send],
     ),
     setEndpoint: useCallback(
       (key: CurveKey, end: 'start' | 'end', value: number) =>
-        dispatch({ type: 'palette', action: { type: 'setEndpoint', key, end, value } }),
-      [],
+        send({ type: 'palette', action: { type: 'setEndpoint', key, end, value } }),
+      [send],
     ),
     resetCurve: useCallback(
-      (key: CurveKey) => dispatch({ type: 'palette', action: { type: 'resetCurve', key } }),
-      [],
+      (key: CurveKey) => send({ type: 'palette', action: { type: 'resetCurve', key } }),
+      [send],
     ),
-    rederive: useCallback(() => dispatch({ type: 'palette', action: { type: 'rederive' } }), []),
+    rederive: useCallback(() => send({ type: 'palette', action: { type: 'rederive' } }), [send]),
   }
 }
