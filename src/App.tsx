@@ -23,6 +23,7 @@ export function App() {
   const [name, setName] = useState(restored?.name ?? 'brand')
   const [format, setFormat] = useState<Format>('hex')
   const [dark, setDark] = useState(false)
+  const [seamless, setSeamless] = useState(false)
   const { copy, copied } = useCopy()
 
   useEffect(() => {
@@ -120,6 +121,14 @@ export function App() {
 
         <button
           type="button"
+          onClick={() => setSeamless((on) => !on)}
+          title="A rule beside a colour changes how you read it. Drop them to see the steps meet."
+        >
+          {seamless ? 'Show dividers' : 'Hide dividers'}
+        </button>
+
+        <button
+          type="button"
           onClick={() => setDark((on) => !on)}
           title="Judge the ramp against the other ground"
         >
@@ -147,7 +156,13 @@ export function App() {
         </p>
       )}
 
-      <RampStrip ramp={palette.ramp} format={format} copiedKey={copied} onCopy={copy} />
+      <RampStrip
+        ramp={palette.ramp}
+        format={format}
+        copiedKey={copied}
+        seamless={seamless}
+        onCopy={copy}
+      />
 
       <div className="curves">
         {CHANNEL_ORDER.map((key) => (

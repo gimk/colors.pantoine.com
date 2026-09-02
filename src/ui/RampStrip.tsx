@@ -5,12 +5,14 @@ type Props = {
   ramp: Swatch[]
   format: Format
   copiedKey: string | null
+  /** Drop the rules between and around the colour chips. */
+  seamless?: boolean
   onCopy: (key: string, text: string) => void
 }
 
-export function RampStrip({ ramp, format, copiedKey, onCopy }: Props) {
+export function RampStrip({ ramp, format, copiedKey, seamless, onCopy }: Props) {
   return (
-    <div className="ramp">
+    <div className={`ramp${seamless ? ' ramp--seamless' : ''}`}>
       {ramp.map((swatch) => {
         const value = formatColor(swatch.oklch, format)
         const key = `swatch-${swatch.index}`

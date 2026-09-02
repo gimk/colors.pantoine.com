@@ -167,15 +167,12 @@ button:disabled {
 
 .ramp {
   display: flex;
-  border: 1px solid var(--rule);
-  border-left: none;
   margin: 20px 0;
 }
 
 .swatch {
   flex: 1;
   min-width: 0;
-  border-left: 1px solid var(--rule);
   background: none;
   padding: 0;
   text-align: left;
@@ -188,9 +185,27 @@ button.swatch:hover:not(:disabled) {
   color: inherit;
 }
 
+/* Rules sit on the chip and the label cell separately rather than on the
+   whole swatch, so the contours around the colour can be dropped without
+   taking the label grid with them. */
 .swatch__chip {
   position: relative;
   height: 116px;
+  border: 1px solid var(--rule);
+  border-right: none;
+  border-bottom: none;
+}
+
+.swatch:last-child .swatch__chip {
+  border-right: 1px solid var(--rule);
+}
+
+/* A 1px black line changes how the eye reads the two colours it separates,
+   so being able to drop it matters for judging a ramp. Held as transparent
+   rather than removed, so toggling does not reflow the strip. */
+.ramp--seamless .swatch__chip,
+.ramp--seamless .swatch:last-child .swatch__chip {
+  border-color: transparent;
 }
 
 /* Corner tick: the curves asked for more chroma than sRGB can show. */
@@ -216,10 +231,15 @@ button.swatch:hover:not(:disabled) {
 }
 
 .swatch__meta {
-  border-top: 1px solid var(--rule);
+  border: 1px solid var(--rule);
+  border-right: none;
   padding: 5px 6px 6px;
   display: grid;
   gap: 1px;
+}
+
+.swatch:last-child .swatch__meta {
+  border-right: 1px solid var(--rule);
 }
 
 .swatch__label {
