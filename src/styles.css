@@ -471,10 +471,24 @@ input:disabled {
   cursor: not-allowed;
 }
 
+/* --- squeezed-ramp warning -------------------------------------------- */
+
+/* Floating rather than in flow. This appears and disappears as a drag pushes
+   the ramp in and out of duplicate steps, and in flow that reflowed the whole
+   page mid-gesture — the graph moved under the pointer. Fixed position costs
+   nothing in layout, and pointer-events: none means that even where it lands
+   over a graph or a swatch it cannot swallow the drag. */
 .notice {
-  margin: 16px 0 0;
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10;
+  max-width: min(46ch, calc(100vw - 32px));
+  margin: 0;
   border: 1px solid var(--rule);
   border-left-width: 4px;
   padding: 8px 10px;
+  background: var(--paper);
   line-height: 1.5;
+  pointer-events: none;
 }

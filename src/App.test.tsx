@@ -89,6 +89,16 @@ describe('RampStrip', () => {
   })
 })
 
+/** The declarations of the first rule whose selector list ends in `selector`. */
+function declarations(selector: string) {
+  for (const block of css.split('}')) {
+    const open = block.indexOf('{')
+    if (open < 0) continue
+    if (block.slice(0, open).trim().endsWith(selector)) return block.slice(open + 1)
+  }
+  return ''
+}
+
 /**
  * The swatch borders are a cascade problem, not a render one: the base
  * `button` rule paints a 1px box, so a swatch that does not reset it keeps a
@@ -96,17 +106,6 @@ describe('RampStrip', () => {
  * test can see that, so assert it against the stylesheet.
  */
 describe('swatch borders', () => {
-
-  /** The declarations of the first rule whose selector list ends in `selector`. */
-  const declarations = (selector: string) => {
-    for (const block of css.split('}')) {
-      const open = block.indexOf('{')
-      if (open < 0) continue
-      if (block.slice(0, open).trim().endsWith(selector)) return block.slice(open + 1)
-    }
-    return ''
-  }
-
   it('resets the border the base button rule would paint', () => {
     expect(declarations('select')).toContain('border: 1px solid var(--rule)')
     expect(declarations('.swatch')).toContain('border: none')
@@ -117,5 +116,23 @@ describe('swatch borders', () => {
     expect(declarations('.ramp--seamless .swatch:last-child .swatch__chip')).toContain(
       'border-color: transparent',
     )
+  })
+})
+
+/**
+ * The squeeze warning is shown and hidden by curve drags. In flow it reflowed
+ * everything under it on every frame of a gesture, which moved the graph being
+ * dragged. That is a layout property, so it is asserted here.
+ */
+describe('squeeze warning', () => {
+  const rule = declarations('.notice')
+
+  it('floats, so appearing mid-drag cannot reflow the page', () => {
+    expect(rule).toContain('position: fixed')
+    expect(rule).toContain('pointer-events: none')
+  })
+
+  it('is opaque, since it sits over the ramp', () => {
+    expect(rule).toContain('background: var(--paper)')
   })
 })

@@ -145,17 +145,6 @@ export function App() {
         </button>
       </div>
 
-      {duplicates > 0 && (
-        <p className="notice">
-          {duplicates === 1 ? '1 step is' : `${duplicates} steps are`} identical to
-          the one before. Holding the base at{' '}
-          <strong>{palette.ramp[palette.config.baseIndex]?.label}</strong> squeezes
-          the ramp toward one end — move it nearer{' '}
-          <strong>{palette.ramp[measuredIndex]?.label}</strong>, where this colour&rsquo;s
-          own lightness sits, or widen the lightness Start and End.
-        </p>
-      )}
-
       <RampStrip
         ramp={palette.ramp}
         format={format}
@@ -192,6 +181,20 @@ export function App() {
         asked for more chroma than sRGB can show, and the colour was mapped to the
         nearest one it can — hue held, chroma reduced.
       </p>
+
+      {/* Out of flow, and last in the tree. It comes and goes mid-drag as the
+          ramp squeezes and relaxes, so anything in flow here would shove the
+          curve you are dragging up and down under the pointer. */}
+      {duplicates > 0 && (
+        <p className="notice" role="status">
+          {duplicates === 1 ? '1 step is' : `${duplicates} steps are`} identical to
+          the one before. Holding the base at{' '}
+          <strong>{palette.ramp[palette.config.baseIndex]?.label}</strong> squeezes
+          the ramp toward one end — move it nearer{' '}
+          <strong>{palette.ramp[measuredIndex]?.label}</strong>, where this colour&rsquo;s
+          own lightness sits, or widen the lightness Start and End.
+        </p>
+      )}
     </div>
   )
 }
