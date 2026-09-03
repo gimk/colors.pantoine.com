@@ -367,7 +367,7 @@ export function ReviewBoard({
         {palettes.map((palette) => (
           <section
             key={palette.id}
-            className={`rband${dropTarget === palette.id ? ' rband--drop' : ''}${
+            className={`rband${dropTarget === palette.id && dragging !== palette.id ? ' rband--drop' : ''}${
               dragging === palette.id ? ' rband--dragging' : ''
             }`}
             style={{ flexGrow: review.weightOf(palette.id) }}

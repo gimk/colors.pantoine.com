@@ -1658,7 +1658,6 @@ button.newpal__cand:hover {
   display: flex;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
 }
 
 .review--rows .review__bands {
@@ -1681,12 +1680,12 @@ button.newpal__cand:hover {
   min-height: 0;
 }
 
-/* Inward, unlike the editor's outward contour: the band is flush with the
-   window and an outset outline would be clipped by the board's overflow. */
+/* Same dashed contour overlay as the editor's drop target (.prow--drop-target).
+   Floats 4px clear of the band so it frames the whole palette cleanly. */
 .rband--drop {
   outline: 2px dashed var(--ink);
-  outline-offset: -2px;
-  z-index: 3;
+  outline-offset: 4px;
+  z-index: 10;
 }
 
 .rband--dragging {
