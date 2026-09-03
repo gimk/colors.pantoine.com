@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { flat } from '../color/curve'
 import { nameForColor } from '../color/names'
 import { formatColor, normalizeHue, parseToOklch, toHex } from '../color/oklch'
-import { createPalette } from '../color/presets'
+import { baseIndexFor, createPalette } from '../color/presets'
+import { generateRamp } from '../color/ramp'
+import { anyEdited } from './paletteReducer'
 import {
   createDocument,
   documentReducer,
@@ -379,6 +381,45 @@ describe('setting base color', () => {
       action: { type: 'setBase', value: '#050505' },
     })
     expect(afterDarkBase.palettes[0].state.config.baseIndex).toBe(newIndex)
+  })
+
+  it('keeps a locked base where it is when the curves are re-derived', () => {
+    const start = run(createDocument(), {
+      type: 'palette',
+      action: { type: 'setBaseLocked', value: true },
+    })
+    const moved = run(start, { type: 'palette', action: { type: 'setBaseIndex', value: 2 } })
+    expect(moved.palettes[0].state.config.baseIndex).toBe(2)
+
+    const rederived = run(moved, { type: 'palette', action: { type: 'rederive' } })
+    const config = rederived.palettes[0].state.config
+    expect(config.baseIndex).toBe(2)
+    expect(config.baseLocked).toBe(true)
+
+    // Kept in the ramp, not merely in the number: the default curves are
+    // solved to pass through the base at whatever index they are given, so
+    // step 2 must still be the colour that was typed.
+    const base = parseToOklch(config.base)!
+    const swatch = generateRamp(config, rederived.gamut)[2]
+    expect(swatch.oklch.l).toBeCloseTo(base.l, 2)
+    expect(swatch.isBase).toBe(true)
+
+    // And the re-derive really did rebuild: nothing is marked hand-edited.
+    expect(anyEdited(rederived.palettes[0].state.edited)).toBe(false)
+  })
+
+  it('re-derives an unlocked base back to where its lightness falls', () => {
+    const moved = run(createDocument(), {
+      type: 'palette',
+      action: { type: 'setBaseIndex', value: 1 },
+    })
+    expect(moved.palettes[0].state.config.baseIndex).toBe(1)
+    expect(moved.palettes[0].state.config.baseLocked).toBe(false)
+
+    const rederived = run(moved, { type: 'palette', action: { type: 'rederive' } })
+    const config = rederived.palettes[0].state.config
+    expect(config.baseIndex).toBe(baseIndexFor(parseToOklch(config.base)!, config.steps))
+    expect(config.baseIndex).not.toBe(1)
   })
 
   it('renames a still-derived palette to the colour that was picked', () => {

@@ -264,14 +264,26 @@ export function createPalette(
   input: string,
   steps = DEFAULT_STEPS,
   gamut: Gamut = 'srgb',
+  /**
+   * Which step carries the base colour.
+   *
+   * Defaults to wherever the base's own lightness falls on the default ramp,
+   * which is what a brand new palette wants. Passed in when the position is
+   * already a decision worth keeping — as a locked base's is when its curves
+   * are re-derived.
+   */
+  baseIndex?: number,
 ): PaletteConfig {
   const base = parseToOklch(input) ?? parseToOklch(FALLBACK_BASE)!
-  const baseIndex = baseIndexFor(base, steps)
+  const index =
+    baseIndex === undefined
+      ? baseIndexFor(base, steps)
+      : clamp(Math.round(baseIndex), 0, steps - 1)
   return {
     base: input,
-    baseIndex,
+    baseIndex: index,
     baseLocked: false,
     steps,
-    ...defaultCurves(base, steps, baseIndex, gamut),
+    ...defaultCurves(base, steps, index, gamut),
   }
 }

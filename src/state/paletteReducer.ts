@@ -266,7 +266,17 @@ export function paletteReducer(
     }
 
     case 'rederive': {
-      const fresh = createPalette(config.base, config.steps, gamut)
+      // Which step carries the base is a decision, and the lock is what says
+      // so. Re-deriving rebuilds the curves *around* that step rather than
+      // dropping the base back wherever its own lightness would land — the
+      // default curves are solved to pass through the base at whatever index
+      // they are given, so the ramp comes out fresh with the base still put.
+      const fresh = createPalette(
+        config.base,
+        config.steps,
+        gamut,
+        config.baseLocked ? config.baseIndex : undefined,
+      )
       return {
         edited: { ...NOTHING_EDITED },
         config: { ...fresh, baseLocked: config.baseLocked },
