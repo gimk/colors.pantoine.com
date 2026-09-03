@@ -1041,12 +1041,6 @@ select:disabled {
   padding: var(--space-7);
 }
 
-/* With the tools away the stack closes up: nothing between the palettes but
-   the gap needed to tell one from the next. */
-.app--bare .stack {
-  gap: var(--space-5);
-}
-
 /* An unselected palette advertises that clicking it brings the toolbox. */
 .prow:not(.prow--selected) {
   cursor: pointer;
@@ -1535,4 +1529,321 @@ button.newpal__cand:hover {
   font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide);
+}
+
+/* --- review board ----------------------------------------------------- */
+
+/* A mode, not the editor with things switched off.
+
+   Everything here is sized as a *share* rather than a length: the bands and
+   the swatches carry a `flex-grow` and a zero `flex-basis`, so a track's size
+   is exactly its fraction of the room and the board cannot be arranged out of
+   the window. That is also what lets the ruler place its ticks by percentage
+   without measuring a chip. */
+.review {
+  display: grid;
+  grid-template-columns: 15px 1fr;
+  grid-template-rows: auto 15px 1fr;
+  grid-template-areas:
+    'bar  bar'
+    'nook top'
+    'side board';
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.review__bar {
+  grid-area: bar;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  border-bottom: 2px solid var(--rule);
+  padding: var(--space-4) var(--space-7);
+}
+
+.review__bar h1 {
+  font-size: var(--text-md);
+  font-weight: 700;
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* Rows and Columns are one choice, so they read as one control. */
+.review__group {
+  display: flex;
+}
+
+.review__group button + button {
+  margin-left: -1px;
+}
+
+/* Brutalist range: a 1px track and a square thumb. The base input rule paints
+   a bordered box, which on a slider is a box around a line. */
+.review__gap input[type='range'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 88px;
+  height: 19px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: ew-resize;
+}
+
+.review__gap input[type='range']::-webkit-slider-runnable-track {
+  height: 1px;
+  background: var(--rule);
+}
+
+.review__gap input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 7px;
+  height: 15px;
+  margin-top: -7px;
+  border: none;
+  background: var(--ink);
+}
+
+.review__gap input[type='range']::-moz-range-track {
+  height: 1px;
+  background: var(--rule);
+}
+
+.review__gap input[type='range']::-moz-range-thumb {
+  width: 7px;
+  height: 15px;
+  border: none;
+  border-radius: 0;
+  background: var(--ink);
+}
+
+/* Two rulers meeting at the corner, one per axis. Resizing lives here rather
+   than on the boundaries themselves: a grip laid over the chips would put a
+   strip that cannot be copied either side of every boundary, and this is the
+   one mode that is nothing but chips. */
+.review__ruler {
+  position: relative;
+}
+
+.review__ruler--across {
+  grid-area: top;
+  border-bottom: 1px solid var(--grid);
+}
+
+.review__ruler--down {
+  grid-area: side;
+  border-right: 1px solid var(--grid);
+}
+
+/* The tick has no box of its own — the mark is the pseudo-element, so the
+   grab area can be comfortably larger than the 1px line it shows. */
+.review__tick {
+  position: absolute;
+  touch-action: none;
+}
+
+.review__tick::after {
+  content: '';
+  position: absolute;
+  background: var(--rule);
+}
+
+.review__ruler--across .review__tick {
+  top: 0;
+  bottom: 0;
+  width: 13px;
+  margin-left: -6.5px;
+  cursor: col-resize;
+}
+
+.review__ruler--across .review__tick::after {
+  top: 3px;
+  bottom: 0;
+  left: 6px;
+  width: 1px;
+}
+
+.review__ruler--across .review__tick:hover::after,
+.review__ruler--across .review__tick:active::after {
+  top: 0;
+  left: 5px;
+  width: 3px;
+  background: var(--ink);
+}
+
+.review__ruler--down .review__tick {
+  left: 0;
+  right: 0;
+  height: 13px;
+  margin-top: -6.5px;
+  cursor: row-resize;
+}
+
+.review__ruler--down .review__tick::after {
+  left: 3px;
+  right: 0;
+  top: 6px;
+  height: 1px;
+}
+
+.review__ruler--down .review__tick:hover::after,
+.review__ruler--down .review__tick:active::after {
+  left: 0;
+  top: 5px;
+  height: 3px;
+  background: var(--ink);
+}
+
+.review__bands {
+  grid-area: board;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.review--rows .review__bands {
+  flex-direction: column;
+}
+
+.review--columns .review__bands {
+  flex-direction: row;
+}
+
+/* `flex-basis: 0` is not a detail: it is what makes a band's size exactly its
+   share of the axis, which is the assumption the ruler ticks and the board
+   PNG are both drawn from. */
+.rband {
+  position: relative;
+  display: flex;
+  flex-shrink: 1;
+  flex-basis: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Inward, unlike the editor's outward contour: the band is flush with the
+   window and an outset outline would be clipped by the board's overflow. */
+.rband--drop {
+  outline: 2px dashed var(--ink);
+  outline-offset: -2px;
+  z-index: 3;
+}
+
+.rband--dragging {
+  opacity: 0.4;
+}
+
+/* Subtle unboxed palette name in the corner of the band: white or black
+   depending on the underlying colour. Absolute, so naming a palette costs
+   the colours no room. */
+.rband__name {
+  position: absolute;
+  z-index: 2;
+  top: 4px;
+  left: 6px;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  background: none;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
+  cursor: grab;
+  user-select: none;
+}
+
+.rband__name:active {
+  cursor: grabbing;
+}
+
+/* --- the strip, filling and turned ------------------------------------ */
+
+/* Both modifiers exist for the board. In the editor a chip stands at its own
+   fixed height and the steps run across; here the strip is given a share of
+   the window and has to take all of it, whichever way it runs. */
+.ramp--fill {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ramp--fill .swatch {
+  min-width: 0;
+  min-height: 0;
+}
+
+.ramp--fill .swatch__chip {
+  flex: 1;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  /* A band thin enough to clip its own stamp clips it, rather than letting
+     the text spill onto the steps either side. */
+  overflow: hidden;
+}
+
+.ramp--vertical {
+  flex-direction: column;
+}
+
+/* The swatch's own axis follows the strip's, so the chip grows the right way
+   and a label cell — if one were ever wanted here — would sit beside it. */
+.ramp--vertical .swatch {
+  flex-direction: row;
+}
+
+/* The value printed on the chip, in whatever format is in force. Subtle text
+   in white or black depending on the underlying swatch contrast, unboxed so
+   it does not occlude the color. Flex column centered in the chip, displaying
+   both the color number (50, 100, 200, etc.) and formatted value. */
+.swatch__stamp {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 2px 4px;
+  background: none;
+  font-size: var(--text-2xs);
+  line-height: 1.2;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.swatch__stamp-label {
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
+}
+
+.swatch__stamp-value {
+  font-size: 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.swatch__stamp-contrast {
+  font-size: 8px;
+  opacity: 0.8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* The stamp reports the copy in place, rather than a second mark landing on
+   top of the one already in the middle of the chip. */
+.swatch__stamp.is-copied {
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
 }

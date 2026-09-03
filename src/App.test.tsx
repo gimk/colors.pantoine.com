@@ -4,9 +4,12 @@ import { describe, expect, it } from 'vitest'
 import { App } from './App'
 import { createPalette, DEFAULT_STEPS } from './color/presets'
 import { chromaCeilingProfile, generateRamp } from './color/ramp'
+import { useDocument } from './state/useDocument'
+import type { ReviewApi, ReviewAxis } from './state/useReview'
 import { CurvePanel } from './ui/CurvePanel'
 import { PaletteRow } from './ui/PaletteRow'
 import { RampStrip } from './ui/RampStrip'
+import { ReviewBoard } from './ui/ReviewBoard'
 
 /**
  * A render smoke test. It will not catch layout problems, but it does catch
@@ -91,9 +94,17 @@ describe('App', () => {
     expect(declarations('.swatch__chip')).not.toContain('border')
   })
 
-  it('shows the colour labels by default and offers to hide them', () => {
+  /**
+   * The editor is where a ramp is read, so it is always labelled. The two
+   * toggles that used to strip it — `Hide labels` and `Hide tools` — between
+   * them put the editor into four states, and only one of them was ever
+   * wanted: tools away, labels off. That state is the review board.
+   */
+  it('always shows the colour labels, and sends stripping them to Review', () => {
     expect(html.match(/class="swatch__meta"/g)).toHaveLength(DEFAULT_STEPS)
-    expect(html).toContain('Hide labels')
+    expect(html).not.toContain('Hide labels')
+    expect(html).not.toContain('Hide tools')
+    expect(html).toContain('>Review</button>')
   })
 
   /**
@@ -438,8 +449,8 @@ describe('the palette stack', () => {
 
   it('offers document-level actions in the top bar', () => {
     expect(html).toContain('New palette')
-    expect(html).toContain('Hide tools')
-    expect(html).toContain('Hide labels')
+    expect(html).toContain('>Review</button>')
+    expect(html).toContain('Dark canvas')
   })
 
   it('keeps the base settings in the toolbox, not the top bar', () => {
@@ -499,7 +510,6 @@ describe('PaletteRow', () => {
         count={2}
         selected={false}
         format="hex"
-        bare={false}
         copiedKey={null}
         onSelect={() => {}}
         onRemove={() => {}}
@@ -530,12 +540,6 @@ describe('PaletteRow', () => {
     expect(render({ selected: true })).toContain('aria-current="true"')
   })
 
-  it('drops the marker with the tools, since nothing is being edited', () => {
-    const bare = render({ selected: true, bare: true })
-    expect(bare).not.toContain('>Editing<')
-    expect(bare).not.toContain('prow--selected')
-  })
-
   /**
    * The base badge and the clipping notch answer questions you only ask of
    * the palette you are shaping. On every ramp at once they were thirty-odd
@@ -559,10 +563,9 @@ describe('PaletteRow', () => {
     })
 
     it('leaves the other palettes as colour alone', () => {
-      for (const row of [render({ palette: vivid }), render({ palette: vivid, bare: true })]) {
-        expect(row).not.toContain('class="swatch__base"')
-        expect(row).not.toContain('class="swatch__clipped"')
-      }
+      const row = render({ palette: vivid })
+      expect(row).not.toContain('class="swatch__base"')
+      expect(row).not.toContain('class="swatch__clipped"')
     })
   })
 
@@ -578,14 +581,17 @@ describe('PaletteRow', () => {
     expect(render({ count: 2 })).not.toMatch(/disabled[^>]*>Delete</)
   })
 
-  it('puts every tool away in bare mode, keeping the colours', () => {
-    const bare = render({ bare: true })
-    expect(bare).not.toContain('prow__head')
-    expect(bare).not.toContain('class="prow__handle"')
-    for (const tool of ['Edit', 'Delete']) {
-      expect(bare).not.toContain(`>${tool}</button>`)
-    }
-    expect(bare.match(/class="swatch"/g)).toHaveLength(view.ramp.length)
+  /**
+   * The editor row always carries its header and its labels now. Putting the
+   * tools away is no longer a state this component can be in — it is the
+   * review board, a mode of its own, which is what lets it also carry a
+   * layout rather than only an absence.
+   */
+  it('always carries its header, its handle and its labels', () => {
+    const row = render()
+    expect(row).toContain('prow__head')
+    expect(row).toContain('class="prow__handle"')
+    expect(row.match(/class="swatch__meta"/g)).toHaveLength(view.ramp.length)
   })
 })
 
@@ -772,5 +778,202 @@ describe('the way into a new palette', () => {
   it('keeps the dialog body out of the page until it is opened', () => {
     expect(page).toContain('class="newpal"')
     expect(page).not.toContain('newpal__panel')
+  })
+})
+
+/**
+ * The review board: the whole document at once, laid out to be judged as a
+ * set rather than edited.
+ *
+ * It replaced a `Hide labels` and a `Hide tools` toggle. Between them those
+ * two could put the editor into four states and only one was ever wanted —
+ * tools away, labels off — and as a mode of its own that state can also carry
+ * a layout, which a pair of toggles could not.
+ */
+describe('the review board', () => {
+  const bases = ['#7c3aed', '#0ea5e9', '#f59e0b']
+  const seeds = bases.map((base, index) => ({
+    name: `p${index}`,
+    config: createPalette(base),
+  }))
+
+  /**
+   * The layout is handed in rather than driven through the hook, so an axis
+   * can just be stated. `useReview` has its own tests for the arithmetic;
+   * what is being rendered here is the board it produces.
+   */
+  const layoutOf = (axis: ReviewAxis, steps: number, labels = true): ReviewApi => ({
+    layout: { axis, gap: 12, paletteWeights: {}, stepWeights: [], labels },
+    steps: Array.from({ length: steps }, () => 1),
+    setAxis: () => {},
+    setGap: () => {},
+    setLabels: () => {},
+    weightOf: () => 1,
+    resizePalettes: () => {},
+    resizeSteps: () => {},
+    reset: () => {},
+  })
+
+  /** A host only for the document, which does have to come from its hook. */
+  function Board({ axis, labels = true }: { axis: ReviewAxis; labels?: boolean }) {
+    const doc = useDocument({ seeds, selected: 0 })
+    return (
+      <ReviewBoard
+        doc={doc}
+        review={layoutOf(axis, doc.selected.config.steps, labels)}
+        format="hex"
+        onFormat={() => {}}
+        gamut="srgb"
+        dark={false}
+        onDark={() => {}}
+        onExit={() => {}}
+        copiedKey={null}
+        onCopy={() => {}}
+      />
+    )
+  }
+
+  const rows = renderToStaticMarkup(<Board axis="rows" />)
+  const columns = renderToStaticMarkup(<Board axis="columns" />)
+  const unlabelled = renderToStaticMarkup(<Board axis="rows" labels={false} />)
+
+  it('shows every palette at once', () => {
+    expect(rows.match(/class="rband"/g)).toHaveLength(bases.length)
+    expect(rows.match(/class="swatch"/g)).toHaveLength(bases.length * DEFAULT_STEPS)
+    expect(rows).not.toContain('class="toolbox"')
+    expect(rows).not.toContain('class="prow')
+  })
+
+  /**
+   * The editor's label cell is a bordered grid row under the chip. On a board
+   * of filling chips that would eat the colour and put back the very rows the
+   * board exists to be rid of, so the value and color number are stamped on the chip
+   * instead — subtle and unboxed, with white or black text depending on contrast.
+   */
+  it('stamps the value on each chip, in the format in force', () => {
+    expect(rows).not.toContain('swatch__meta')
+    expect(rows.match(/class="swatch__stamp"/g)).toHaveLength(bases.length * DEFAULT_STEPS)
+    expect(rows).toContain('>#7c3aed<')
+    expect(rows).toContain('>500<')
+    expect(rows).toContain('class="swatch__stamp-contrast"')
+    expect(rows).toMatch(/W \d+(\.\d+)? · B \d+(\.\d+)?/)
+    const stamp = declarations('.swatch__stamp')
+    expect(stamp).toContain('position: absolute')
+    expect(stamp).toContain('background: none')
+    // A value is read and compared, not captioned: tracking out a hex makes
+    // two of them harder to tell apart, so the stamp is neither spaced nor
+    // uppercased — unlike every other boxed mark in this UI.
+    expect(stamp).not.toContain('text-transform')
+  })
+
+  it('leaves nothing but colour with the labels off', () => {
+    expect(unlabelled).not.toContain('swatch__stamp')
+    expect(unlabelled).not.toContain('rband__name')
+    expect(unlabelled).not.toContain('swatch__meta')
+    expect(unlabelled.match(/class="swatch"/g)).toHaveLength(bases.length * DEFAULT_STEPS)
+  })
+
+  /**
+   * What a chip reads as and what clicking it copies are one setting, driven
+   * from the board's own select. Showing a hex while copying an `oklch()` is
+   * a trap, and two settings for one idea is how you arrive at it.
+   */
+  it('drives the labels and the copies off one format', () => {
+    expect(rows).toContain('<span>Format</span>')
+    expect(rows.match(/<span>Format<\/span>/g)).toHaveLength(1)
+    expect(rows).toContain('title="Copy #7c3aed"')
+  })
+
+  /**
+   * The base badge and the clipping notch ride the selection in the editor,
+   * and on a board of every ramp at once there is no selection to ride —
+   * they would be thirty-odd marks competing with the colours.
+   */
+  it('carries no annotations on the chips', () => {
+    expect(rows).not.toContain('swatch__base')
+    expect(rows).not.toContain('swatch__clipped')
+  })
+
+  it('keeps the page title and a way back, and little else', () => {
+    expect(rows).toContain('<h1>colors.pantoine.com — review</h1>')
+    expect(rows).toContain('← Back')
+    for (const tool of ['Re-derive', 'Lock base', 'Match all curves', 'Apply all', 'Undo']) {
+      expect(rows).not.toContain(tool)
+    }
+  })
+
+  /**
+   * Sizes are shares, never lengths. A band's size is exactly its fraction of
+   * the axis, which is what makes the board fit the window by construction
+   * rather than by clamping something against the viewport — and it is the
+   * assumption the ruler ticks and the board PNG are both drawn from.
+   */
+  it('sizes the board in shares, so it cannot be arranged out of the window', () => {
+    expect(declarations('.review')).toContain('overflow: hidden')
+    expect(declarations('.review')).toContain('100dvh')
+    const band = declarations('.rband')
+    expect(band).toContain('flex-basis: 0')
+    expect(rows).toContain('flex-grow:1')
+  })
+
+  /**
+   * One tick per internal boundary and no more: a ruler tick either divides
+   * two tracks or has nothing to divide.
+   */
+  it('puts a resize tick on every boundary, on both axes', () => {
+    const ticks = rows.match(/class="review__tick"/g) ?? []
+    expect(ticks).toHaveLength(bases.length - 1 + (DEFAULT_STEPS - 1))
+  })
+
+  /**
+   * Resizing lives on the rulers rather than on the boundaries themselves.
+   * A grip laid over the chips would put a strip that cannot be copied either
+   * side of every boundary, in the one mode that is nothing but chips.
+   */
+  it('keeps the resize grips off the colour', () => {
+    const rail = rows.slice(rows.indexOf('review__ruler'), rows.indexOf('review__bands'))
+    expect(rail).toContain('review__tick')
+    expect(rail).not.toContain('class="swatch"')
+  })
+
+  it('swaps which ruler divides which axis with the layout', () => {
+    expect(rows).toContain('review__ruler--palette review__ruler--down')
+    expect(rows).toContain('review__ruler--step review__ruler--across')
+    expect(columns).toContain('review__ruler--palette review__ruler--across')
+    expect(columns).toContain('review__ruler--step review__ruler--down')
+  })
+
+  it('turns the ramps on their side for the column layout', () => {
+    expect(rows).toContain('class="ramp ramp--fill"')
+    expect(columns).toContain('class="ramp ramp--vertical ramp--fill"')
+    expect(declarations('.ramp--vertical')).toContain('flex-direction: column')
+  })
+
+  /**
+   * The band itself drags, not only its name badge, so switching the labels
+   * off does not take reordering away with them. Resizing is on the rulers,
+   * so nothing competes for the gesture, and a native drag stays distinct
+   * from a click — a chip still copies.
+   */
+  it('lets a palette be dragged whether or not it is named', () => {
+    expect(rows.match(/class="rband" style="flex-grow:1" draggable="true"/g)).toHaveLength(
+      bases.length,
+    )
+    expect(unlabelled.match(/draggable="true"/g)).toHaveLength(bases.length)
+  })
+
+  it('names each palette with subtle unboxed text', () => {
+    expect(rows.match(/class="rband__name"/g)).toHaveLength(bases.length)
+    // Subtle unboxed text in white or black depending on the underlying swatch contrast.
+    expect(declarations('.rband__name')).toContain('background: none')
+  })
+
+  /**
+   * The same two gestures the export panel leads with — paste as pixels, or
+   * as layers — on the whole board rather than one ramp.
+   */
+  it('offers the board as pixels and as layers', () => {
+    expect(rows).toContain('>Copy PNG</button>')
+    expect(rows).toContain('>Copy SVG</button>')
   })
 })

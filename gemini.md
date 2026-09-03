@@ -57,16 +57,18 @@ colors.pantoine.com/
 │   ├── export/                 # Export engines (Code, Tokens, Canvas, SVG)
 │   │   ├── export.test.ts      # Unit tests for text serializers & SVG generators
 │   │   ├── formats.ts          # Hex, OKLCH, CSS Vars, Tailwind, SCSS, JSON token formats
-│   │   └── image.ts            # Pixel-grid Canvas PNG generator & Figma-compatible SVG generator
+│   │   └── image.ts            # Pixel-grid Canvas PNG, whole-board PNG & SVG, Figma-compatible layers
 │   ├── state/                  # Multi-palette state, history, URL, and persistence
 │   │   ├── document.test.ts    # Tests for document actions, selection, and URL codecs
 │   │   ├── document.ts         # Document reducer (add, remove, reorder, rename, select)
 │   │   ├── history.test.ts     # Tests for undo/redo and time-windowed coalescing
 │   │   ├── history.ts          # Generic snapshot-based undo/redo engine with coalescing
 │   │   ├── paletteReducer.ts   # Reducer for an individual palette
+│   │   ├── review.test.ts      # Tests for the splitter arithmetic and the board's pixel tracks
 │   │   ├── storage.ts          # localStorage sync ('colors.pantoine.com/v1') with merge logic
 │   │   ├── url.ts              # Compact URL hash encoder/decoder (multi-palette separated by '~')
-│   │   └── useDocument.ts      # React hook coordinating state, history, and WeakMap ramp caching
+│   │   ├── useDocument.ts      # React hook coordinating state, history, and WeakMap ramp caching
+│   │   └── useReview.ts        # Review-board layout (axis, spacing, weights) + its own localStorage key
 │   ├── ui/                     # Brutalist React UI components
 │   │   ├── BaseColorInput.tsx  # Text input + swatch that opens the OKLCH picker
 │   │   ├── ColorPicker.test.tsx  # Tests for slice geometry, gamut wedge, and clipping readout
@@ -79,7 +81,8 @@ colors.pantoine.com/
 │   │   ├── NewPaletteDialog.tsx  # Guided new-palette modal: paste a list, or pick from a harmony
 │   │   ├── NumberField.tsx     # Controlled numeric input with draft state to avoid caret fighting
 │   │   ├── PaletteRow.tsx      # Row in the document stack (title, move/delete, ramp strip)
-│   │   ├── RampStrip.tsx       # Horizontal swatch strip with metadata and clip indicators
+│   │   ├── RampStrip.tsx       # Swatch strip: either axis, fixed or filling, per-step weights
+│   │   ├── ReviewBoard.tsx     # The review board: bar, two resize rulers, the bands, board PNG
 │   │   ├── Toolbox.tsx         # Contextual controls for currently selected palette
 │   │   └── useCopy.ts          # Hook managing clipboard write and transient "copied" indicators
 │   ├── App.test.tsx            # SSR smoke tests and DOM structure assertions
@@ -158,6 +161,12 @@ colors.pantoine.com/
 - **LocalStorage Autosave (`storage.ts`)**:
   - Saved under key `colors.pantoine.com/v1`, as the same hash string a share link carries — so the gamut is stored with it and there is one deserialiser to trust.
   - When loading from a shared link, foreign palettes are merged into existing local storage without erasing prior user work. A link that brings new palettes also brings its gamut, since otherwise its colours would not be the ones the sender saw.
+- **Review Layout Store (`useReview.ts`)**:
+  - Its own key, `colors.pantoine.com/review/v1`, kept apart from the document key on purpose: the layout says *how you are looking* at the palettes, not what you made, so it never travels in a share link and a mangled layout cannot take the document down with it.
+  - Sizes are held as **weights, never pixels**. A weight is a share of whatever room there is, and the grid tracks are `flex-grow` over a zero `flex-basis`, so a band's size is exactly its fraction of the axis. That is what makes the board fit the window *by construction* rather than by clamping something against the viewport.
+  - `splitPair` is the whole of the resize behaviour and is pure: it moves share between two neighbours and returns their pair total **unchanged**. Nothing in the UI can add weight, which is why no arrangement can push the board out of the window. A `MIN_BAND` floor (10px, or half the pair when the pair is smaller than two floors) keeps a band grabbable — a band dragged to nothing cannot be dragged back.
+  - Palette weights are keyed by **id in memory** but serialised as an **array in document order**. Palette ids are per-session handles that `document.ts` regenerates on every load, so an id is the right key while dragging a palette should carry its thickness with it, and a meaningless one on disk. Order is what persists, so order is what the stored weights are pinned to.
+  - `stepWeightsFor` reconciles the step-weight array's length **on read** rather than subscribing to the document: the step count is global, and nine stored shares say nothing about a ramp of fifteen. Nothing to subscribe to is nothing to get out of sync.
 - **Performance Caching (`useDocument.ts`)**:
   - Ramps are derived and cached using a `WeakMap<PaletteConfig, Map<Gamut, Swatch[]>>`. Because `PaletteConfig` is treated as immutable, re-renders and undo/redo operations avoid re-computing gamut mappings, and switching gamut back and forth re-uses both sets.
 
@@ -174,6 +183,9 @@ colors.pantoine.com/
 - **Images & Vector Graphics (`image.ts`)**:
   - **PNG**: Rendered on an integer-aligned HTML `<canvas>` without borders or gaps, ensuring accurate pipetting/eyedropping in external design software. Optional label strip. Directly copyable to clipboard as `image/png` or downloadable.
   - **SVG**: Generates SVG with individual named `<rect>` elements (`{palette}-{label}`) ready for pasting directly as editable layers into Figma.
+  - **Board PNG (`drawBoard` / `copyBoardPng`)**: the whole review board as one image, arranged exactly as it is on screen — same axis, spacing, weights, names and stamped values. Copied at a fixed 2000px long edge with the board's own proportions, so a paste is usable whatever window it was arranged in. Values arrive on `BoardPalette.values` **pre-formatted by the caller**, so this file stays out of the business of knowing formats and gamuts and the image cannot disagree with the board about what a step reads as. Text is boxed in ink with knocked-out glyphs (as on screen), and any box that will not fit its cell is dropped rather than spilling; the palette name is drawn last, so a band thin enough for the two to meet keeps the mark that says which palette it is.
+  - **Board SVG (`boardSvg`)**: the same geometry as vector rectangles, one `<g>` per palette. **No background and no baked text**, unlike the PNG — this exists to be pasted into Figma as editable layers, and there the labels are better carried as *names*: the group takes the palette's name and each rect takes its step's, so the layer panel reads the board back to you. Copied as text through the shared `useCopy`, exactly as the export panel's own Copy SVG is.
+  - `tracks` is the pixel twin of the board's `fr` grid, and the rounding is the entire problem it solves: boundaries are rounded **once, cumulatively**, and each span is the distance between two of them. Rounding each span independently lets the error accumulate into a 1px seam of background between two steps — and a pipette landing on a seam picks the seam, which is the one thing this file exists to prevent. The gaps between palettes are painted in the active canvas colour, since the spacing is being judged against that ground.
 
 ---
 
@@ -189,7 +201,17 @@ colors.pantoine.com/
 - **Color Gamut Selector**: Dropdown switching the whole document between **sRGB**, **Display P3**, **Adobe RGB**, and **Rec. 2020**. It steers derivation as well as preview: chroma ceilings, corner clipping triangles, and tooltips all follow it, and it travels in the share link and the autosave.
 - **Numeric Fields (`NumberField`)**: `type="text"` with `inputMode="decimal"`, not `type="number"`. A number input's value sanitiser discards anything that is not a valid float, so a comma decimal ("0,85") arrived as an empty string and the digits were lost on blur; its spinner also clipped visible digits. Arrow-key stepping (shift for a coarser nudge) is implemented here as a result. Blur commits, but only a change the field can actually display — an unguarded commit would mark the channel hand-edited and push an undo entry merely for tabbing past it.
 - **Canvas Contrast**: Light / Dark ground toggle (`data-canvas="dark"` on `document.documentElement`).
-- **Bare Mode**: "Hide tools" button to review swatches cleanly across multiple palettes without editor clutter.
+- **Review Board (`ReviewBoard`)**: `Review` replaces the old `Hide labels` and `Hide tools` toggles. Between them those two could put the editor into four states and only one was ever wanted — tools away, labels off — and as a **mode** of its own that state can also carry a *layout*, which a pair of toggles could not. The editor is consequently always labelled and always has its header; the board is colour, palette names, and nothing else.
+  - **Two layouts**: `Rows` (palettes as horizontal bands stacked down the window, as in the editor) and `Columns` (palettes as vertical bands stacked across it). Step count is document-global, so the board is a perfect N×S grid and `Columns` is simply its transpose — `RampStrip` gained an `orientation` and a `fill` for it rather than the board growing a second chip implementation, so the clipped notch, base badge and copy flash cannot drift between the two modes.
+  - **Fits the window, always**: nested flex with `flex-basis: 0` and a per-track `flex-grow`, which is auto-layout's "fill container" and cannot overflow. The `Spacing` slider gaps palettes only — steps within one ramp always meet edge to edge, the same rule the PNG follows and for the same eyedropper reason.
+  - **Resize on two rulers, not on the colour**: an L of rulers along the two axes, ticks placed by percentage (no measuring, since a track's size *is* its share). Dragging a tick moves share between the two tracks it divides. Step weights are **board-level, shared by every palette**, so the columns stay aligned across ramps — comparing step 500 across eight palettes only works if the 500s line up. Grips laid over the chips instead would put a strip that cannot be copied either side of every boundary, in the one mode that is nothing but chips.
+  - **Drag maths**: sizes are measured once at `pointerdown` and every move recomputes from that snapshot against the total distance travelled. Applying each event's own increment compounds the rounding and the boundary drifts away from the pointer over a long drag.
+  - **`Labels` + `Format`**: one switch prints the palette names *and* each step's value on its chip, because both answer the same question — which colour is this — and a board that named its palettes but not its steps would be halfway to the editor's label grid without being any use. The value is **stamped on the chip** (`swatch__stamp`), boxed and centred like the copy flash, rather than in the editor's `swatch__meta` grid row: on filling chips a row under each would eat the colour and put back the very rows the board exists to be rid of. It is the one boxed mark in this UI that is neither uppercased nor tracked out — a value is read and compared, and letter-spacing on a hex makes two of them harder to tell apart. The stamp also **reports the copy in place**, since a second mark landing in the middle of the same chip would collide.
+    - The `Format` select drives the **document's** one format (the editor's "Click copies"), not a second of its own: what a chip reads as and what clicking it copies have to be the same string, and two settings for one idea is how you end up showing a hex while copying an `oklch()`.
+    - Labels default **on**, because the names are also the visible advertisement that a band can be dragged — a board that opened bare would open with its arranging hidden.
+  - **Reordering**: the **whole band** is draggable, not only its name badge, so switching the labels off does not take reordering away with them. Nothing competes for the gesture (resizing is on the rulers), and a native HTML5 drag stays distinct from a click, so a chip still copies. It goes through the document's own `reorder`, so it is a real edit and lands in undo history — which is why `App` keeps every hook above the mode branch.
+  - **`Copy PNG` / `Copy SVG`**: the same two gestures the export panel leads with — paste as pixels, or as layers — on the whole board rather than one ramp. Both measure the board's live box so the copy carries the arrangement actually on screen. `Reset sizes` restores every weight to an even share and leaves the axis, spacing and labels alone: those were chosen deliberately, the weights are what a stray drag can wreck.
+  - `Escape` or `← Back` leaves. Dark canvas lives in the board's bar too, since judging a ramp against the other ground is a review activity rather than an editing one.
 - **OKLCH Base Color Picker (`ColorPicker`)**: Replaces `input[type="color"]`, which speaks sRGB hex only and so cannot express a base on a wide-gamut document. Two views: the **constant-hue slice** (lightness up, chroma across, with the gamut drawn as the curved wedge it is and its cusp marked) and a **hue strip** painted at the lightness and chroma in hand, so it goes visibly flat across hues that cannot hold the chroma being asked for. Three `NumberField`s carry L, C and H, and the readout gives `oklch()` with the sRGB hex beneath it.
   - The slice **respects the document gamut**: switching to Rec. 2020 widens the wedge, since peak chroma runs $0.322$ in sRGB against $0.454$ in Rec. 2020.
   - Out-of-gamut requests are **shown, not forbidden**, consistent with how curve values are treated everywhere else: a dashed spill line and a ring mark where the colour will actually land, both carrying the resolved chroma in their tooltips. Reported **inside the plot only** — every child of `.cpick` is a fixed height on purpose, because the dialog is centred and a notice appearing mid-drag re-centres the modal and pulls the plot out from under the pointer.
@@ -223,6 +245,11 @@ colors.pantoine.com/
 - **Color Invariant Tests (`base.test.ts`, `color.test.ts`, `gamut.test.ts`)**:
   - Asserts that for realistic positions across diverse hues (yellow, violet, cyan, red, green, navy, slate), lightness strictly descends and the base color appears exactly at its assigned step.
   - Verifies that wide-gamut colors are accurately classified and mapped across sRGB, P3, Adobe RGB, and Rec. 2020.
+- **Review Board Tests (`review.test.ts`, `App.test.tsx`)**:
+  - `splitPair` is tested for the property the board's fit-the-window promise actually rests on: the pair total comes out unchanged for every drag, the boundary tracks the pointer in proportion, and no band can be squeezed out of existence.
+  - `tracks` is tested for contiguity — each span starting exactly where the last ended, the set summing to the total — because the failure mode is a 1px seam a pipette can land on, which no eye test would catch.
+  - The board's render tests hand in a plain `ReviewApi` object rather than driving `useReview`, so an axis and a labels state can just be stated; the hook has its own tests for the arithmetic.
+  - `boardSvg` is tested for the two properties that make it worth having beside the PNG: named groups and rects (the labels as *layer names*), and no background or baked text to get in the way of editing.
 - **GitHub Actions (`.github/workflows/deploy.yml`)**:
   - Deploys automatically to GitHub Pages on pushes to `main`.
   - Enforces `npm test` prior to `npm run build` to prevent mathematical regressions from deploying.
@@ -236,7 +263,6 @@ colors.pantoine.com/
 - Base color pinning / locking (`baseLocked` and `holdBase`).
 - Document-level undo/redo with action coalescing.
 - Local storage persistence with smart link-merging.
-- Bare display mode.
 - **Wide Gamut Selection (Display P3, Adobe RGB, Rec. 2020)**: Real-time clipping re-evaluation, CSS Color 4 preview, gamut-aware chroma ceilings driving derivation, `color()` copy and CSS export, and the gamut carried in the share link and autosave.
 - **Global Step Count**: Unified step count across all palettes in the document.
 - **OKLCH Color Picker**: Constant-hue slice with the gamut wedge drawn and its cusp marked, a live hue strip, numeric L/C/H, and an out-of-gamut readout — replacing the sRGB-only system picker.
@@ -244,6 +270,10 @@ colors.pantoine.com/
 - **Gamut Chroma Ceiling on the Chroma Graph**: the boundary drawn dashed with the unreachable region hatched above it, and the step dots plotted where the colour actually landed with a leader back up to the curve.
 - **Guided New Palette**: a modal to paste a list of colours, or to pick a base from a colour harmony built on any swatch already in the document, with an "All rules" view for comparing every rule at once.
 
+- **Review Board**: the whole document at once as a fit-to-window N×S board, in rows or columns, with palette spacing, drag-to-reorder, splitter resizing of both palettes and steps on a pair of rulers, an optional label stamping each step's value (in any format) plus the palette names, and the arrangement copyable as one PNG or as grouped, named SVG layers. Replaces the `Hide labels` and `Hide tools` toggles.
+
 ### Potential Future Enhancements
 - **APCA Contrast**: Advanced Perceptual Contrast Algorithm calculations alongside existing WCAG 2.1 ratios.
 - **Automated Neutral / Gray Scale Derivation**: Generating tinted grays derived from a palette's base hue with suppressed chroma.
+- **Live Reordering on the Board**: the board keeps the editor's HTML5 drag-and-drop, which shuffles on drop rather than under the pointer. Pointer-driven reordering would preview the new order as the palette moves, at the cost of hand-rolling what the browser currently provides.
+- **True Full Screen on the Board**: `requestFullscreen` to drop the bar as well, for showing a palette set to a room.

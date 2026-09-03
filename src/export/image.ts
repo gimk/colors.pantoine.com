@@ -139,3 +139,297 @@ export function downloadSvg(ramp: Swatch[], options: ImageOptions, name: string)
   const blob = new Blob([toSvg(ramp, options, name)], { type: 'image/svg+xml' })
   download(blob, `${slugify(name)}-ramp.svg`)
 }
+
+/* --- the review board as one image ------------------------------------ */
+
+export type BoardPalette = {
+  name: string
+  ramp: Swatch[]
+  /**
+   * The value to stamp on each step, pre-formatted by the caller and indexed
+   * by step. Formatted outside so this file stays out of the business of
+   * knowing formats and gamuts, and so the image cannot disagree with the
+   * board about what a step reads as.
+   */
+  values?: string[]
+}
+
+export type BoardOptions = {
+  /** `rows`: palettes are horizontal bands stacked down the image. */
+  axis: 'rows' | 'columns'
+  /** Space between palettes, in image pixels. Never between steps. */
+  gap: number
+  /** Share of the stacking axis per palette, in document order. */
+  paletteWeights: number[]
+  /** Share of the ramp axis per step, shared by every palette. */
+  stepWeights: number[]
+  /** Palette names, and each step's value stamped on its block. */
+  labels: boolean
+  width: number
+  height: number
+  /** The canvas the board is being judged against, painted into the gaps. */
+  background: string
+}
+
+/**
+ * Integer pixel spans for a set of weights laid across `total` pixels.
+ *
+ * Boundaries are rounded *once*, cumulatively, and each span is the distance
+ * between two of them. Rounding each span on its own instead leaves the
+ * errors to accumulate, which shows up as a 1px seam of background between
+ * two steps and a 1px overlap somewhere else — and a seam is the one thing
+ * this file exists to avoid, since a pipette landing on it picks the seam.
+ */
+export function tracks(
+  weights: number[],
+  total: number,
+  gap: number,
+): { start: number; size: number }[] {
+  const sum = weights.reduce((a, b) => a + b, 0)
+  if (!(sum > 0)) return []
+  const room = total - gap * (weights.length - 1)
+
+  let weight = 0
+  let edge = 0
+  return weights.map((share, index) => {
+    weight += share
+    const end = Math.round((weight / sum) * room) + index * gap
+    const track = { start: edge, size: Math.max(end - edge, 0) }
+    edge = end + gap
+    return track
+  })
+}
+
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+export function drawBoard(
+  canvas: HTMLCanvasElement,
+  palettes: BoardPalette[],
+  options: BoardOptions,
+): void {
+  canvas.width = Math.max(Math.round(options.width), 1)
+  canvas.height = Math.max(Math.round(options.height), 1)
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  // The gaps are canvas, not nothing: the spacing between palettes is being
+  // judged against the ground, so the image has to carry the same ground.
+  ctx.fillStyle = options.background
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+  const rows = options.axis === 'rows'
+  const bands = tracks(
+    options.paletteWeights,
+    rows ? canvas.height : canvas.width,
+    Math.round(options.gap),
+  )
+  const steps = tracks(options.stepWeights, rows ? canvas.width : canvas.height, 0)
+
+  palettes.forEach((palette, index) => {
+    const band = bands[index]
+    if (!band) return
+    palette.ramp.forEach((swatch, position) => {
+      const step = steps[position]
+      if (!step) return
+      ctx.fillStyle = swatch.hex
+      if (rows) ctx.fillRect(step.start, band.start, step.size, band.size)
+      else ctx.fillRect(band.start, step.start, band.size, step.size)
+    })
+  })
+
+  if (!options.labels) return
+
+  // Subtle labels in white or black depending on the contrast of the swatch.
+  const fontPx = Math.round(Math.min(Math.max(canvas.width / 160, 9), 16))
+  const subFontPx = Math.round(fontPx * 0.85)
+  const contrastFontPx = Math.round(fontPx * 0.75)
+
+  palettes.forEach((palette, index) => {
+    const band = bands[index]
+    if (!band) return
+
+    // Step labels: color number + value centred on each chip
+    palette.ramp.forEach((swatch, position) => {
+      const step = steps[position]
+      if (!step) return
+      const cellX = rows ? step.start : band.start
+      const cellY = rows ? band.start : step.start
+      const cellW = rows ? step.size : band.size
+      const cellH = rows ? band.size : step.size
+
+      const textColor =
+        swatch.contrastOnBlack >= swatch.contrastOnWhite ? '#000000' : '#ffffff'
+      ctx.fillStyle = textColor
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+
+      const cx = cellX + cellW / 2
+      const cy = cellY + cellH / 2
+      const value = palette.values?.[position]
+      const contrast = `W ${swatch.contrastOnWhite.toFixed(1)} · B ${swatch.contrastOnBlack.toFixed(1)}`
+
+      if (value && cellH >= fontPx * 3.4) {
+        ctx.font = `bold ${fontPx}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
+        if (ctx.measureText(swatch.label).width <= cellW - 4) {
+          ctx.fillText(swatch.label, cx, cy - fontPx * 1.1)
+        }
+        ctx.font = `${subFontPx}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
+        if (ctx.measureText(value).width <= cellW - 4) {
+          ctx.fillText(value, cx, cy)
+        }
+        ctx.font = `${contrastFontPx}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
+        if (ctx.measureText(contrast).width <= cellW - 4) {
+          ctx.fillText(contrast, cx, cy + fontPx * 1.05)
+        }
+      } else if (value && cellH >= fontPx * 2.2) {
+        ctx.font = `bold ${fontPx}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
+        if (ctx.measureText(swatch.label).width <= cellW - 4) {
+          ctx.fillText(swatch.label, cx, cy - fontPx * 0.55)
+        }
+        ctx.font = `${subFontPx}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
+        if (ctx.measureText(value).width <= cellW - 4) {
+          ctx.fillText(value, cx, cy + fontPx * 0.55)
+        }
+      } else if (cellH >= fontPx) {
+        ctx.font = `bold ${fontPx}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
+        if (ctx.measureText(swatch.label).width <= cellW - 4) {
+          ctx.fillText(swatch.label, cx, cy)
+        }
+      }
+    })
+  })
+}
+
+/**
+ * The board as vector rectangles, one group per palette.
+ *
+ * When labels are toggled on, includes each step's color number, formatted value,
+ * and WCAG W/B contrast ratios in white or black text depending on the underlying swatch contrast.
+ */
+export function boardSvg(palettes: BoardPalette[], options: BoardOptions): string {
+  const width = Math.max(Math.round(options.width), 1)
+  const height = Math.max(Math.round(options.height), 1)
+  const rows = options.axis === 'rows'
+  const bands = tracks(
+    options.paletteWeights,
+    rows ? height : width,
+    Math.round(options.gap),
+  )
+  const steps = tracks(options.stepWeights, rows ? width : height, 0)
+  const fontPx = Math.round(Math.min(Math.max(width / 160, 9), 16))
+  const subFontPx = Math.round(fontPx * 0.85)
+  const contrastFontPx = Math.round(fontPx * 0.75)
+
+  const groups = palettes
+    .map((palette, index) => {
+      const band = bands[index]
+      if (!band) return ''
+      const slug = slugify(palette.name)
+      const rects = palette.ramp
+        .map((swatch, position) => {
+          const step = steps[position]
+          if (!step) return ''
+          const x = rows ? step.start : band.start
+          const y = rows ? band.start : step.start
+          const w = rows ? step.size : band.size
+          const h = rows ? band.size : step.size
+          return (
+            `    <rect id="${slug}-${swatch.label}" x="${x}" y="${y}" ` +
+            `width="${w}" height="${h}" fill="${swatch.hex}"/>`
+          )
+        })
+        .filter(Boolean)
+        .join('\n')
+
+      let labelsMarkup = ''
+      if (options.labels) {
+        const stepTexts = palette.ramp
+          .map((swatch, position) => {
+            const step = steps[position]
+            if (!step) return ''
+            const cellX = rows ? step.start : band.start
+            const cellY = rows ? band.start : step.start
+            const cellW = rows ? step.size : band.size
+            const cellH = rows ? band.size : step.size
+
+            const textColor =
+              swatch.contrastOnBlack >= swatch.contrastOnWhite ? '#000000' : '#ffffff'
+            const cx = Math.round(cellX + cellW / 2)
+            const cy = Math.round(cellY + cellH / 2)
+            const value = palette.values?.[position]
+            const contrast = `W ${swatch.contrastOnWhite.toFixed(1)} · B ${swatch.contrastOnBlack.toFixed(1)}`
+
+            if (value && cellH >= fontPx * 3.4) {
+              const labelY = Math.round(cy - fontPx * 1.1)
+              const valueY = Math.round(cy)
+              const contrastY = Math.round(cy + fontPx * 1.05)
+              return (
+                `    <text x="${cx}" y="${labelY}" fill="${textColor}" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="${fontPx}" font-weight="bold" text-anchor="middle" dominant-baseline="central">${swatch.label}</text>\n` +
+                `    <text x="${cx}" y="${valueY}" fill="${textColor}" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="${subFontPx}" text-anchor="middle" dominant-baseline="central">${escapeXml(value)}</text>\n` +
+                `    <text x="${cx}" y="${contrastY}" fill="${textColor}" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="${contrastFontPx}" text-anchor="middle" dominant-baseline="central">${escapeXml(contrast)}</text>`
+              )
+            } else if (value && cellH >= fontPx * 2.2) {
+              const labelY = Math.round(cy - fontPx * 0.55)
+              const valueY = Math.round(cy + fontPx * 0.55)
+              return (
+                `    <text x="${cx}" y="${labelY}" fill="${textColor}" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="${fontPx}" font-weight="bold" text-anchor="middle" dominant-baseline="central">${swatch.label}</text>\n` +
+                `    <text x="${cx}" y="${valueY}" fill="${textColor}" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="${subFontPx}" text-anchor="middle" dominant-baseline="central">${escapeXml(value)}</text>`
+              )
+            } else {
+              return `    <text x="${cx}" y="${cy}" fill="${textColor}" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="${fontPx}" font-weight="bold" text-anchor="middle" dominant-baseline="central">${swatch.label}</text>`
+            }
+          })
+          .filter(Boolean)
+          .join('\n')
+
+        labelsMarkup = `\n${stepTexts}`
+      }
+
+      return `  <g id="${slug}">\n${rects}${labelsMarkup}\n  </g>`
+    })
+    .filter(Boolean)
+    .join('\n')
+
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" ` +
+    `viewBox="0 0 ${width} ${height}">\n${groups}\n</svg>`
+  )
+}
+
+function boardCanvas(palettes: BoardPalette[], options: BoardOptions): HTMLCanvasElement {
+  const canvas = document.createElement('canvas')
+  drawBoard(canvas, palettes, options)
+  return canvas
+}
+
+export function boardPngBlob(
+  palettes: BoardPalette[],
+  options: BoardOptions,
+): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    boardCanvas(palettes, options).toBlob((blob) => resolve(blob), 'image/png')
+  })
+}
+
+/** The board as arranged, straight to the clipboard. */
+export async function copyBoardPng(
+  palettes: BoardPalette[],
+  options: BoardOptions,
+): Promise<boolean> {
+  const blob = await boardPngBlob(palettes, options)
+  if (!blob || typeof ClipboardItem === 'undefined') return false
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+    return true
+  } catch {
+    return false
+  }
+}

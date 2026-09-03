@@ -4,10 +4,12 @@ import { MAX_STEPS, MIN_STEPS } from './color/presets'
 import { restoreDocument, saveDocument } from './state/storage'
 import { documentUrl } from './state/url'
 import { useDocument, type PaletteView } from './state/useDocument'
+import { useReview } from './state/useReview'
 import { NewPaletteDialog } from './ui/NewPaletteDialog'
 import { NumberField } from './ui/NumberField'
 import { HelpDialog } from './ui/HelpDialog'
 import { PaletteRow } from './ui/PaletteRow'
+import { ReviewBoard } from './ui/ReviewBoard'
 import { Toolbox } from './ui/Toolbox'
 import { useCopy } from './ui/useCopy'
 
@@ -27,9 +29,22 @@ export function App() {
   const { gamut } = doc
   const [format, setFormat] = useState<Format>('hex')
   const [dark, setDark] = useState(false)
-  const [labels, setLabels] = useState(true)
-  const [bare, setBare] = useState(false)
+  /**
+   * The review board, which is a mode rather than a set of things hidden.
+   *
+   * It replaced a `Hide labels` and a `Hide tools` toggle that between them
+   * could put the editor into four states, only one of which anybody wanted:
+   * the one where the tools are away and the labels are off. That is this
+   * board, and having it as a mode is what lets it also have a layout —
+   * an axis, a spacing, and sizes — which a pair of toggles could not.
+   */
+  const [review, setReview] = useState(false)
   const { copy, copied } = useCopy()
+
+  const layout = useReview(
+    doc.palettes.map((palette) => palette.id),
+    doc.selected.config.steps,
+  )
 
   useEffect(() => {
     document.documentElement.dataset.canvas = dark ? 'dark' : 'light'
@@ -71,8 +86,31 @@ export function App() {
   const shareHref =
     typeof window === 'undefined' ? '' : documentUrl(seedsOf(doc.palettes), gamut)
 
+  /**
+   * The board is a different page, not the editor with things switched off,
+   * so it replaces the tree rather than hiding parts of it. Every hook above
+   * still runs: reordering a palette on the board is a real document edit, so
+   * the undo shortcut and the autosave have to keep working while it is up.
+   */
+  if (review) {
+    return (
+      <ReviewBoard
+        doc={doc}
+        review={layout}
+        format={format}
+        onFormat={setFormat}
+        gamut={gamut}
+        dark={dark}
+        onDark={() => setDark((on) => !on)}
+        onExit={() => setReview(false)}
+        copiedKey={copied}
+        onCopy={copy}
+      />
+    )
+  }
+
   return (
-    <div className={`app${bare ? ' app--bare' : ''}`}>
+    <div className="app">
       <header className="masthead">
         <h1>colors.pantoine.com — tints &amp; shades</h1>
         <span className="spacer" />
@@ -175,22 +213,10 @@ export function App() {
         <div className="controls__group">
           <button
             type="button"
-            className={!labels ? 'is-on' : undefined}
-            aria-pressed={!labels}
-            onClick={() => setLabels((on) => !on)}
-            title="Drop the step names, values and contrast figures, and look at nothing but the colours"
+            onClick={() => setReview(true)}
+            title="Put every tool and every label away and look at the whole document at once, laid out however you arrange it"
           >
-            {labels ? 'Hide labels' : 'Show labels'}
-          </button>
-
-          <button
-            type="button"
-            className={bare ? 'is-on' : undefined}
-            aria-pressed={bare}
-            onClick={() => setBare((on) => !on)}
-            title="Put every tool away and look at nothing but the palettes"
-          >
-            {bare ? 'Show tools' : 'Hide tools'}
+            Review
           </button>
 
           <button
@@ -212,8 +238,6 @@ export function App() {
             selected={palette.id === selected.id}
             format={format}
             gamut={gamut}
-            labels={labels}
-            bare={bare}
             copiedKey={copied}
             onSelect={() => doc.select(palette.id)}
             onRemove={() => doc.remove(palette.id)}
@@ -227,7 +251,7 @@ export function App() {
           so `position: sticky; bottom` pins it to the foot of the window while
           the palettes scroll behind, and it names the palette it is editing
           since it is no longer beside it. */}
-      {!bare && <Toolbox doc={doc} shareHref={shareHref} />}
+      <Toolbox doc={doc} shareHref={shareHref} />
     </div>
   )
 }

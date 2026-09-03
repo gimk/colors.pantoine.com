@@ -4,7 +4,7 @@ import { createPalette } from '../color/presets'
 import { generateRamp } from '../color/ramp'
 import { decodePalette, encodePalette } from '../state/url'
 import { slugify, TEXT_FORMATS } from './formats'
-import { toSvg } from './image'
+import { boardSvg, drawBoard, toSvg, type BoardOptions } from './image'
 
 const config = createPalette('#7c3aed')
 const ramp = generateRamp(config)
@@ -119,6 +119,136 @@ describe('svg export', () => {
     const xs = [...svg.matchAll(/x="(\d+)"/g)].map((m) => Number(m[1]))
     expect(xs).toEqual(ramp.map((_, i) => i * 64))
     expect(svg).toContain(`width="${64 * ramp.length}"`)
+  })
+})
+
+/**
+ * The board as layers rather than pixels. The labels are carried as *names*
+ * here — the group takes the palette's, each rect takes its step's — because
+ * that is what a Figma layer panel reads back to you, where a text element
+ * baked over the colour would only be in the way.
+ */
+describe('the board as SVG', () => {
+  const sky = generateRamp(createPalette('#0ea5e9'))
+  const palettes = [
+    { name: 'Brand Purple', ramp },
+    // Values are the PNG's business; this one carries some to prove it.
+    { name: 'Sky', ramp: sky, values: ramp.map(() => 'ignored') },
+  ]
+  const options: BoardOptions = {
+    axis: 'rows',
+    gap: 10,
+    paletteWeights: [1, 1],
+    stepWeights: ramp.map(() => 1),
+    labels: true,
+    width: 1000,
+    height: 420,
+    background: '#ffffff',
+  }
+  const board = boardSvg(palettes, options)
+
+  it('groups one named rect per step under one named group per palette', () => {
+    expect(board.match(/<g /g)).toHaveLength(2)
+    expect(board).toContain('<g id="brand-purple">')
+    expect(board).toContain('<g id="sky">')
+    expect(board.match(/<rect /g)).toHaveLength(ramp.length * 2)
+    for (const swatch of ramp) {
+      expect(board).toContain(`id="brand-purple-${swatch.label}"`)
+    }
+  })
+
+  it('carries labels when toggled on, and omits them when toggled off', () => {
+    expect(board).toContain('<text')
+    expect(board).not.toContain('BRAND PURPLE')
+    expect(board).toContain('ignored')
+    expect(board).toMatch(/W \d+(\.\d+)? · B \d+(\.\d+)?/)
+    for (const swatch of ramp) {
+      expect(board).toContain(`>${swatch.label}</text>`)
+    }
+
+    const unlabelled = boardSvg(palettes, { ...options, labels: false })
+    expect(unlabelled).not.toContain('<text')
+    expect(unlabelled).not.toContain('ignored')
+  })
+
+  it('tiles the steps edge to edge and gaps only the palettes', () => {
+    const band = board.slice(
+      board.indexOf('<g id="brand-purple">'),
+      board.indexOf('<g id="sky">'),
+    )
+    const xs = [...band.matchAll(/<rect [^>]*x="(\d+)"/g)].map((m) => Number(m[1]))
+    const widths = [...band.matchAll(/<rect [^>]*width="(\d+)"/g)].map((m) => Number(m[1]))
+    xs.forEach((x, index) => {
+      if (index === 0) return expect(x).toBe(0)
+      expect(x).toBe(xs[index - 1] + widths[index - 1])
+    })
+    expect(xs[xs.length - 1] + widths[widths.length - 1]).toBe(1000)
+    // The gap comes off the stacking axis only: two bands over 420px with a
+    // 10px gap gives 205 each, so the second starts at 215.
+    const rectYs = [...board.matchAll(/<rect [^>]*y="(\d+)"/g)].map((m) => Number(m[1]))
+    expect(new Set(rectYs)).toEqual(new Set([0, 215]))
+  })
+
+  it('draws contrast-based labels on canvas when labels are enabled (without palette names)', () => {
+    const filledTexts: { text: string; fillStyle: string }[] = []
+    const filledRects: { x: number; y: number; w: number; h: number; fillStyle: string }[] = []
+    const ctx = {
+      fillStyle: '',
+      fillRect: (x: number, y: number, w: number, h: number) => {
+        filledRects.push({ x, y, w, h, fillStyle: ctx.fillStyle })
+      },
+      fillText: (text: string) => {
+        filledTexts.push({ text, fillStyle: ctx.fillStyle })
+      },
+      measureText: (text: string) => ({ width: text.length * 6 }),
+      font: '',
+      textAlign: '',
+      textBaseline: '',
+    }
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => ctx,
+    } as unknown as HTMLCanvasElement
+
+    drawBoard(canvas, palettes, options)
+
+    // Palette names are not drawn in exports
+    expect(filledTexts.some((t) => t.text === 'BRAND PURPLE')).toBe(false)
+    expect(filledTexts.some((t) => t.text === 'SKY')).toBe(false)
+
+    // Color numbers drawn
+    for (const swatch of ramp) {
+      expect(filledTexts.some((t) => t.text === swatch.label)).toBe(true)
+    }
+
+    // W and B contrast ratios drawn
+    expect(filledTexts.some((t) => /^W \d+(\.\d+)? · B \d+(\.\d+)?$/.test(t.text))).toBe(true)
+
+    // Text colors are strictly either black or white based on contrast
+    for (const t of filledTexts) {
+      expect(['#000000', '#ffffff']).toContain(t.fillStyle)
+    }
+  })
+
+  it('omits all text when labels are disabled on canvas', () => {
+    const filledTexts: string[] = []
+    const ctx = {
+      fillStyle: '',
+      fillRect: () => {},
+      fillText: (text: string) => {
+        filledTexts.push(text)
+      },
+      measureText: () => ({ width: 10 }),
+    }
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => ctx,
+    } as unknown as HTMLCanvasElement
+
+    drawBoard(canvas, palettes, { ...options, labels: false })
+    expect(filledTexts).toHaveLength(0)
   })
 })
 
