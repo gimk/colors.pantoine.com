@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { flat } from '../color/curve'
-import { normalizeHue, parseToOklch } from '../color/oklch'
+import { formatColor, normalizeHue, parseToOklch, toHex } from '../color/oklch'
 import { createPalette } from '../color/presets'
 import {
   createDocument,
   documentReducer,
+  MAX_PALETTES,
   selectedEntry,
   type DocumentAction,
   type DocumentState,
@@ -546,5 +547,127 @@ describe('saving', () => {
     expect(restoreDocument('').seeds).toEqual([])
     // A link still opens: the address bar does not need permission.
     expect(restoreDocument(`#${encodeDocument([accent])}`).seeds).toHaveLength(1)
+  })
+})
+
+describe('adding palettes in a batch', () => {
+  const add = (state: DocumentState, bases: { base: string; name?: string }[]) =>
+    documentReducer(state, { type: 'add', bases })
+
+  const namesOf = (state: DocumentState) => state.palettes.map((entry) => entry.name)
+
+  it('appends one palette per colour, in the order given', () => {
+    const doc = add(createDocument(), [
+      { base: '#ff5722' },
+      { base: 'rgb(30 136 229)' },
+      { base: 'oklch(0.7 0.15 150)' },
+    ])
+    expect(doc.palettes).toHaveLength(4)
+    expect(doc.palettes.slice(1).map((entry) => entry.state.config.base)).toEqual([
+      '#ff5722',
+      'rgb(30 136 229)',
+      'oklch(0.7 0.15 150)',
+    ])
+  })
+
+  it('lands on the first of the batch, not the last', () => {
+    // The same rule a shared link follows: the first one is the one whoever
+    // asked for them named first.
+    const doc = add(createDocument(), [{ base: '#ff0000' }, { base: '#00ff00' }])
+    expect(selectedEntry(doc).id).toBe(doc.palettes[1].id)
+  })
+
+  it('hands back the state it was given when there is nothing to add', () => {
+    const doc = createDocument()
+    expect(add(doc, [])).toBe(doc)
+    // An undo entry that undoes nothing is worse than no entry at all.
+    expect(add(doc, [{ base: 'not a colour' }, { base: '' }])).toBe(doc)
+  })
+
+  it('drops what it cannot parse and keeps the rest', () => {
+    // Unlike the base field, a batch has no field left to keep typing in, so a
+    // bad string would persist through storage and links with no way to heal.
+    const doc = add(createDocument(), [
+      { base: '#ff0000' },
+      { base: 'not a colour' },
+      { base: '#0000ff' },
+    ])
+    expect(doc.palettes).toHaveLength(3)
+    expect(doc.palettes.every((entry) => parseToOklch(entry.state.config.base))).toBe(true)
+  })
+
+  it('trims whitespace off a pasted colour', () => {
+    const doc = add(createDocument(), [{ base: '  #ff5722\t' }])
+    expect(doc.palettes[1].state.config.base).toBe('#ff5722')
+  })
+
+  it('names a palette after its colour when it is not given one', () => {
+    const doc = add(createDocument(), [{ base: '#ff5722' }, { base: '#1e88e5' }])
+    expect(namesOf(doc)).toEqual(['brand', 'ff5722', '1e88e5'])
+  })
+
+  it('keeps the name it is given', () => {
+    const doc = add(createDocument(), [{ base: '#ff5722', name: 'triad 1' }])
+    expect(doc.palettes[1].name).toBe('triad 1')
+  })
+
+  it('never repeats a name, inside a batch or across them', () => {
+    // Names ride in the encoded link segment, and the link merge de-dupes
+    // segments through a Set — so two identical names can lose a palette.
+    const once = add(createDocument(), [{ base: '#ff5722' }, { base: '#ff5722' }])
+    expect(namesOf(once)).toEqual(['brand', 'ff5722', 'ff5722 2'])
+
+    const twice = add(once, [{ base: '#ff5722' }])
+    expect(new Set(namesOf(twice)).size).toBe(namesOf(twice).length)
+  })
+
+  it('does not reuse a name freed by a removal', () => {
+    const doc = add(createDocument(), [{ base: '#ff5722' }])
+    const removed = documentReducer(doc, { type: 'remove', id: doc.palettes[0].id })
+    const again = add(removed, [{ base: '#ff5722' }])
+    expect(new Set(namesOf(again)).size).toBe(namesOf(again).length)
+  })
+
+  it('inherits the document step count and gamut', () => {
+    const doc = run(createDocument([], -1, 'rec2020'), { type: 'setSteps', value: 15 })
+    const added = add(doc, [{ base: '#00ff66' }])
+    expect(added.palettes[1].state.config.steps).toBe(15)
+    // Derived against the wide ceiling, so the curve differs from the sRGB one.
+    const srgb = add(createDocument(), [{ base: '#00ff66' }])
+    expect(added.palettes[1].state.config.chroma).not.toEqual(
+      srgb.palettes[1].state.config.chroma,
+    )
+  })
+
+  it('truncates at the cap rather than refusing the whole batch', () => {
+    const many = Array.from({ length: MAX_PALETTES + 10 }, (_, i) => ({
+      base: `oklch(0.6 0.15 ${i * 7})`,
+    }))
+    const doc = add(createDocument(), many)
+    expect(doc.palettes).toHaveLength(MAX_PALETTES)
+    expect(add(doc, [{ base: '#ff0000' }])).toBe(doc)
+  })
+
+  it('survives a share link with its bases and names intact', () => {
+    const doc = add(createDocument(), [
+      { base: formatColor(parseToOklch('#00ff66')!, 'oklch'), name: 'triad 1' },
+      { base: '#ff5722' },
+    ])
+    const seeds = doc.palettes.map((entry) => ({
+      config: entry.state.config,
+      name: entry.name,
+    }))
+    const back = decodeDocument(`#${encodeDocument(seeds)}`)
+    expect(back.map((entry) => entry.name)).toEqual(['brand', 'triad 1', 'ff5722'])
+    expect(back[1].config.base).toBe(seeds[1].config.base)
+    // A computed candidate has no original text, so it travels as oklch() and
+    // takes a rounding: one decimal of lightness moves a colour sitting on the
+    // sRGB boundary by a single 8-bit step. A pasted colour goes through
+    // verbatim instead, and takes none.
+    expect(toHex(parseToOklch(back[2].config.base)!)).toBe('#ff5722')
+    const revived = parseToOklch(back[1].config.base)!
+    const original = parseToOklch('#00ff66')!
+    expect(revived.h).toBeCloseTo(original.h, 1)
+    expect(revived.c).toBeCloseTo(original.c, 3)
   })
 })

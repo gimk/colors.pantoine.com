@@ -756,3 +756,21 @@ describe('chroma dots sit where the colour actually landed', () => {
     expect(panel('lightness')).not.toContain('graph__drop')
   })
 })
+
+describe('the way into a new palette', () => {
+  const page = renderToStaticMarkup(<App />)
+
+  it('leads with the dialog and keeps the hue step as a shortcut', () => {
+    const controls = page.slice(page.indexOf('class="controls"'))
+    const bar = controls.slice(0, controls.indexOf('class="divider"'))
+    expect(bar).toContain('+ New palette')
+    expect(bar).toContain('+ Quick add')
+    // Filled solid, still the one control here that adds rather than adjusts.
+    expect(bar.indexOf('is-primary')).toBeLessThan(bar.indexOf('+ Quick add'))
+  })
+
+  it('keeps the dialog body out of the page until it is opened', () => {
+    expect(page).toContain('class="newpal"')
+    expect(page).not.toContain('newpal__panel')
+  })
+})

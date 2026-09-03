@@ -143,6 +143,68 @@ export function parseToOklch(input: string): Oklch | null {
   return { l: c.l ?? 0, c: c.c ?? 0, h: c.h ?? 0 }
 }
 
+/** One entry of a pasted list: the text as typed, and what it parsed to. */
+export type ParsedColor = { input: string; oklch: Oklch }
+
+export type ColorList = {
+  colors: ParsedColor[]
+  /** Tokens that parsed to nothing, reported rather than dropped — a typo in
+   *  a pasted list should be visible, not silently one palette short. */
+  unrecognised: string[]
+}
+
+/**
+ * Split pasted text into colour tokens.
+ *
+ * Depth-aware, and that is the whole difficulty: the obvious split on commas
+ * and whitespace shreds `rgb(1, 2, 3)` and `oklch(0.54 0.247 293)` into
+ * fragments that parse to nothing. So separators only separate at paren depth
+ * zero, and everything inside a functional notation is carried through whole.
+ */
+const SEPARATOR = /[\s,;]/
+
+function tokenizeColors(text: string): string[] {
+  const tokens: string[] = []
+  let current = ''
+  let depth = 0
+
+  for (const character of text) {
+    if (character === '(') depth++
+    else if (character === ')') depth = Math.max(0, depth - 1)
+
+    if (depth === 0 && SEPARATOR.test(character)) {
+      if (current.trim()) tokens.push(current.trim())
+      current = ''
+      continue
+    }
+    current += character
+  }
+  if (current.trim()) tokens.push(current.trim())
+
+  return tokens
+}
+
+/**
+ * Every colour in a block of pasted text, in any format CSS accepts.
+ *
+ * Formats may be mixed freely and separated by newlines, commas, semicolons or
+ * spaces, because pasted text comes from wherever the designer had it — a
+ * spreadsheet column, a CSS file, a chat message. culori also accepts bare hex
+ * without a `#`, which is what a spreadsheet usually holds.
+ */
+export function parseColorList(text: string): ColorList {
+  const colors: ParsedColor[] = []
+  const unrecognised: string[] = []
+
+  for (const token of tokenizeColors(text)) {
+    const parsed = parseToOklch(token)
+    if (parsed) colors.push({ input: token, oklch: parsed })
+    else unrecognised.push(token)
+  }
+
+  return { colors, unrecognised }
+}
+
 /** Check whether an OKLCH color fits in the specified gamut within channel tolerance. */
 export function isInGamut(color: Oklch, gamut: Gamut = 'srgb'): boolean {
   if (gamut === 'oklab') {

@@ -46,6 +46,8 @@ colors.pantoine.com/
 │   │   ├── curve.ts            # Channel definitions, IRLS curve fitting, Lagrange constraints
 │   │   ├── gamut.test.ts       # Wide-gamut clipping and mapping tests across color spaces
 │   │   ├── gamut.ts            # Binary search for maximum chroma at given L and H per gamut
+│   │   ├── harmony.test.ts     # Tests for harmony offsets, gamut safety, and pastel preservation
+│   │   ├── harmony.ts          # Colour-harmony rules as OKLCH hue rotations from a seed
 │   │   ├── oklch.ts            # Culori wrappers, strict gamut mapping, WCAG 2.1 contrast, formatting
 │   │   ├── presets.ts          # Default curve generators, adaptive fitting, base pinning
 │   │   ├── ramp.ts             # PaletteConfig -> Swatch[] generation, clipping & duplicate detection
@@ -73,6 +75,8 @@ colors.pantoine.com/
 │   │   ├── CurveEditor.tsx     # Interactive SVG curve editor (tangent handles, keyboard controls)
 │   │   ├── CurvePanel.tsx      # Channel box with numeric endpoints, shapes, and curve editor
 │   │   ├── ExportPanel.tsx     # Copy/download buttons for text, PNG, SVG, and share link
+│   │   ├── NewPaletteDialog.test.tsx # Tests for both panes, rule rows, and dialog styling
+│   │   ├── NewPaletteDialog.tsx  # Guided new-palette modal: paste a list, or pick from a harmony
 │   │   ├── NumberField.tsx     # Controlled numeric input with draft state to avoid caret fighting
 │   │   ├── PaletteRow.tsx      # Row in the document stack (title, move/delete, ramp strip)
 │   │   ├── RampStrip.tsx       # Horizontal swatch strip with metadata and clip indicators
@@ -127,13 +131,19 @@ colors.pantoine.com/
   - **`bendThrough`**: Exact closed-form adjustment shifting handles first (and anchors only if handles run out of headroom) to pass through a target point while preserving bounds.
   - **Base Lock (`baseLocked`)**: Corrects curves dynamically during edits so that the base color step remains fixed at the exact requested OKLCH coordinates.
 
+- **`harmony.ts`**:
+  - Eight classic rules as **hue rotations in OKLCH**, not on the artist's HSB wheel. Measured both: the HSB complement of `#0044ff` lands at $L0.83$ against the seed's $L0.51$, so the source and the new palette would carry completely different weight, while OKLCH holds lightness. The hue families land in the same place regardless — within $5$–$25^\circ$ of the HSB answer across the seeds checked — so the artist's-wheel intuition is not lost.
+  - Offsets never include $0$: the seed is already a palette in the document, so offering it back would only duplicate one.
+  - Chroma is `min(seed.c, maxChromaFor(seed.l, newHue, gamut))`. Holding a *share* of the ceiling — the trick `chromaCurveFor` uses — was tried and rejected: it breaks on pastels, turning `#f0abfc` (94% of its own modest ceiling) into `#45ef2c`, a screaming lime, where capping gives `#96de8c`. A vivid seed already sits at its ceiling, so capping hands it the most saturated colour each hue can hold, and every candidate is inside the gamut **by construction** — none needs a clipped marker.
+  - `hasUsableHue` refuses a grey rather than offering eight identical swatches: hue is meaningless below `CHROMA_JND`.
+
 ### 3.2 State Management & Persistence (`src/state/`)
 
 - **Document Model (`document.ts`)**:
   - A Document is a list of `PaletteEntry` items (`{ id, name, state }`) with a `selectedId` and a `gamut`.
   - **Global Steps**: The step count is unified document-wide across all palettes. Modifying steps updates every palette in the document stack simultaneously, and new palettes inherit the current document step count.
   - **Global Gamut**: The target gamut is document state, not a view preference, because it decides how much chroma every derived curve may ask for. `setGamut` rebuilds each palette's chroma curve only where it was still derived (`regamut`), leaving hand-edited curves alone — the same rule `setBaseIndex` follows. `paletteReducer` takes the gamut as its third argument so every derivation sees the one in force.
-  - Adding a palette (`new`) offsets the base hue by $72^\circ$ around the color wheel to help build harmonious color schemes.
+  - **Adding palettes**: `new` is the no-dialog quick-add and offsets the base hue by 72° around the wheel. `add` takes a list of `{ base, name? }` and appends one palette per colour — the action behind the guided modal. It drops bases `parseToOklch` rejects (a batch has no field left to keep typing in, unlike `setBase`), hands back the state it was given when nothing survives so no empty undo entry is recorded, truncates at `MAX_PALETTES`, and lands the selection on the *first* of the batch, following the rule a shared link already follows. Names go through one uniqueness pass: the name rides inside the encoded link segment and the merge in `storage.ts` de-dupes segments through a `Set`, so two identical names can cost a palette.
   - Moving/reordering with `move(-1 | 1)` and deletion (guarded so at least one palette always remains).
 - **Undo / Redo with Smart Coalescing (`history.ts`)**:
   - Snapshot-based history holding up to 100 past states.
@@ -169,6 +179,11 @@ colors.pantoine.com/
 
 ## 4. UI Features & Interactions
 
+- **Guided New Palette (`NewPaletteDialog`)**: `+ New palette` opens a modal with two panes, because a 72° hue step is a fair guess for a second ramp and a poor one for a fifth — a five-palette document ends up being the hue wheel walked in equal steps whatever the brand actually is. The 72° step survives beside it as a `+72°` quick-add for when another ramp is all that is wanted.
+  - **Paste**: one or many colour strings in any format CSS accepts, separated by newlines, commas, semicolons or spaces, one palette per colour. `parseColorList` tokenises **parenthesis-aware**, because the obvious split on commas and whitespace shreds `rgb(1, 2, 3)` and `oklch(0.54 0.247 293)`. Tokens that parse to nothing are listed rather than silently dropped, and the text goes through as the base **verbatim** — re-emitting it as `oklch()` would round a colour sitting on the gamut boundary (#00ff66 comes back #05ff66).
+  - **Harmony**: pick any swatch already in the document as a seed, then a rule. Candidates are named after the rule, and a candidate *is* formatted as `oklch()` since it has no original text — hex would be worse than a rounding, because `toHex` gamut-maps to sRGB first and `chromaCurveFor` would then derive the whole ramp from that reduced chroma against the wide ceiling.
+  - **All rules** is the first entry in the rule list and renders every rule's row at once, to compare. Each row is led by the seed, dashed and not clickable, which is what makes a one-candidate rule like Complementary read as a relationship rather than a lone swatch.
+  - Both variable regions are **fixed height with their own scroll**. The dialog is centred, so a region that grows re-centres the whole modal — between keystrokes in the paste preview, and by eight rule rows at once under All rules. Same lesson as `.cpick`, different cause.
 - **Global Step Count**: One control in the top header bar — where the document-level controls live — adjusting the number of steps (5–21) across all palettes simultaneously. Not duplicated in the toolbox: two fields driving one value read as though the palette under the toolbox had a count of its own.
 - **Per-Channel & Document-Wide Curve Sync**: "Apply all" button in each channel panel (Lightness, Chroma, Hue shift) to sync individual curves across all palettes, plus a "Match all curves" button in the toolbox to sync all three curves at once. Applying a curve a palette already has returns the same state, so it does not become an undo entry.
 - **Color Gamut Selector**: Dropdown switching the whole document between **sRGB**, **Display P3**, **Adobe RGB**, and **Rec. 2020**. It steers derivation as well as preview: chroma ceilings, corner clipping triangles, and tooltips all follow it, and it travels in the share link and the autosave.
@@ -226,6 +241,8 @@ colors.pantoine.com/
 - **Global Step Count**: Unified step count across all palettes in the document.
 - **OKLCH Color Picker**: Constant-hue slice with the gamut wedge drawn and its cusp marked, a live hue strip, numeric L/C/H, and an out-of-gamut readout — replacing the sRGB-only system picker.
 - **Per-Channel & All-in-One Curve Sync**: "Apply all" buttons on Lightness, Chroma, and Hue shift curve panels, alongside "Match all curves" in the toolbox.
+- **Gamut Chroma Ceiling on the Chroma Graph**: the boundary drawn dashed with the unreachable region hatched above it, and the step dots plotted where the colour actually landed with a leader back up to the curve.
+- **Guided New Palette**: a modal to paste a list of colours, or to pick a base from a colour harmony built on any swatch already in the document, with an "All rules" view for comparing every rule at once.
 
 ### Potential Future Enhancements
 - **APCA Contrast**: Advanced Perceptual Contrast Algorithm calculations alongside existing WCAG 2.1 ratios.

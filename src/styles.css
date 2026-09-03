@@ -1336,3 +1336,203 @@ select:disabled {
 .toolbox .curves {
   padding: var(--space-5) var(--space-7) var(--space-6);
 }
+
+/* --- new palette dialog ----------------------------------------------- */
+
+/* Same shape as `.help`: no padding of its own, so the panel covers the whole
+   box and a click on the dialog itself can only be the backdrop. Wider,
+   because the harmony pane lays out every rule's swatches in a row. */
+.newpal {
+  border: 1px solid var(--rule);
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  width: min(72ch, calc(100vw - 32px));
+}
+
+.newpal::backdrop {
+  background: rgb(0 0 0 / 0.55);
+}
+
+.newpal__panes {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: var(--space-5);
+}
+
+.newpal__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.newpal__paste {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: var(--text-md);
+  line-height: 1.5;
+  padding: var(--space-3);
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 0;
+}
+
+.newpal__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.newpal__bad {
+  margin: var(--space-3) 0 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+/* Fixed height, not min-height. The dialog is centred, so any region that
+   grows with its content re-centres the whole modal — between keystrokes in
+   the paste pane, and by eight rule rows at once in the harmony pane. */
+.newpal__scroll {
+  height: 250px;
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  padding: var(--space-4);
+}
+
+.newpal__preview,
+.newpal__rule-ramp,
+.newpal__source-ramp {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Squares rather than the ramp's flush strip: these are separate choices, not
+   a continuous scale, and the gap is what says so. */
+.newpal__cand {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  cursor: pointer;
+}
+
+/* Bigger in the harmony rows than in the paste preview, because these are the
+   thing being judged: a hue you are deciding whether to build a palette on
+   needs enough area to read as a colour rather than as a chip. The preview
+   stays small — it only has to confirm that what was pasted parsed. */
+.newpal__rule-ramp .newpal__cand {
+  width: 46px;
+  height: 46px;
+}
+
+button.newpal__cand:hover {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+/* Not a button, and it must not read as one: it is the colour you already
+   have, shown so a one-candidate rule still reads as a relationship. */
+.newpal__cand--seed {
+  cursor: default;
+  border-style: dashed;
+  margin-right: var(--space-3);
+}
+
+.newpal__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.newpal__rules {
+  gap: var(--space-2);
+}
+
+.newpal__rules button {
+  font-size: var(--text-sm);
+  padding: 3px 6px;
+  height: 24px;
+}
+
+.newpal__sources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 120px;
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  padding: var(--space-3);
+}
+
+.newpal__source {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.newpal__source-name {
+  width: 12ch;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newpal__pick {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  cursor: pointer;
+}
+
+/* Its own class, not `is-on`: that one fills with ink, which would paint over
+   the colour this button exists to show. */
+.newpal__pick.is-picked {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.newpal__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.newpal__count {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.newpal__rule {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.newpal__rule:last-child {
+  margin-bottom: 0;
+}
+
+.newpal__rule-name {
+  width: 18ch;
+  flex-shrink: 0;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}

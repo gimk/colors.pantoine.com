@@ -224,3 +224,36 @@ describe('history', () => {
     expect(state.present.palettes).toHaveLength(11)
   })
 })
+
+describe('a batch of new palettes', () => {
+  it('is one undo entry however many palettes it brought', () => {
+    const s = session()
+    s.edit({
+      type: 'add',
+      bases: [{ base: '#ff0000' }, { base: '#00ff00' }, { base: '#0000ff' }],
+    })
+    expect(s.present.palettes).toHaveLength(4)
+    expect(s.depth).toBe(1)
+    s.undo()
+    expect(s.present.palettes).toHaveLength(1)
+  })
+
+  it('stays two entries when two batches land back to back', () => {
+    // A click is a discrete act, so two of them are two things to step back
+    // through — even inside the coalescing window.
+    const s = session()
+    s.edit({ type: 'add', bases: [{ base: '#ff0000' }] }, 1)
+    s.edit({ type: 'add', bases: [{ base: '#00ff00' }] }, 1)
+    expect(s.depth).toBe(2)
+    s.undo()
+    expect(s.present.palettes).toHaveLength(2)
+  })
+
+  it('records nothing for a batch the reducer declined', () => {
+    const s = session()
+    s.edit({ type: 'add', bases: [] })
+    s.edit({ type: 'add', bases: [{ base: 'not a colour' }] })
+    expect(s.depth).toBe(0)
+    expect(canUndo(s.state)).toBe(false)
+  })
+})

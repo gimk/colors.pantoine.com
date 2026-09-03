@@ -8,6 +8,7 @@ import {
   documentReducer,
   isTransient,
   selectedEntry,
+  type BaseSeed,
   type DocumentAction,
   type DocumentState,
   type PaletteSeed,
@@ -64,6 +65,8 @@ export type DocumentApi = {
   canUndo: boolean
   canRedo: boolean
   newPalette: () => void
+  /** Append one palette per base colour and land on the first of them. */
+  addPalettes: (bases: BaseSeed[]) => void
   select: (id: string) => void
   remove: (id: string) => void
   move: (id: string, by: -1 | 1) => void
@@ -128,6 +131,7 @@ export function useDocument(seed: Seed): DocumentApi {
     undo: useCallback(() => dispatch({ type: 'undo' }), []),
     redo: useCallback(() => dispatch({ type: 'redo' }), []),
     newPalette: useCallback(() => send({ type: 'new' }), [send]),
+    addPalettes: useCallback((bases: BaseSeed[]) => send({ type: 'add', bases }), [send]),
     select: useCallback((id: string) => send({ type: 'select', id }), [send]),
     remove: useCallback((id: string) => send({ type: 'remove', id }), [send]),
     move: useCallback((id: string, by: -1 | 1) => send({ type: 'move', id, by }), [send]),

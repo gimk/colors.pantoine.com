@@ -1,5 +1,5 @@
 import { CHANNEL_ORDER, clamp, curvesEqual, type Curve } from '../color/curve'
-import { normalizeHue, parseGamut, toHex, type Gamut } from '../color/oklch'
+import { normalizeHue, parseGamut, parseToOklch, toHex, type Gamut } from '../color/oklch'
 import {
   chromaCurveFor,
   createPalette,
@@ -25,9 +25,10 @@ import {
 /**
  * A document is an ordered stack of palettes plus which one is being edited.
  *
- * Order is top-to-bottom on screen, and a new palette is appended: the one you
- * are working on sits at the bottom, nearest the toolbox, and the ones you
- * finished stack up above it.
+ * Order is top-to-bottom on screen, and new palettes are appended, so the ones
+ * you finished stack up above the ones you just made. The quick-add leaves you
+ * on its single new palette at the bottom; a batch leaves you on the *first*
+ * of the batch, which is the one whose colour the designer named first.
  */
 
 export type PaletteEntry = {
@@ -52,6 +53,8 @@ export type DocumentAction =
   /** Forwarded to whichever palette is selected. */
   | { type: 'palette'; action: PaletteAction }
   | { type: 'new' }
+  /** Append one palette per base colour, in the order given. */
+  | { type: 'add'; bases: BaseSeed[] }
   | { type: 'select'; id: string }
   | { type: 'remove'; id: string }
   | { type: 'move'; id: string; by: -1 | 1 }
@@ -75,6 +78,24 @@ let nextId = 0
 const makeId = () => `p${++nextId}`
 
 export type PaletteSeed = { name: string; config: PaletteConfig }
+
+/**
+ * A palette to create, named by whoever asked for it.
+ *
+ * Deliberately not called a "seed": `PaletteSeed` above and `makeEntry`'s own
+ * parameter already mean two different things by that word in this file.
+ */
+export type BaseSeed = { base: string; name?: string }
+
+/**
+ * As many palettes as one document is any use with.
+ *
+ * A cap rather than a refusal, the way `setSteps` clamps: someone pasting a
+ * hundred hex codes should get a document, not an error. The limit is about
+ * what a person can read down a page and what fits in a share link — the
+ * derivation itself would happily do more.
+ */
+export const MAX_PALETTES = 24
 
 function makeEntry(
   seed: string | PaletteConfig,
@@ -267,6 +288,26 @@ function sameStack(state: DocumentState, palettes: PaletteEntry[]): DocumentStat
     : { ...state, palettes }
 }
 
+/**
+ * A default name for a palette created from a colour rather than from an
+ * ordinal. Someone pasting eight brand colours wants to see `ff5722`, not
+ * `palette 4` — and it cannot collide with a count that has drifted out of
+ * step with the stack after a deletion.
+ */
+function nameForBase(base: string): string {
+  const parsed = parseToOklch(base)
+  return parsed ? toHex(parsed).replace(/^#/, '') : 'palette'
+}
+
+/** `name`, or the first `name 2`, `name 3` … not already spoken for. Records
+ *  whatever it hands out, so a batch cannot collide with itself. */
+function uniqueName(taken: Set<string>, name: string): string {
+  let candidate = name
+  for (let n = 2; taken.has(candidate); n++) candidate = `${name} ${n}`
+  taken.add(candidate)
+  return candidate
+}
+
 export function documentReducer(state: DocumentState, action: DocumentAction): DocumentState {
   switch (action.type) {
     case 'syncChannel': {
@@ -318,6 +359,36 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
       const next = paletteReducer(current.state, action.action, state.gamut)
       if (next === current.state) return state
       return replaceEntry(state, current.id, (entry) => ({ ...entry, state: next }))
+    }
+
+    case 'add': {
+      // Unparseable bases are dropped rather than kept. `createPalette` stores
+      // the raw string while falling back to violet for the curves, which is
+      // right for the base *field* — the designer is mid-keystroke and can
+      // finish typing — but wrong here: a batch has no field to correct, so a
+      // bad string would persist through storage and links forever.
+      const usable = action.bases
+        .map((entry) => ({ ...entry, base: entry.base.trim() }))
+        .filter((entry) => parseToOklch(entry.base) !== null)
+        .slice(0, Math.max(0, MAX_PALETTES - state.palettes.length))
+      if (!usable.length) return state
+
+      const steps = selectedEntry(state).state.config.steps
+      // Seeded with the names already in the document and added to as the batch
+      // runs. `palettes.length` cannot grow inside one reducer call, so an
+      // ordinal scheme would hand every palette in the batch the same name —
+      // and identical names make identical link segments, which the merge in
+      // storage.ts de-dupes into one.
+      const taken = new Set(state.palettes.map((entry) => entry.name))
+      const entries = usable.map((entry) =>
+        makeEntry(entry.base, uniqueName(taken, entry.name || nameForBase(entry.base)), steps, state.gamut),
+      )
+
+      return {
+        ...state,
+        palettes: [...state.palettes, ...entries],
+        selectedId: entries[0].id,
+      }
     }
 
     case 'new': {

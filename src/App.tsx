@@ -4,6 +4,7 @@ import { MAX_STEPS, MIN_STEPS } from './color/presets'
 import { restoreDocument, saveDocument } from './state/storage'
 import { documentUrl } from './state/url'
 import { useDocument, type PaletteView } from './state/useDocument'
+import { NewPaletteDialog } from './ui/NewPaletteDialog'
 import { NumberField } from './ui/NumberField'
 import { HelpDialog } from './ui/HelpDialog'
 import { PaletteRow } from './ui/PaletteRow'
@@ -83,13 +84,22 @@ export function App() {
         <div className="controls__group">
           {/* First in the bar and filled solid: it is the one thing here that
               adds to the document rather than adjusting it. */}
+          <NewPaletteDialog
+            palettes={doc.palettes}
+            selected={selected}
+            gamut={gamut}
+            onAdd={doc.addPalettes}
+          />
+
+          {/* The old behaviour, kept as a shortcut. A fifth of the wheel is a
+              poor guess for a scheme but a fine one for "just give me another
+              ramp", and that is worth not making anyone open a dialog for. */}
           <button
             type="button"
-            className="is-primary"
             onClick={doc.newPalette}
-            title="Add a palette below this one and bring the toolbox to it"
+            title="Add a palette a fifth of the way around the hue wheel, without the dialog"
           >
-            + New palette
+            + Quick add
           </button>
 
           <button

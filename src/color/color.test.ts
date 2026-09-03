@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { basisAtX, bezierYAtX, solveTForX } from './bezier'
 import { arc, bendThrough, linear, sampleCurve, CHANNELS } from './curve'
-import { isInSrgb, parseToOklch, toHex } from './oklch'
+import { isInSrgb, parseColorList, parseToOklch, toHex } from './oklch'
 import { createPalette } from './presets'
 import { generateRamp, stepLabels } from './ramp'
 
@@ -225,5 +225,61 @@ describe('ramp', () => {
       // A zero-chroma OKLCH colour must render as an equal-channel grey.
       expect(swatch.hex).toMatch(/^#([0-9a-f]{2})\1\1$/)
     }
+  })
+})
+
+describe('parsing a pasted list of colours', () => {
+  const inputsOf = (text: string) => parseColorList(text).colors.map((entry) => entry.input)
+
+  it('takes every format CSS takes, mixed together', () => {
+    const list = parseColorList('#ff5722 1e88e5 rebeccapurple oklch(0.7 0.15 150)')
+    expect(list.colors).toHaveLength(4)
+    expect(list.unrecognised).toEqual([])
+    expect(toHex(list.colors[1].oklch)).toBe('#1e88e5')
+    expect(toHex(list.colors[2].oklch)).toBe('#663399')
+  })
+
+  it('keeps a functional notation whole, commas and spaces and all', () => {
+    // The reason the tokenizer counts parentheses: a naive split on commas and
+    // whitespace shreds these into fragments that parse to nothing.
+    expect(inputsOf('rgb(1, 2, 3), oklch(0.54 0.247 293)')).toEqual([
+      'rgb(1, 2, 3)',
+      'oklch(0.54 0.247 293)',
+    ])
+    expect(parseColorList('hsl(210, 50%, 40%)').unrecognised).toEqual([])
+  })
+
+  it('accepts whichever separator the paste happened to use', () => {
+    const expected = ['#ff0000', '#00ff00', '#0000ff']
+    for (const text of [
+      '#ff0000\n#00ff00\n#0000ff',
+      '#ff0000, #00ff00, #0000ff',
+      '#ff0000; #00ff00; #0000ff',
+      '#ff0000 #00ff00 #0000ff',
+      '  #ff0000 ,\n  #00ff00\t;#0000ff  ',
+    ]) {
+      expect(inputsOf(text)).toEqual(expected)
+    }
+  })
+
+  it('reports what it could not read rather than dropping it', () => {
+    const list = parseColorList('#ff5722 not-a-colour #00ff00')
+    expect(list.colors).toHaveLength(2)
+    expect(list.unrecognised).toEqual(['not-a-colour'])
+  })
+
+  it('finds nothing in nothing', () => {
+    for (const text of ['', '   ', '\n\n', ' , ; ']) {
+      expect(parseColorList(text)).toEqual({ colors: [], unrecognised: [] })
+    }
+  })
+
+  it('keeps duplicates, in order', () => {
+    expect(inputsOf('#ff0000 #ff0000')).toEqual(['#ff0000', '#ff0000'])
+  })
+
+  it('survives an unbalanced parenthesis without hanging or swallowing', () => {
+    const list = parseColorList('#ff5722 rgb(1 2 3 #00ff00')
+    expect(list.colors.map((entry) => toHex(entry.oklch))).toContain('#ff5722')
   })
 })
