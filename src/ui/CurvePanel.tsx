@@ -17,6 +17,7 @@ type Props = {
   onSync?: () => void
   /** Chroma only: the gamut ceiling sampled across the ramp, for the graph. */
   ceiling?: number[]
+  graphH?: number
 }
 
 export function CurvePanel({
@@ -30,6 +31,7 @@ export function CurvePanel({
   canSync,
   onSync,
   ceiling,
+  graphH,
 }: Props) {
   const channel = CHANNELS[channelKey]
   const last = Math.max(swatches.length - 1, 1)
@@ -114,6 +116,7 @@ export function CurvePanel({
         swatches={swatches}
         lockedIndex={lockedIndex}
         ceiling={ceiling}
+        graphH={graphH}
         onChange={onChange}
       />
     </section>

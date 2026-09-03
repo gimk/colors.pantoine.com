@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { basisAtX, bezierYAtX, solveTForX } from './bezier'
-import { arc, bendThrough, linear, sampleCurve, CHANNELS } from './curve'
+import {
+  arc,
+  bendThrough,
+  clampCurve,
+  linear,
+  sampleCurve,
+  CHANNELS,
+} from './curve'
 import { isInSrgb, parseColorList, parseToOklch, toHex } from './oklch'
 import { createPalette } from './presets'
 import { generateRamp, stepLabels } from './ramp'
@@ -91,6 +98,31 @@ describe('curve shaping', () => {
   it('moves the anchor when the bend target sits on an endpoint', () => {
     expect(bendThrough(linear(0.9, 0.1), 0, 0.5, 0, 1).start).toBe(0.5)
     expect(bendThrough(linear(0.9, 0.1), 1, 0.5, 0, 1).end).toBe(0.5)
+  })
+
+  it('clamps anchors and handles strictly to channel bounds', () => {
+    const channel = CHANNELS.lightness // min: 0, max: 1
+    const clamped = clampCurve(
+      {
+        start: 1.5, // above max
+        end: -0.5, // below min
+        h1: { x: -0.2, y: 1.4 },
+        h2: { x: 1.2, y: -0.4 },
+      },
+      channel,
+    )
+
+    // Anchors strictly clamped to [0, 1]
+    expect(clamped.start).toBe(1)
+    expect(clamped.end).toBe(0)
+
+    // Handle X clamped to [0, 1] for monotonic x(t)
+    expect(clamped.h1.x).toBe(0)
+    expect(clamped.h2.x).toBe(1)
+
+    // Handle Y strictly clamped to [0, 1]
+    expect(clamped.h1.y).toBe(1)
+    expect(clamped.h2.y).toBe(0)
   })
 })
 

@@ -418,6 +418,7 @@ button.swatch:hover:not(:disabled) {
 .curves {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr minmax(200px, 240px);
+  grid-auto-rows: var(--panel-h, 336px);
   gap: var(--space-4);
   align-items: stretch;
 }
@@ -425,20 +426,24 @@ button.swatch:hover:not(:disabled) {
 @media (max-width: 1100px) {
   .curves {
     grid-template-columns: 1fr 1fr 1fr;
+    grid-auto-rows: var(--panel-h, 336px);
   }
   .curves > :last-child {
     grid-column: 1 / -1;
     max-width: 320px;
+    height: var(--panel-h, 336px);
   }
 }
 
 @media (max-width: 768px) {
   .curves {
     grid-template-columns: 1fr;
+    grid-auto-rows: var(--panel-h, 336px);
   }
   .curves > :last-child {
     grid-column: 1;
     max-width: 100%;
+    height: var(--panel-h, 336px);
   }
 }
 
@@ -795,96 +800,48 @@ body.is-dragging-hue * {
   line-height: 1.4;
 }
 
-/* The export panel is a column, and the drawer takes whatever height is left
-   in it rather than asking for more.
-
-   Opening the drawer used to grow the grid row, which pushed the dock taller
-   and stretched the three curve panels beside it over empty space. Capped
-   here instead: the cap only bites when the row would otherwise exceed it,
-   which tracks the curve panels' own height — a 190px graph plus two rows and
-   a head. Past that the drawer scrolls. */
+/* The export panel is fixed to the height of the curve panels beside it (336px:
+   a 228px graph plus two rows, head, and rules).
+   The top group stays fixed in view while other formats remain directly
+   visible and scrollable inside .export__body rather than pushing the dock taller. */
 .export {
   display: flex;
   flex-direction: column;
   height: 100%;
-  max-height: 298px;
-  overflow: hidden;
-}
-
-.export > .drawer,
-.export > .drawer[open] {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
+  max-height: var(--panel-h, 336px);
   min-height: 0;
   overflow: hidden;
 }
 
-.export > .drawer::details-content {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.drawer__body {
-  flex: 1;
-  min-height: 0;
-  max-height: 165px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
-}
-
-.drawer__body::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-}
-
-/* --- drawer ----------------------------------------------------------- */
-
-/* Situational exports, folded away. The marker is a plain +/− because the
-   chrome has no other glyphs in it — a disclosure triangle would be the only
-   drawn shape in the whole frame. */
-.drawer > summary {
+.export__subhead {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-5);
   border-top: 1px solid var(--rule);
-  padding: var(--space-4);
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-}
-
-.drawer > summary::-webkit-details-marker {
-  display: none;
-}
-
-.drawer > summary::after {
-  content: '+';
-  color: var(--muted);
-  font-weight: 700;
-}
-
-.drawer[open] > summary {
   border-bottom: 1px solid var(--rule);
+  padding: var(--space-2) var(--space-4);
+  background: var(--paper);
 }
 
-.drawer[open] > summary::after {
-  content: '–';
+.export__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--rule) transparent;
 }
 
-.drawer > summary:hover {
-  background: var(--ink);
+.export__body::-webkit-scrollbar {
+  display: block !important;
+  width: 5px !important;
 }
 
-.drawer > summary:hover .legend,
-.drawer > summary:hover::after {
-  color: var(--paper);
+.export__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.export__body::-webkit-scrollbar-thumb {
+  background: var(--rule);
 }
 
 .field input[type='checkbox'] {
@@ -1166,37 +1123,61 @@ select:disabled {
   position: sticky;
   bottom: 0;
   z-index: 15;
-  border-top: 4px solid var(--rule);
   background: var(--paper);
-  max-height: 62vh;
+  max-height: calc(100vh - 100px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
-.toolbox__head {
+.toolbox__resizer {
+  height: 6px;
+  background: var(--rule);
+  cursor: ns-resize;
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-5);
-  border-bottom: 1px solid var(--rule);
-  padding: var(--space-3) var(--space-7);
+  justify-content: center;
+  touch-action: none;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.toolbox__resizer::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  left: 0;
+  right: 0;
+  cursor: ns-resize;
+}
+
+.toolbox__resizer:hover,
+.toolbox__resizer.is-dragging {
+  background: var(--ink);
+}
+
+.toolbox__resizer-grip {
+  width: 36px;
+  height: 2px;
+  background: var(--paper);
+  pointer-events: none;
 }
 
 .toolbox__controls {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-4) var(--space-8);
-  border-bottom: 1px solid var(--rule);
-  padding: var(--space-4) var(--space-7);
+  padding: var(--space-3) var(--space-7) var(--space-2);
+  width: 100%;
 }
 
 .toolbox__primary {
   display: flex;
   align-items: center;
-  gap: var(--space-5);
+  gap: var(--space-4);
   flex-wrap: wrap;
-  padding: var(--space-3) var(--space-5);
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
   border: 1px solid var(--rule);
   background: rgba(0, 0, 0, 0.04);
 }
@@ -1208,13 +1189,6 @@ select:disabled {
 .toolbox__param {
   display: flex;
   flex-direction: column;
-}
-
-.toolbox__separator {
-  width: 1px;
-  height: 48px;
-  background: var(--rule);
-  opacity: 0.35;
 }
 
 .field--stacked {
@@ -1251,7 +1225,8 @@ select:disabled {
 .toolbox__input-name,
 .toolbox__input-color,
 .toolbox__select-step,
-.toolbox__btn-lock {
+.toolbox__btn-lock,
+.toolbox__btn-rederive {
   box-sizing: border-box;
   height: 32px;
   margin: 0;
@@ -1282,12 +1257,20 @@ select:disabled {
   padding: 4px 8px;
 }
 
-.toolbox__btn-lock {
+.toolbox__btn-lock,
+.toolbox__btn-rederive {
   padding: 0 var(--space-4);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.toolbox__btn-lock:hover:not(:disabled),
+.toolbox__btn-rederive:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .field__swatch-wrap .picker {
@@ -1300,35 +1283,8 @@ select:disabled {
   vertical-align: middle;
 }
 
-.toolbox__group {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.toolbox__group button {
-  box-sizing: border-box;
-  height: 36px;
-  padding: 0 var(--space-5);
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  background: var(--paper);
-  color: var(--ink);
-  border: 1px solid var(--rule);
-  white-space: nowrap;
-}
-
-.toolbox__group button:hover:not(:disabled) {
-  background: var(--ink);
-  color: var(--paper);
-}
-
 .toolbox .curves {
-  padding: var(--space-5) var(--space-7) var(--space-6);
+  padding: var(--space-2) var(--space-7) var(--space-5);
 }
 
 /* --- new palette dialog ----------------------------------------------- */

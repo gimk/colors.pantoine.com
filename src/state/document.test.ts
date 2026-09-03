@@ -204,21 +204,6 @@ describe('document', () => {
     expect(synced.palettes[0].state.config.hue.end).toBeCloseTo(10, 4)
     expect(synced.palettes[0].state.edited.hue).toBe(true)
   })
-
-  it('syncs all three curves simultaneously with syncAll', () => {
-    const doc = run(createDocument(), { type: 'new' })
-    const synced = run(doc, { type: 'syncAll' })
-    const source = synced.palettes[1].state.config
-    const target = synced.palettes[0].state.config
-    expect(target.lightness).toEqual(source.lightness)
-    expect(target.chroma).toEqual(source.chroma)
-    expect(target.hue).toEqual(source.hue)
-    expect(synced.palettes[0].state.edited).toEqual({
-      lightness: true,
-      chroma: true,
-      hue: true,
-    })
-  })
 })
 
 /**
@@ -350,11 +335,10 @@ describe('syncing curves twice', () => {
     return [doc, run(doc, action)] as const
   }
 
-  it('changes nothing the second time, for one channel or all three', () => {
+  it('changes nothing the second time, for one channel or another', () => {
     for (const action of [
       { type: 'syncChannel', key: 'hue' },
       { type: 'syncChannel', key: 'chroma' },
-      { type: 'syncAll' },
     ] as DocumentAction[]) {
       const [once, again] = twice(action)
       expect(again).toBe(once)

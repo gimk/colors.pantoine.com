@@ -12,14 +12,10 @@ import type { Swatch } from '../color/ramp'
 /**
  * The graph is as wide as it is given and a fixed height tall.
  *
- * A fixed aspect ratio cannot work in a full-width dock: three panels across
- * a wide screen are 500-1000px each, and a portrait viewBox scaled to that
- * width comes out taller than the dock. So the viewBox is measured in real
- * pixels — one user unit per pixel — which keeps strokes and handles circular
- * at any width while the plot spreads into whatever space it has. Wide and
- * short also suits the curves: x is the ramp, and the ramp is what you read.
+ * Sized 20% taller (228px, up from 190px) to provide comfortable vertical headroom
+ * for shaping Bézier curves with strict channel bounds.
  */
-const GRAPH_H = 190
+export const DEFAULT_GRAPH_H = 228
 
 /** Before measurement, and on the server, where there is nothing to measure. */
 const FALLBACK_W = 520
@@ -55,6 +51,7 @@ type Props = {
    * is the ramp the designer thinks they drew.
    */
   ceiling?: number[]
+  graphH?: number
   onChange: (curve: Curve, moved: Target) => void
 }
 
@@ -64,12 +61,14 @@ export function CurveEditor({
   swatches,
   lockedIndex,
   ceiling,
+  graphH = DEFAULT_GRAPH_H,
   onChange,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
   const dragging = useRef<Target | null>(null)
   const hatchId = useRef<string>('')
   if (!hatchId.current) hatchId.current = `outgamut-${++nextPatternId}`
+
   const span = channel.max - channel.min
 
   // Measured on the svg itself, which is safe from a feedback loop: its width
@@ -87,7 +86,7 @@ export function CurveEditor({
   }, [])
 
   const plotW = viewW - PAD.left - PAD.right
-  const plotH = GRAPH_H - PAD.top - PAD.bottom
+  const plotH = graphH - PAD.top - PAD.bottom
 
   const last = Math.max(swatches.length - 1, 1)
   const lockedX = lockedIndex === undefined ? null : lockedIndex / last
@@ -101,13 +100,14 @@ export function CurveEditor({
     y: PAD.top + (1 - (y - channel.min) / span) * plotH,
   })
 
-  /** Client pixels to curve space, clamped into the channel box. */
+  /** Client pixels to curve space, strictly clamped into the channel box. */
   const fromClient = (clientX: number, clientY: number): Point => {
     const svg = svgRef.current
     if (!svg) return { x: 0, y: 0 }
     const rect = svg.getBoundingClientRect()
     const vx = ((clientX - rect.left) / rect.width) * viewW
-    const vy = ((clientY - rect.top) / rect.height) * GRAPH_H
+    const vy = ((clientY - rect.top) / rect.height) * graphH
+
     return {
       x: clamp((vx - PAD.left) / plotW, 0, 1),
       y: clamp(channel.max - ((vy - PAD.top) / plotH) * span, channel.min, channel.max),
@@ -217,7 +217,7 @@ export function CurveEditor({
     <svg
       ref={svgRef}
       className="graph"
-      viewBox={`0 0 ${viewW} ${GRAPH_H}`}
+      viewBox={`0 0 ${viewW} ${graphH}`}
       role="group"
       aria-label={`${channel.label} curve`}
     >

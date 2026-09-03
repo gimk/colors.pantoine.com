@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { FORMATS, GAMUTS, type Format, type Gamut } from './color/oklch'
 import { MAX_STEPS, MIN_STEPS } from './color/presets'
 import { restoreDocument, saveDocument } from './state/storage'
@@ -83,6 +83,53 @@ export function App() {
 
   const { selected } = doc
 
+  const isInitialMount = useRef(true)
+  const [scrollTrigger, setScrollTrigger] = useState(0)
+  const triggerScroll = useCallback(() => {
+    setScrollTrigger((c) => c + 1)
+  }, [])
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      return
+    }
+
+    let rafId: number
+    const timer = setTimeout(() => {
+      rafId = requestAnimationFrame(() => {
+        const rowEl = document.querySelector<HTMLElement>('.prow--selected')
+        const toolboxEl = document.querySelector<HTMLElement>('.toolbox')
+        if (!rowEl || !toolboxEl) return
+
+        const rowRect = rowEl.getBoundingClientRect()
+        const toolboxRect = toolboxEl.getBoundingClientRect()
+
+        // 14px gap above toolbox (accommodates 2px outline + 5px offset + 7px breathing room)
+        const GAP_ABOVE_TOOLBOX = 14
+        const targetBottom = toolboxRect.top - GAP_ABOVE_TOOLBOX
+        const delta = rowRect.bottom - targetBottom
+
+        // Ensure the top of the palette doesn't scroll behind sticky .controls
+        const controlsEl = document.querySelector<HTMLElement>('.controls')
+        const minTop = controlsEl ? controlsEl.getBoundingClientRect().bottom + 12 : 12
+
+        const scrollAmount = Math.min(delta, rowRect.top - minTop)
+
+        if (Math.abs(scrollAmount) > 2) {
+          if (typeof window.scrollBy === 'function') {
+            window.scrollBy({ top: scrollAmount, behavior: 'smooth' })
+          }
+        }
+      })
+    }, 40)
+
+    return () => {
+      clearTimeout(timer)
+      if (rafId) cancelAnimationFrame(rafId)
+    }
+  }, [selected.id, scrollTrigger])
+
   const shareHref =
     typeof window === 'undefined' ? '' : documentUrl(seedsOf(doc.palettes), gamut)
 
@@ -126,7 +173,10 @@ export function App() {
             palettes={doc.palettes}
             selected={selected}
             gamut={gamut}
-            onAdd={doc.addPalettes}
+            onAdd={(bases) => {
+              doc.addPalettes(bases)
+              triggerScroll()
+            }}
           />
 
           {/* The old behaviour, kept as a shortcut. A fifth of the wheel is a
@@ -134,7 +184,10 @@ export function App() {
               ramp", and that is worth not making anyone open a dialog for. */}
           <button
             type="button"
-            onClick={doc.newPalette}
+            onClick={() => {
+              doc.newPalette()
+              triggerScroll()
+            }}
             title="Add a palette a fifth of the way around the hue wheel, without the dialog"
           >
             + Quick add
@@ -239,7 +292,10 @@ export function App() {
             format={format}
             gamut={gamut}
             copiedKey={copied}
-            onSelect={() => doc.select(palette.id)}
+            onSelect={() => {
+              doc.select(palette.id)
+              triggerScroll()
+            }}
             onRemove={() => doc.remove(palette.id)}
             onReorder={doc.reorder}
             onCopy={copy}

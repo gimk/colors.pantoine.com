@@ -212,7 +212,7 @@ function declarations(selector: string) {
 describe('the export panel', () => {
   const html = renderToStaticMarkup(<App />)
   const panel = html.slice(html.indexOf('class="panel export"'))
-  const front = panel.slice(0, panel.indexOf('<details'))
+  const front = panel.slice(0, panel.indexOf('class="export__subhead"'))
 
   it('keeps the two copies and the labels toggle in front', () => {
     for (const control of ['Copy PNG', 'Copy SVG', '<span>Labels</span>']) {
@@ -220,35 +220,33 @@ describe('the export panel', () => {
     }
   })
 
-  it('folds every other export into one drawer, shut', () => {
-    expect(panel.match(/<details/g)).toHaveLength(1)
-    const drawer = panel.slice(panel.indexOf('<details'))
-    // Shut: a <details> with no `open` attribute.
-    expect(drawer.slice(0, drawer.indexOf('>'))).not.toContain('open')
+  it('keeps other formats directly visible without a collapse drawer', () => {
+    expect(panel).not.toContain('<details')
     for (const label of ['Share palette', 'Hex list', 'Tailwind scale', 'Download PNG', 'Download SVG']) {
-      expect(drawer).toContain(label)
-      expect(front).not.toContain(label)
+      expect(panel).toContain(label)
     }
   })
 
   /**
-   * Size is in the drawer but still governs the copies in front, so the
-   * drawer says so rather than leaving a hidden setting to be discovered.
+   * Size still governs the copies in front, so the panel says so rather
+   * than leaving a setting whose reach is surprising.
    */
-  it('says that the hidden size still applies to the copies', () => {
+  it('says that the size setting applies to the copies', () => {
     expect(panel).toContain('Size applies to the copies above')
   })
 
   /**
-   * Opening the drawer used to grow the grid row, which pushed the dock
-   * taller and stretched the three curve panels beside it over empty space.
+   * Stretches to the height of the curve panels, with other formats scrolling
+   * inside .export__body rather than pushing the dock taller.
    */
-  it('scrolls the drawer rather than growing the dock', () => {
-    expect(panel).toContain('class="drawer__body"')
-    const body = declarations('.drawer__body')
+  it('scrolls the other formats within export__body and fixes to curve height', () => {
+    expect(panel).toContain('class="export__body"')
+    const body = declarations('.export__body')
     expect(body).toContain('overflow-y: auto')
     expect(body).toContain('min-height: 0')
-    expect(declarations('.export')).toContain('max-height')
+    const exp = declarations('.export')
+    expect(exp).toContain('height: 100%')
+    expect(exp).toContain('max-height: var(--panel-h, 336px)')
   })
 })
 
@@ -382,6 +380,15 @@ describe('the curve graphs', () => {
   it('fills the width it is given', () => {
     expect(declarations('.graph')).toContain('width: 100%')
   })
+
+  it('is sized 20% taller (height 228) for comfortable curve editing', () => {
+    const boxes = html.match(/class="graph" viewBox="0 0 (\d+) (\d+)"/g) ?? []
+    expect(boxes).toHaveLength(3)
+    for (const box of boxes) {
+      const [, , h] = box.match(/viewBox="0 0 (\d+) (\d+)"/)!
+      expect(Number(h)).toBe(228)
+    }
+  })
 })
 
 /**
@@ -461,7 +468,6 @@ describe('the palette stack', () => {
       expect(bar).not.toContain(control)
       expect(html).toContain(control)
     }
-    expect(html).toContain('Match all curves')
     expect(html).toContain('Apply all')
   })
 
@@ -640,6 +646,13 @@ describe('selection marker', () => {
   it('draws no line between the header and the ramp', () => {
     expect(declarations('.prow__head')).not.toContain('border')
   })
+
+  it('keeps the palette stack positioned above the sticky toolbox dock', () => {
+    expect(declarations('.toolbox')).toContain('position: sticky')
+    expect(declarations('.toolbox')).toContain('bottom: 0')
+    expect(declarations('.stack')).toContain('display: flex')
+    expect(declarations('.stack')).toContain('flex-direction: column')
+  })
 })
 
 describe('undo and redo', () => {
@@ -674,9 +687,18 @@ describe('UI standardization and menu separation', () => {
     expect(controls).toContain('class="divider"')
   })
 
-  it('groups toolbox attributes and actions into distinct clusters', () => {
+  it('groups toolbox attributes and actions into a full-width primary cluster', () => {
     const toolbox = html.slice(html.indexOf('class="toolbox"'))
-    expect(toolbox).toContain('class="toolbox__group"')
+    expect(toolbox).toContain('class="toolbox__primary"')
+    expect(toolbox).toContain('toolbox__btn-rederive')
+    expect(declarations('.toolbox__primary')).toContain('width: 100%')
+  })
+
+  it('provides a vertical resizer handle on the toolbox to scale curves and export', () => {
+    const toolbox = html.slice(html.indexOf('class="toolbox"'))
+    expect(toolbox).toContain('class="toolbox__resizer"')
+    expect(toolbox).toContain('class="toolbox__resizer-grip"')
+    expect(declarations('.toolbox__resizer')).toContain('cursor: ns-resize')
   })
 
   it('provides toggle hover states for buttons', () => {
@@ -897,7 +919,7 @@ describe('the review board', () => {
   it('keeps the page title and a way back, and little else', () => {
     expect(rows).toContain('<h1>colors.pantoine.com — review</h1>')
     expect(rows).toContain('← Back')
-    for (const tool of ['Re-derive', 'Lock base', 'Match all curves', 'Apply all', 'Undo']) {
+    for (const tool of ['Re-derive', 'Lock base', 'Apply all', 'Undo']) {
       expect(rows).not.toContain(tool)
     }
   })

@@ -56,15 +56,13 @@ export function PaletteRow({
    */
   const copies = selected
 
-  /**
-   * Clicking the palette selects it — anywhere but on a control, so the
-   * buttons inside keep doing their own jobs without nesting anything
-   * interactive inside anything else interactive.
-   */
   const pick = (event: MouseEvent<HTMLElement>) => {
-    if (copies) return
     if ((event.target as HTMLElement).closest('button, input, select, a, .prow__handle')) return
-    onSelect()
+    if (!selected) {
+      onSelect()
+    } else if ((event.target as HTMLElement).closest('.prow__head')) {
+      onSelect()
+    }
   }
 
   const handleDragStart = (e: DragEvent) => {

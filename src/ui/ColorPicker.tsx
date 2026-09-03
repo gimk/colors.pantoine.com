@@ -181,12 +181,17 @@ type Props = {
   onChange: (color: Oklch) => void
 }
 
+let nextGradId = 0
+
 export function ColorPicker({
   color,
   gamut,
   model = 'oklch',
   onChange,
 }: Props) {
+  const gradId = useRef<string>('')
+  if (!gradId.current) gradId.current = `oklch-hue-grad-${++nextGradId}`
+
   const wrapRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<SVGSVGElement>(null)
   const stripRef = useRef<SVGSVGElement>(null)
@@ -251,19 +256,19 @@ export function ColorPicker({
   const stripC = Math.max(0.04, Math.min(color.c, 0.16))
 
   const stops = useMemo(() => hueStops(stripL, stripC, gamut), [stripL, stripC, gamut])
-  const stopEls = useMemo(() => {
-    const w = plotW / stops.length
-    return stops.map((stop, i) => (
-      <rect
-        key={stop.h}
-        x={PAD.left + i * w}
-        y={0}
-        width={w + OVERLAP}
-        height={HUE_H}
-        fill={stop.color}
-      />
-    ))
-  }, [stops, plotW])
+  const oklchGradStops = useMemo(() => {
+    if (!stops.length) return []
+    const gradStops = stops.map((stop) => ({
+      offset: `${((stop.h / 360) * 100).toFixed(2)}%`,
+      color: stop.color,
+    }))
+    // Complete the hue circle at 100% (360° is 0°)
+    gradStops.push({
+      offset: '100%',
+      color: stops[0].color,
+    })
+    return gradStops
+  }, [stops])
 
   const edgePath = useMemo(
     () =>
@@ -649,13 +654,20 @@ export function ColorPicker({
               />
             ))}
           </linearGradient>
+          <linearGradient id={gradId.current} x1="0" y1="0" x2="1" y2="0">
+            {oklchGradStops.map((stop, i) => (
+              <stop key={i} offset={stop.offset} stopColor={stop.color} />
+            ))}
+          </linearGradient>
         </defs>
 
-        {model === 'oklch' ? (
-          stopEls
-        ) : (
-          <rect x={PAD.left} y={0.5} width={plotW} height={HUE_H - 1} fill="url(#okhv-hue-rainbow)" />
-        )}
+        <rect
+          x={PAD.left}
+          y={0.5}
+          width={plotW}
+          height={HUE_H - 1}
+          fill={model === 'oklch' ? `url(#${gradId.current})` : 'url(#okhv-hue-rainbow)'}
+        />
 
         <rect
           className="cpick__frame"

@@ -63,7 +63,6 @@ export type DocumentAction =
   | { type: 'setSteps'; value: number }
   | { type: 'setGamut'; value: Gamut }
   | { type: 'syncChannel'; key: CurveKey }
-  | { type: 'syncAll' }
 
 /**
  * A new palette starts a fifth of the way around the hue circle from the one
@@ -242,39 +241,6 @@ function applyChannelSync(
   return settled(targetEntry, { ...config, hue: finalHue }, { ...edited, hue: true })
 }
 
-function applyAllSync(targetEntry: PaletteEntry, sourceConfig: PaletteConfig): PaletteEntry {
-  const { config } = targetEntry.state
-  const base = resolveBase(config)
-
-  const lCopy = cloneCurve(sourceConfig.lightness)
-  const cCopy = cloneCurve(sourceConfig.chroma)
-  const hCopy = cloneCurve(sourceConfig.hue)
-
-  const baseIndex = nearestStep(lCopy, config.steps, base.l)
-
-  const finalLightness = config.baseLocked
-    ? holdBase(lCopy, 'lightness', base, config.steps, baseIndex)
-    : lCopy
-  const finalChroma = config.baseLocked
-    ? holdBase(cCopy, 'chroma', base, config.steps, baseIndex)
-    : cCopy
-  const finalHue = config.baseLocked
-    ? holdBase(hCopy, 'hue', base, config.steps, baseIndex)
-    : hCopy
-
-  return settled(
-    targetEntry,
-    {
-      ...config,
-      baseIndex,
-      lightness: finalLightness,
-      chroma: finalChroma,
-      hue: finalHue,
-    },
-    { lightness: true, chroma: true, hue: true },
-  )
-}
-
 /**
  * The state it was handed, when every entry came back untouched.
  *
@@ -318,15 +284,6 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
         entry.id === current.id
           ? entry
           : applyChannelSync(entry, action.key, sourceCurve, state.gamut),
-      )
-      return sameStack(state, palettes)
-    }
-
-    case 'syncAll': {
-      if (state.palettes.length < 2) return state
-      const current = selectedEntry(state)
-      const palettes = state.palettes.map((entry) =>
-        entry.id === current.id ? entry : applyAllSync(entry, current.state.config),
       )
       return sameStack(state, palettes)
     }

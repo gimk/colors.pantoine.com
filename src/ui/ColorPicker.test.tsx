@@ -94,6 +94,14 @@ describe('the OKLCH picker', () => {
     expect(html).toContain('class="cpick__hue"')
   })
 
+  it('renders a continuous linear gradient for the OKLCH hue strip without block seams', () => {
+    const hueSvg = html.slice(html.indexOf('class="cpick__hue"'))
+    expect(hueSvg).toContain('linearGradient id="oklch-hue-grad-')
+    expect(hueSvg).toContain('fill="url(#oklch-hue-grad-')
+    // No discrete block rects inside the hue strip: 1 fill rect + 1 frame rect
+    expect(hueSvg.match(/<rect/g)).toHaveLength(2)
+  })
+
   it('offers lightness, chroma and hue as numbers too', () => {
     for (const label of ['>L</span>', '>C</span>', '>H</span>']) {
       expect(html).toContain(label)
