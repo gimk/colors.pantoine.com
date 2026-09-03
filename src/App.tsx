@@ -161,6 +161,16 @@ export function App() {
       <header className="masthead">
         <h1>colors.pantoine.com — tints &amp; shades</h1>
         <span className="spacer" />
+        <span className="masthead__credit">
+          Made with dedication by{' '}
+          <a
+            href="https://www.pantoine.com"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Antoine Pouligny
+          </a>
+        </span>
         <span className="badge badge--solid">OKLCH</span>
         <HelpDialog gamut={gamut} />
       </header>

@@ -1,5 +1,6 @@
 import { CHANNEL_ORDER, clamp, curvesEqual, type Curve } from '../color/curve'
 import { normalizeHue, parseGamut, parseToOklch, toHex, type Gamut } from '../color/oklch'
+import { nameForColor } from '../color/names'
 import {
   chromaCurveFor,
   createPalette,
@@ -268,8 +269,7 @@ function sameStack(state: DocumentState, palettes: PaletteEntry[]): DocumentStat
  * step with the stack after a deletion.
  */
 function nameForBase(base: string): string {
-  const parsed = parseToOklch(base)
-  return parsed ? toHex(parsed).replace(/^#/, '') : 'palette'
+  return nameForColor(base)
 }
 
 /** `name`, or the first `name 2`, `name 3` … not already spoken for. Records
@@ -387,9 +387,11 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
     case 'new': {
       const currentConfig = selectedEntry(state).state.config
       const currentSteps = currentConfig.steps
+      const base = steppedBase(currentConfig)
+      const taken = new Set(state.palettes.map((entry) => entry.name))
       const entry = makeEntry(
-        steppedBase(currentConfig),
-        `palette ${state.palettes.length + 1}`,
+        base,
+        uniqueName(taken, nameForBase(base)),
         currentSteps,
         state.gamut,
       )

@@ -78,6 +78,17 @@ export function HelpDialog({ gamut }: Props) {
               Your palettes are saved in this browser, and the address bar holds all of
               them, so a link carries the whole set.
             </p>
+            <p>
+              Default color names powered by{' '}
+              <a
+                href="https://github.com/meodai/color-names"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                meodai/color-names
+              </a>
+              .
+            </p>
           </div>
         </div>
       </dialog>

@@ -184,6 +184,30 @@ select {
   line-height: 1.55;
 }
 
+.masthead__credit {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  letter-spacing: var(--tracking-normal);
+  white-space: nowrap;
+}
+
+.masthead__credit a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 700;
+}
+
+.masthead__credit a:hover {
+  color: var(--ink);
+}
+
+.help__body a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .help__body p:last-child {
   margin-bottom: 0;
 }

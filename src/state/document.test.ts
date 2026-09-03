@@ -46,7 +46,7 @@ describe('document', () => {
     const doc = run(createDocument(), { type: 'new' })
     expect(doc.palettes).toHaveLength(2)
     expect(selectedEntry(doc).id).toBe(doc.palettes[1].id)
-    expect(doc.palettes[1].name).toBe('palette 2')
+    expect(doc.palettes[1].name).toBe('Rowan')
   })
 
   it('starts a new palette elsewhere on the hue circle', () => {
@@ -661,7 +661,7 @@ describe('adding palettes in a batch', () => {
 
   it('names a palette after its colour when it is not given one', () => {
     const doc = add(createDocument(), [{ base: '#ff5722' }, { base: '#1e88e5' }])
-    expect(namesOf(doc)).toEqual(['brand', 'ff5722', '1e88e5'])
+    expect(namesOf(doc)).toEqual(['brand', 'Smashing Pumpkins', 'Bleu de France'])
   })
 
   it('keeps the name it is given', () => {
@@ -673,7 +673,7 @@ describe('adding palettes in a batch', () => {
     // Names ride in the encoded link segment, and the link merge de-dupes
     // segments through a Set — so two identical names can lose a palette.
     const once = add(createDocument(), [{ base: '#ff5722' }, { base: '#ff5722' }])
-    expect(namesOf(once)).toEqual(['brand', 'ff5722', 'ff5722 2'])
+    expect(namesOf(once)).toEqual(['brand', 'Smashing Pumpkins', 'Smashing Pumpkins 2'])
 
     const twice = add(once, [{ base: '#ff5722' }])
     expect(new Set(namesOf(twice)).size).toBe(namesOf(twice).length)
@@ -716,7 +716,7 @@ describe('adding palettes in a batch', () => {
       name: entry.name,
     }))
     const back = decodeDocument(`#${encodeDocument(seeds)}`)
-    expect(back.map((entry) => entry.name)).toEqual(['brand', 'triad 1', 'ff5722'])
+    expect(back.map((entry) => entry.name)).toEqual(['brand', 'triad 1', 'Smashing Pumpkins'])
     expect(back[1].config.base).toBe(seeds[1].config.base)
     // A computed candidate has no original text, so it travels as oklch() and
     // takes a rounding: one decimal of lightness moves a colour sitting on the
