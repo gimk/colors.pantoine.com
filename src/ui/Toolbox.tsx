@@ -1,6 +1,8 @@
+import { useMemo } from 'react'
 import { CHANNEL_ORDER, type Curve, type CurveControl } from '../color/curve'
 import { parseToOklch } from '../color/oklch'
 import { FALLBACK_BASE, type CurveKey } from '../color/presets'
+import { chromaCeilingProfile } from '../color/ramp'
 import type { DocumentApi } from '../state/useDocument'
 import { BaseColorInput } from './BaseColorInput'
 import { CurvePanel } from './CurvePanel'
@@ -21,6 +23,20 @@ type Props = {
 export function Toolbox({ doc, shareHref }: Props) {
   const { selected } = doc
   const parsedBase = parseToOklch(selected.config.base)
+
+  // Sixty-five bisections per redraw is not free, and the profile only moves
+  // when the lightness curve, the hue curve, the base hue or the gamut do —
+  // never on a chroma drag, which is when this graph redraws most.
+  const ceiling = useMemo(
+    () => chromaCeilingProfile(selected.config, doc.gamut),
+    [
+      selected.config.lightness,
+      selected.config.hue,
+      selected.config.base,
+      selected.config.steps,
+      doc.gamut,
+    ],
+  )
 
   return (
     <section className="toolbox">
@@ -140,6 +156,7 @@ export function Toolbox({ doc, shareHref }: Props) {
             }
             canSync={doc.palettes.length > 1}
             onSync={() => doc.syncChannel(key)}
+            ceiling={key === 'chroma' ? ceiling : undefined}
             onChange={(curve: Curve, moved?: CurveControl) => doc.setCurve(key, curve, moved)}
             onEndpoint={(end, value) => doc.setEndpoint(key, end, value)}
             onReset={() => doc.resetCurve(key)}

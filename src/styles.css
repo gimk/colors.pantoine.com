@@ -904,6 +904,36 @@ body.is-dragging-hue * {
   margin-right: var(--space-2);
 }
 
+/* --- gamut ceiling ---------------------------------------------------- */
+
+.graph__hatch {
+  stroke: var(--rule);
+  stroke-width: 1;
+  opacity: 0.35;
+}
+
+/* Non-interactive so the hatch can lie over the whole upper plot without
+   ever swallowing a handle drag that starts inside it. */
+.graph__ceiling-fill {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.graph__ceiling {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.25;
+  stroke-dasharray: 4 3;
+}
+
+/* The leader from the curve down to the colour that step really is. Thin and
+   muted on purpose: it is there to say the dot was pulled, not to be read. */
+.graph__drop {
+  stroke: var(--muted);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
 /* --- dark canvas ------------------------------------------------------ */
 
 /* Not a theme so much as a second ground: the same ramp reads differently

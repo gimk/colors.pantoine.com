@@ -13,7 +13,7 @@ import {
   type CurveControl,
 } from './curve'
 import { maxChromaFor } from './gamut'
-import { parseToOklch, type Gamut, type Oklch } from './oklch'
+import { normalizeHue, parseToOklch, type Gamut, type Oklch } from './oklch'
 
 /** The three channels a palette shapes. */
 export type CurveKey = ChannelKey
@@ -171,6 +171,41 @@ export function chromaCurveFor(
   // ceiling spikes near the light end, it inflated the whole middle of the
   // ramp by a third and cost 0.07 of chroma to gamut mapping.
   return clampCurve(fitCurve(targets, channel.min, channel.max, [{ x, y: base.c }]), channel)
+}
+
+/**
+ * The most chroma this palette could show at horizontal position `x`.
+ *
+ * Reads the lightness *and* the hue curve, not just lightness: the ceiling is
+ * a surface over both, and a ramp with hue torsion in it walks across that
+ * surface as it goes. Sampling at a single hue would put the boundary in the
+ * wrong place on exactly the palettes that need it most.
+ */
+export function chromaCeilingAt(
+  config: Pick<PaletteConfig, 'lightness' | 'hue'>,
+  base: Oklch,
+  x: number,
+  gamut: Gamut = 'srgb',
+): number {
+  const l = clamp(
+    sampleCurve(config.lightness, x),
+    CHANNELS.lightness.min,
+    CHANNELS.lightness.max,
+  )
+  const h = normalizeHue(base.h + sampleCurve(config.hue, x))
+  return Math.min(maxChromaFor(l, h, gamut), CHANNELS.chroma.max)
+}
+
+/** The ceiling at every step of the ramp. */
+export function chromaCeilings(
+  config: Pick<PaletteConfig, 'lightness' | 'hue' | 'steps'>,
+  base: Oklch,
+  gamut: Gamut = 'srgb',
+): number[] {
+  const last = Math.max(config.steps - 1, 1)
+  return Array.from({ length: config.steps }, (_, i) =>
+    chromaCeilingAt(config, base, i / last, gamut),
+  )
 }
 
 /**
