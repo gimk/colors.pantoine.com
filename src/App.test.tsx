@@ -42,10 +42,23 @@ describe('App', () => {
   })
 
   it('offers a base position for every step, and a lock', () => {
-    const select = html.match(/Base at<\/span>.*?<\/select>/s)?.[0] ?? ''
+    const select = html.match(/Base position<\/span>.*?<\/select>/s)?.[0] ?? ''
     expect(select.match(/<option /g)).toHaveLength(DEFAULT_STEPS)
     expect(html).toContain('Lock base')
     expect(html).toContain('aria-pressed="false"')
+  })
+
+  it('numbers the base positions from one, not by token name', () => {
+    // The step labels are derived from lightness and renumber as the ramp is
+    // dragged; a position says where on the ramp the base sits.
+    const select = html.match(/Base position<\/span>.*?<\/select>/s)?.[0] ?? ''
+    const options = [...select.matchAll(/<option[^>]*value="(\d+)"[^>]*>([^<]*)</g)]
+    expect(options).toHaveLength(DEFAULT_STEPS)
+    options.forEach(([, value, text], index) => {
+      // The value stays the config's zero-based index; only the text counts up.
+      expect(Number(value)).toBe(index)
+      expect(text).toBe(String(index + 1))
+    })
   })
 
   it('offers a gamut dropdown with sRGB, Display P3, Adobe RGB, Rec. 2020, and OKLab', () => {
@@ -468,7 +481,7 @@ describe('the palette stack', () => {
     // They belong to a palette, not the document: with a stack of ramps, a
     // base field far from the one it drives would be ambiguous.
     const bar = html.slice(html.indexOf('class="controls"'), html.indexOf('class="stack"'))
-    for (const control of ['Base at', 'Lock base', 'Re-derive']) {
+    for (const control of ['Base position', 'Lock base', 'Re-derive']) {
       expect(bar).not.toContain(control)
       expect(html).toContain(control)
     }

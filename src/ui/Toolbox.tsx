@@ -149,16 +149,21 @@ export function Toolbox({ doc, shareHref }: Props) {
 
           <div className="toolbox__param">
             <label className="field field--stacked">
-              <span className="field__tag">Base at</span>
+              <span className="field__tag">Base position</span>
               <select
                 className="toolbox__select-step"
                 value={selected.config.baseIndex}
                 onChange={(event) => doc.setBaseIndex(Number(event.target.value))}
                 title="Which step carries your base colour. Moving it redistributes lightness across the ramp."
               >
+                {/* Counted from one, not the token name. The labels are
+                    derived from lightness, so they renumber as the ramp is
+                    dragged — a position tells you where on the ramp the base
+                    sits, which is what this control is choosing. The value
+                    stays the config's own zero-based index. */}
                 {selected.ramp.map((swatch) => (
                   <option key={swatch.index} value={swatch.index}>
-                    {swatch.label}
+                    {swatch.index + 1}
                   </option>
                 ))}
               </select>
