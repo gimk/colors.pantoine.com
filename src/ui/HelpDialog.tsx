@@ -69,6 +69,12 @@ export function HelpDialog({ gamut }: Props) {
               one it can — hue held, chroma reduced.
             </p>
             <p>
+              The dashed line across the chroma graph is the most chroma{' '}
+              {gamutLabel(gamut)} has at each step, and the hatching above it is
+              chroma you cannot have. A curve up in the hatching still produces
+              colours — they are just the ones under the line.
+            </p>
+            <p>
               Your palettes are saved in this browser, and the address bar holds all of
               them, so a link carries the whole set.
             </p>

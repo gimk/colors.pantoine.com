@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { App } from './App'
 import { createPalette, DEFAULT_STEPS } from './color/presets'
-import { generateRamp } from './color/ramp'
+import { chromaCeilingProfile, generateRamp } from './color/ramp'
+import { CurvePanel } from './ui/CurvePanel'
 import { PaletteRow } from './ui/PaletteRow'
 import { RampStrip } from './ui/RampStrip'
 
@@ -677,3 +678,81 @@ describe('UI standardization and menu separation', () => {
   })
 })
 
+
+describe('the gamut ceiling in the rendered page', () => {
+  const config = createPalette('#00ff66', 11, 'rec2020')
+  const markup = renderToStaticMarkup(
+    <CurvePanel
+      channelKey="chroma"
+      curve={config.chroma}
+      swatches={generateRamp(config, 'srgb')}
+      ceiling={chromaCeilingProfile(config, 'srgb')}
+      onChange={() => {}}
+      onEndpoint={() => {}}
+      onReset={() => {}}
+    />,
+  )
+
+  it('draws the boundary and hatches the region above it', () => {
+    expect(markup).toContain('graph__ceiling')
+    expect(markup).toContain('graph__ceiling-fill')
+    expect(markup).toContain('graph__hatch')
+  })
+
+  it('leaves the header exactly as the other channels have it', () => {
+    const head = markup.slice(0, markup.indexOf('</header>'))
+    expect(head).toContain('OKLCH C')
+    expect(head).not.toContain('button')
+  })
+
+  it('draws no ceiling on a channel that has none', () => {
+    const plain = renderToStaticMarkup(
+      <CurvePanel
+        channelKey="lightness"
+        curve={config.lightness}
+        swatches={generateRamp(config, 'srgb')}
+        onChange={() => {}}
+        onEndpoint={() => {}}
+        onReset={() => {}}
+      />,
+    )
+    expect(plain).not.toContain('graph__ceiling')
+  })
+
+  it('gives the chroma graph the page’s only ceiling', () => {
+    const page = renderToStaticMarkup(<App />)
+    expect(page.match(/graph__ceiling"/g)).toHaveLength(1)
+  })
+})
+
+describe('chroma dots sit where the colour actually landed', () => {
+  const config = createPalette('#00ff66', 11, 'rec2020')
+  const ramp = generateRamp(config, 'srgb')
+
+  const panel = (channelKey: 'chroma' | 'lightness') =>
+    renderToStaticMarkup(
+      <CurvePanel
+        channelKey={channelKey}
+        curve={config[channelKey]}
+        swatches={ramp}
+        ceiling={channelKey === 'chroma' ? chromaCeilingProfile(config, 'srgb') : undefined}
+        onChange={() => {}}
+        onEndpoint={() => {}}
+        onReset={() => {}}
+      />,
+    )
+
+  it('draws a leader from the curve to every clipped step', () => {
+    const clipped = ramp.filter((swatch) => swatch.clipped).length
+    expect(clipped).toBeGreaterThan(0)
+    expect(panel('chroma').match(/graph__drop/g)).toHaveLength(clipped)
+  })
+
+  it('says what was asked for and what was got', () => {
+    expect(panel('chroma')).toMatch(/asked [\d.]+, got [\d.]+/)
+  })
+
+  it('leaves dots on the curve for channels the mapping cannot move', () => {
+    expect(panel('lightness')).not.toContain('graph__drop')
+  })
+})

@@ -32,6 +32,9 @@ type Target = CurveControl
 const HANDLE_NUDGE_X = 0.02
 const GRIDLINES = [0.25, 0.5, 0.75]
 
+/** Ids have to be unique per editor: three of these render at once. */
+let nextPatternId = 0
+
 type Props = {
   curve: Curve
   channel: Channel
@@ -41,12 +44,32 @@ type Props = {
   /** Set when the base is locked: that step's dot is pinned, and if it sits
    *  on an anchor the anchor stops being draggable. */
   lockedIndex?: number
+  /**
+   * The channel's own ceiling, sampled evenly across x — only chroma has one.
+   *
+   * Drawn, never enforced. The gamut mapping already holds every swatch inside
+   * the gamut on its way to the screen, so a control that clamped the ramp
+   * would change nothing anyone could see. What is missing without this line
+   * is knowing *that it happened*: a curve sailing well over the boundary and
+   * one sitting just under it produce the same colours, and only one of them
+   * is the ramp the designer thinks they drew.
+   */
+  ceiling?: number[]
   onChange: (curve: Curve, moved: Target) => void
 }
 
-export function CurveEditor({ curve, channel, swatches, lockedIndex, onChange }: Props) {
+export function CurveEditor({
+  curve,
+  channel,
+  swatches,
+  lockedIndex,
+  ceiling,
+  onChange,
+}: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
   const dragging = useRef<Target | null>(null)
+  const hatchId = useRef<string>('')
+  if (!hatchId.current) hatchId.current = `outgamut-${++nextPatternId}`
   const span = channel.max - channel.min
 
   // Measured on the svg itself, which is safe from a feedback loop: its width
@@ -150,6 +173,10 @@ export function CurveEditor({ curve, channel, swatches, lockedIndex, onChange }:
     return text.includes('.') ? text.replace(/\.?0+$/, '') || '0' : text
   }
 
+  // Only chroma has a gamut ceiling, and only chroma has dots that can sit
+  // off the curve.
+  const isChroma = channel.key === 'chroma'
+
   const anchorStart = toPx(0, curve.start)
   const anchorEnd = toPx(1, curve.end)
   const handle1 = toPx(curve.h1.x, curve.h1.y)
@@ -215,6 +242,47 @@ export function CurveEditor({ curve, channel, swatches, lockedIndex, onChange }:
         />
       ))}
 
+      {ceiling && (
+        <>
+          <defs>
+            <pattern
+              id={hatchId.current}
+              width={6}
+              height={6}
+              patternUnits="userSpaceOnUse"
+              patternTransform="rotate(45)"
+            >
+              <line className="graph__hatch" x1={0} y1={0} x2={0} y2={6} />
+            </pattern>
+          </defs>
+          {/* Closed up over the top of the plot, so the unreachable chroma is
+              a region rather than a line someone has to interpret. */}
+          <path
+            className="graph__ceiling-fill"
+            fill={`url(#${hatchId.current})`}
+            d={
+              ceiling
+                .map((value, i) => {
+                  const at = toPx(i / (ceiling.length - 1), Math.min(value, channel.max))
+                  return `${i === 0 ? 'M' : 'L'}${at.x} ${at.y}`
+                })
+                .join(' ') + ` L${PAD.left + plotW} ${PAD.top} L${PAD.left} ${PAD.top} Z`
+            }
+          />
+          <path
+            className="graph__ceiling"
+            d={ceiling
+              .map((value, i) => {
+                const at = toPx(i / (ceiling.length - 1), Math.min(value, channel.max))
+                return `${i === 0 ? 'M' : 'L'}${at.x} ${at.y}`
+              })
+              .join(' ')}
+          >
+            <title>Gamut ceiling — chroma above this line cannot be displayed</title>
+          </path>
+        </>
+      )}
+
       <rect className="graph__frame" x={PAD.left} y={PAD.top} width={plotW} height={plotH} />
 
       {/* Tangent lines, so this reads as a curve editor rather than loose dots. */}
@@ -239,10 +307,30 @@ export function CurveEditor({ curve, channel, swatches, lockedIndex, onChange }:
       />
 
       {swatches.map((swatch) => {
-        const at = toPx(swatch.x, clamp(sampleCurve(curve, swatch.x), channel.min, channel.max))
+        const asked = clamp(sampleCurve(curve, swatch.x), channel.min, channel.max)
+        // Chroma is the only channel the gamut mapping touches — it holds L
+        // and H and takes the chroma down — so it is the only one whose dot
+        // can leave the curve. Plotting it where the colour actually landed
+        // rather than where the curve asked is the point: the dot is filled
+        // with the colour you get, and it belongs at the value you get. The
+        // gap that opens up is exactly the chroma being given up.
+        const value = isChroma ? clamp(asked - swatch.chromaLost, channel.min, channel.max) : asked
+        const at = toPx(swatch.x, value)
+        const onCurve = toPx(swatch.x, asked)
         const isLocked = lockedIndex !== undefined && swatch.isBase
         return (
           <g key={swatch.index}>
+            {isChroma && swatch.clipped && (
+              // Without this the dot reads as a dot that missed the curve
+              // rather than as one that was pulled off it.
+              <line
+                className="graph__drop"
+                x1={onCurve.x}
+                y1={onCurve.y}
+                x2={at.x}
+                y2={at.y}
+              />
+            )}
             <circle
               className={`graph__dot${swatch.isBase ? ' graph__dot--base' : ''}`}
               cx={at.x}
@@ -251,7 +339,11 @@ export function CurveEditor({ curve, channel, swatches, lockedIndex, onChange }:
               fill={swatch.displayColor}
             >
               <title>
-                {`${swatch.label} — ${swatch.hex}${isLocked ? ' — locked to the base colour' : ''}`}
+                {`${swatch.label} — ${swatch.hex}` +
+                  (isChroma && swatch.clipped
+                    ? ` — asked ${show(asked)}, got ${show(value)}`
+                    : '') +
+                  (isLocked ? ' — locked to the base colour' : '')}
               </title>
             </circle>
             {isLocked && (

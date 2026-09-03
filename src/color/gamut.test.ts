@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { maxChromaFor } from './gamut'
 import { formatColor, isInGamut, mapToGamut, toColorCss, toHex, type Oklch } from './oklch'
-import { chromaCurveFor, createPalette } from './presets'
-import { countDuplicateSteps, generateRamp } from './ramp'
-import { sampleCurve } from './curve'
+import { chromaCeilings, chromaCurveFor, createPalette } from './presets'
+import { chromaCeilingProfile, countDuplicateSteps, generateRamp, resolveBase } from './ramp'
+import { linear, sampleCurve } from './curve'
 
 describe('gamut detection and mapping', () => {
   // At L=0.8, C=0.28, H=140 (a vivid green), the color is noticeably outside sRGB
@@ -175,5 +175,70 @@ describe('OKLab gamut', () => {
     const config = createPalette('#00ff66', 11, 'oklab')
     const ramp = generateRamp(config, 'oklab')
     expect(ramp.every((s) => !s.clipped)).toBe(true)
+  })
+})
+
+describe('the chroma ceiling', () => {
+  /** A Rec. 2020 palette opened in sRGB: the curve asks for far more chroma
+   *  than sRGB has, which is the state the graph has to make visible. */
+  const wide = () => createPalette('#00ff66', 11, 'rec2020')
+
+  it('sits under what the curve is asking for, when the curve is over', () => {
+    const config = wide()
+    const ramp = generateRamp(config, 'srgb')
+    const ceilings = chromaCeilings(config, resolveBase(config), 'srgb')
+
+    expect(ramp.some((swatch, i) => swatch.oklch.c > ceilings[i])).toBe(true)
+    // And those are exactly the steps the gamut mapping has to pull back.
+    for (let i = 0; i < ramp.length; i++) {
+      if (ramp[i].clipped) expect(ramp[i].oklch.c).toBeGreaterThan(ceilings[i])
+    }
+  })
+
+  it('is the chroma the mapping actually lands on, to within a JND', () => {
+    const config = wide()
+    const ceilings = chromaCeilings(config, resolveBase(config), 'srgb')
+
+    // Not exact, and it should not be. The ceiling search counts a colour as
+    // displayable if it *rounds* into a valid 8-bit channel, while culori's
+    // gamut map holds to the last float, so the line sits a shade above where
+    // the mapping stops. A couple of thousandths, which is under the JND the
+    // rest of the tool uses to decide a colour was visibly clipped at all.
+    generateRamp(config, 'srgb').forEach((swatch, i) => {
+      const landed = swatch.oklch.c - swatch.chromaLost
+      const expected = Math.min(swatch.oklch.c, ceilings[i])
+      expect(landed).toBeLessThanOrEqual(expected + 1e-9)
+      expect(expected - landed).toBeLessThan(0.004)
+    })
+  })
+
+  it('rises when the gamut widens', () => {
+    const config = wide()
+    const base = resolveBase(config)
+    const srgb = chromaCeilings(config, base, 'srgb')
+    const rec = chromaCeilings(config, base, 'rec2020')
+
+    expect(rec.every((value, i) => value >= srgb[i])).toBe(true)
+    expect(rec.some((value, i) => value > srgb[i] + 0.01)).toBe(true)
+  })
+
+  it('follows hue torsion rather than sampling one hue', () => {
+    const base = createPalette('#00ff66', 11, 'srgb')
+    const straight = chromaCeilings(base, resolveBase(base), 'srgb')
+    const twisted = chromaCeilings({ ...base, hue: linear(0, 80) }, resolveBase(base), 'srgb')
+
+    expect(twisted).not.toEqual(straight)
+    // Step 0 is a zero-degree shift either way, so it must not have moved.
+    expect(twisted[0]).toBeCloseTo(straight[0], 6)
+  })
+
+  it('samples the drawing profile more finely than the steps', () => {
+    const config = wide()
+    const profile = chromaCeilingProfile(config, 'srgb')
+    const atSteps = chromaCeilings(config, resolveBase(config), 'srgb')
+
+    expect(profile.length).toBeGreaterThan(atSteps.length)
+    expect(profile[0]).toBeCloseTo(atSteps[0], 6)
+    expect(profile[profile.length - 1]).toBeCloseTo(atSteps[atSteps.length - 1], 6)
   })
 })

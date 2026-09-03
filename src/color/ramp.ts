@@ -8,7 +8,7 @@ import {
   type Gamut,
   type Oklch,
 } from './oklch'
-import { FALLBACK_BASE, type PaletteConfig } from './presets'
+import { chromaCeilingAt, FALLBACK_BASE, type PaletteConfig } from './presets'
 
 export type Swatch = {
   index: number
@@ -69,6 +69,23 @@ export function countDuplicateSteps(ramp: Swatch[]): number {
     if (ramp[i].hex === ramp[i - 1].hex) duplicates++
   }
   return duplicates
+}
+
+/**
+ * The gamut's chroma ceiling sampled evenly across the ramp, for drawing.
+ *
+ * Denser than the steps on purpose. The ceiling has a knee in it — it climbs
+ * to a peak and drops away — and a polyline through eleven points rounds that
+ * knee off, which would draw the boundary somewhere the colours are not.
+ */
+export function chromaCeilingProfile(
+  config: PaletteConfig,
+  gamut: Gamut = 'srgb',
+  samples = 65,
+): number[] {
+  const base = resolveBase(config)
+  const last = Math.max(samples - 1, 1)
+  return Array.from({ length: samples }, (_, i) => chromaCeilingAt(config, base, i / last, gamut))
 }
 
 export function generateRamp(config: PaletteConfig, gamut: Gamut = 'srgb'): Swatch[] {
