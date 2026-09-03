@@ -110,12 +110,19 @@ export function decodePalette(hash: string): DecodedPalette | null {
  */
 const SEPARATOR = '~'
 
-export function encodeDocument(palettes: DecodedPalette[], gamut: Gamut = 'srgb'): string {
+const STEPS_UNLOCKED_KEY = 'u'
+
+export function encodeDocument(
+  palettes: DecodedPalette[],
+  gamut: Gamut = 'srgb',
+  stepsLocked = true,
+): string {
   const segments = palettes.map((entry) => encodePalette(entry.config, entry.name))
   // Carries no palette key, so `decodeDocument` drops it the way it drops any
   // other segment it cannot read — which is what lets an older reader open a
   // link from a newer one. Omitted at the default so ordinary links are
   // exactly what they always were.
+  if (!stepsLocked) segments.unshift(`${STEPS_UNLOCKED_KEY}=1`)
   if (gamut !== 'srgb') segments.unshift(`${GAMUT_KEY}=${gamut}`)
   return segments.join(SEPARATOR)
 }
@@ -141,7 +148,21 @@ export function decodeGamut(hash: string): Gamut {
   return 'srgb'
 }
 
-export function documentUrl(palettes: DecodedPalette[], gamut: Gamut = 'srgb'): string {
+/** Whether the steps are locked across all palettes, defaulting to true. */
+export function decodeStepsLocked(hash: string): boolean {
+  const raw = hash.replace(/^#/, '')
+  if (!raw) return true
+  for (const segment of raw.split(SEPARATOR)) {
+    if (new URLSearchParams(segment).get(STEPS_UNLOCKED_KEY) === '1') return false
+  }
+  return true
+}
+
+export function documentUrl(
+  palettes: DecodedPalette[],
+  gamut: Gamut = 'srgb',
+  stepsLocked = true,
+): string {
   const { origin, pathname } = window.location
-  return `${origin}${pathname}#${encodeDocument(palettes, gamut)}`
+  return `${origin}${pathname}#${encodeDocument(palettes, gamut, stepsLocked)}`
 }

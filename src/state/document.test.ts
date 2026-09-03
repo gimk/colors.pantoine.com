@@ -15,6 +15,7 @@ import {
   decodeDocument,
   decodeGamut,
   decodePalette,
+  decodeStepsLocked,
   encodeDocument,
   encodePalette,
   restoreBaseColor,
@@ -160,6 +161,61 @@ describe('document', () => {
     const doc = createDocument(mixedSeeds)
     expect(doc.palettes[0].state.config.steps).toBe(9)
     expect(doc.palettes[1].state.config.steps).toBe(9)
+    expect(doc.stepsLocked).toBe(true)
+  })
+
+  it('allows editing steps per palette independently when stepsLocked is false', () => {
+    const doc = run(createDocument(), { type: 'new' })
+    expect(doc.palettes).toHaveLength(2)
+    expect(doc.stepsLocked).toBe(true)
+
+    // Unlock steps
+    const unlocked = run(doc, { type: 'setStepsLocked', value: false })
+    expect(unlocked.stepsLocked).toBe(false)
+
+    // Change only palette 0's steps
+    const p0Id = unlocked.palettes[0].id
+    const updated = run(unlocked, { type: 'setPaletteSteps', id: p0Id, value: 7 })
+    expect(updated.palettes[0].state.config.steps).toBe(7)
+    expect(updated.palettes[1].state.config.steps).toBe(11)
+
+    // When unlocked, palette-scoped setSteps modifies only the active palette
+    const active = run(updated, {
+      type: 'palette',
+      action: { type: 'setSteps', value: 15 },
+    })
+    // Palette 1 is selected
+    expect(active.palettes[1].state.config.steps).toBe(15)
+    expect(active.palettes[0].state.config.steps).toBe(7)
+  })
+
+  it('synchronizes all palettes to active palette when locking steps back on', () => {
+    const doc = run(
+      createDocument(),
+      { type: 'new' },
+      { type: 'setStepsLocked', value: false },
+    )
+    const p0Id = doc.palettes[0].id
+    const mixed = run(doc, { type: 'setPaletteSteps', id: p0Id, value: 5 })
+    expect(mixed.palettes[0].state.config.steps).toBe(5)
+    expect(mixed.palettes[1].state.config.steps).toBe(11)
+
+    // Selected palette is palette 1 (steps: 11)
+    const relocked = run(mixed, { type: 'setStepsLocked', value: true })
+    expect(relocked.stepsLocked).toBe(true)
+    expect(relocked.palettes[0].state.config.steps).toBe(11)
+    expect(relocked.palettes[1].state.config.steps).toBe(11)
+  })
+
+  it('preserves individual palette steps when stepsLocked is false', () => {
+    const mixedSeeds = [
+      { name: 'brand', config: createPalette('#7c3aed', 9) },
+      { name: 'accent', config: createPalette('#facc15', 13) },
+    ]
+    const doc = createDocument(mixedSeeds, -1, 'srgb', false)
+    expect(doc.stepsLocked).toBe(false)
+    expect(doc.palettes[0].state.config.steps).toBe(9)
+    expect(doc.palettes[1].state.config.steps).toBe(13)
   })
 
   it('syncs lightness across all palettes and aligns their base steps', () => {
@@ -419,6 +475,24 @@ describe('document links', () => {
 
   it('ignores a gamut that is not one of ours', () => {
     expect(decodeGamut(`#g=cmyk~${encodePalette(seeds[0].config, 'brand')}`)).toBe('srgb')
+  })
+
+  it('carries the steps lock state in the link', () => {
+    const lockedHash = `#${encodeDocument(seeds, 'srgb', true)}`
+    expect(decodeStepsLocked(lockedHash)).toBe(true)
+
+    const unlockedHash = `#${encodeDocument(seeds, 'srgb', false)}`
+    expect(unlockedHash).toContain('u=1')
+    expect(decodeStepsLocked(unlockedHash)).toBe(false)
+  })
+
+  it('decodes unlocked steps from links containing the u=1 flag', () => {
+    const mixed = [
+      { name: 'nine', config: createPalette('#0044ff', 9) },
+      { name: 'eleven', config: createPalette('#ff0044', 11) },
+    ]
+    const hash = `#${encodeDocument(mixed, 'srgb', false)}`
+    expect(decodeStepsLocked(hash)).toBe(false)
   })
 
   it('adds # only when necessary when reloading base color from save', () => {

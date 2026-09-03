@@ -74,6 +74,9 @@ export type DocumentApi = {
   rename: (id: string, name: string) => void
   setBase: (value: string) => void
   setSteps: (value: number) => void
+  setPaletteSteps: (id: string, value: number) => void
+  stepsLocked: boolean
+  setStepsLocked: (value: boolean) => void
   setBaseIndex: (value: number) => void
   setBaseLocked: (value: boolean) => void
   setCurve: (key: CurveKey, curve: Curve, moved?: CurveControl) => void
@@ -86,12 +89,22 @@ export type DocumentApi = {
   setGamut: (value: Gamut) => void
 }
 
-type Seed = { seeds: PaletteSeed[]; selected: number; gamut?: Gamut }
+type Seed = {
+  seeds: PaletteSeed[]
+  selected: number
+  gamut?: Gamut
+  stepsLocked?: boolean
+}
 
 export function useDocument(seed: Seed): DocumentApi {
   const [history, dispatch] = useReducer(historyReducer, seed, (initial) =>
     initHistory<DocumentState>(
-      createDocument(initial.seeds, initial.selected, initial.gamut ?? 'srgb'),
+      createDocument(
+        initial.seeds,
+        initial.selected,
+        initial.gamut ?? 'srgb',
+        initial.stepsLocked,
+      ),
     ),
   )
 
@@ -145,6 +158,15 @@ export function useDocument(seed: Seed): DocumentApi {
     ),
     setSteps: useCallback(
       (value: number) => send({ type: 'setSteps', value }),
+      [send],
+    ),
+    setPaletteSteps: useCallback(
+      (id: string, value: number) => send({ type: 'setPaletteSteps', id, value }),
+      [send],
+    ),
+    stepsLocked: state.stepsLocked,
+    setStepsLocked: useCallback(
+      (value: boolean) => send({ type: 'setStepsLocked', value }),
       [send],
     ),
     setBaseIndex: useCallback(

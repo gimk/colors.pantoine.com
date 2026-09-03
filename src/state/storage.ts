@@ -2,6 +2,7 @@ import type { Gamut } from '../color/oklch'
 import {
   decodeDocument,
   decodeGamut,
+  decodeStepsLocked,
   encodeDocument,
   encodePalette,
   type DecodedPalette,
@@ -21,7 +22,12 @@ const KEY = 'colors.pantoine.com/v1'
 
 type Stored = { v: number; hash: string; selected: number }
 
-export type Restored = { seeds: DecodedPalette[]; selected: number; gamut: Gamut }
+export type Restored = {
+  seeds: DecodedPalette[]
+  selected: number
+  gamut: Gamut
+  stepsLocked?: boolean
+}
 
 const segmentOf = (seed: DecodedPalette) => encodePalette(seed.config, seed.name)
 
@@ -38,6 +44,7 @@ function readStored(): Restored | null {
     return {
       seeds,
       gamut: decodeGamut(parsed.hash),
+      stepsLocked: decodeStepsLocked(parsed.hash),
       selected: Number.isInteger(selected) && selected >= 0 && selected < seeds.length
         ? selected
         : seeds.length - 1,
@@ -51,9 +58,10 @@ export function saveDocument(
   palettes: DecodedPalette[],
   selected: number,
   gamut: Gamut = 'srgb',
+  stepsLocked = true,
 ): void {
   try {
-    const value: Stored = { v: 1, hash: encodeDocument(palettes, gamut), selected }
+    const value: Stored = { v: 1, hash: encodeDocument(palettes, gamut, stepsLocked), selected }
     window.localStorage.setItem(KEY, JSON.stringify(value))
   } catch {
     // Full, disabled, or a private window. Autosave is a convenience, and the
@@ -77,8 +85,16 @@ export function restoreDocument(hash: string): Restored {
   const shared = decodeDocument(hash)
   const sharedGamut = decodeGamut(hash)
 
-  if (!shared.length) return stored ?? { seeds: [], selected: 0, gamut: 'srgb' }
-  if (!stored) return { seeds: shared, selected: shared.length - 1, gamut: sharedGamut }
+  const sharedStepsLocked = decodeStepsLocked(hash)
+
+  if (!shared.length) return stored ?? { seeds: [], selected: 0, gamut: 'srgb', stepsLocked: true }
+  if (!stored)
+    return {
+      seeds: shared,
+      selected: shared.length - 1,
+      gamut: sharedGamut,
+      stepsLocked: sharedStepsLocked,
+    }
 
   const have = new Set(stored.seeds.map(segmentOf))
   const added = shared.filter((seed) => !have.has(segmentOf(seed)))
@@ -91,5 +107,6 @@ export function restoreDocument(hash: string): Restored {
     seeds: [...stored.seeds, ...added],
     selected: stored.seeds.length,
     gamut: sharedGamut,
+    stepsLocked: sharedStepsLocked,
   }
 }

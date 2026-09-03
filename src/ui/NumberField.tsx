@@ -9,6 +9,8 @@ type Props = {
   decimals: number
   disabled?: boolean
   title?: string
+  stacked?: boolean
+  inputClassName?: string
   onCommit: (value: number) => void
 }
 
@@ -38,6 +40,7 @@ export function parseNumberInput(raw: string): number | null {
 
 export function parseNumberCommit(raw: string): number | null {
   const normalized = raw.trim().replace(',', '.')
+  if (normalized === '' || normalized === '-' || normalized === '.') return null
   const parsed = Number.parseFloat(normalized)
   return Number.isFinite(parsed) ? parsed : null
 }
@@ -80,6 +83,8 @@ export function NumberField({
   decimals,
   disabled,
   title,
+  stacked,
+  inputClassName,
   onCommit,
 }: Props) {
   const [draft, setDraft] = useState(() => value.toFixed(decimals))
@@ -101,11 +106,11 @@ export function NumberField({
   }
 
   return (
-    <label className="field" title={title}>
-      <span>{label}</span>
+    <label className={`field${stacked ? ' field--stacked' : ''}`} title={title}>
+      <span className={stacked ? 'field__tag' : undefined}>{label}</span>
       <input
         type="text"
-        className="number"
+        className={`number${inputClassName ? ` ${inputClassName}` : ''}`}
         inputMode="decimal"
         autoComplete="off"
         spellCheck={false}

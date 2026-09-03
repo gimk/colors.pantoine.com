@@ -10,6 +10,7 @@ import { CurvePanel } from './ui/CurvePanel'
 import { PaletteRow } from './ui/PaletteRow'
 import { RampStrip } from './ui/RampStrip'
 import { ReviewBoard } from './ui/ReviewBoard'
+import { Toolbox } from './ui/Toolbox'
 
 /**
  * A render smoke test. It will not catch layout problems, but it does catch
@@ -62,11 +63,14 @@ describe('App', () => {
    * exactly once — two fields driving one value invite the reading that the
    * palette under the toolbox has a count of its own.
    */
-  it('offers a global steps input in the header, and only there', () => {
+  it('offers a global steps input and lock toggle in the header', () => {
     const controls = html.slice(html.indexOf('class="controls"'), html.indexOf('class="stack"'))
     expect(controls).toContain('<span>Steps</span>')
     expect(controls).toContain(`value="${DEFAULT_STEPS}"`)
-    expect(html.match(/<span>Steps<\/span>/g)).toHaveLength(1)
+    expect(controls).toContain('class="controls__steps"')
+    expect(controls).toContain('class="controls__btn-lock is-locked"')
+    expect(controls).toContain('Unlock steps per palette')
+    expect(controls.match(/<span>Steps<\/span>/g)).toHaveLength(1)
   })
 
   /**
@@ -568,10 +572,31 @@ describe('PaletteRow', () => {
       expect(active).toContain('class="swatch__clipped"')
     })
 
+    it('sets the clipped corner indicator color to black or white based on contrast', () => {
+      const active = render({ palette: vivid, selected: true })
+      expect(active).toMatch(/class="swatch__clipped"[^>]*border-top-color:\s*(?:#000000|#ffffff)/)
+    })
+
     it('leaves the other palettes as colour alone', () => {
       const row = render({ palette: vivid })
       expect(row).not.toContain('class="swatch__base"')
       expect(row).not.toContain('class="swatch__clipped"')
+    })
+
+    it('always displays the steps field in the palette header, disabled when locked', () => {
+      const locked = render({ stepsLocked: true })
+      expect(locked).toContain('class="number prow__input-steps"')
+      expect(locked).toMatch(/class="number prow__input-steps"[^>]*disabled/)
+
+      const unlocked = render({ stepsLocked: false, onStepsChange: () => {} })
+      expect(unlocked).toContain('class="number prow__input-steps"')
+      expect(unlocked).not.toMatch(/class="number prow__input-steps"[^>]*disabled/)
+    })
+
+    it('shows only base color in prow__note, avoiding duplicate steps text', () => {
+      const row = render()
+      expect(row).toContain('class="prow__note"')
+      expect(row).not.toContain('steps ·')
     })
   })
 
@@ -699,6 +724,32 @@ describe('UI standardization and menu separation', () => {
     expect(toolbox).toContain('class="toolbox__resizer"')
     expect(toolbox).toContain('class="toolbox__resizer-grip"')
     expect(declarations('.toolbox__resizer')).toContain('cursor: ns-resize')
+  })
+
+  it('renders per-palette steps input in toolbox when steps are unlocked', () => {
+    const config = createPalette('#0044ff', 9)
+    const mockDoc: any = {
+      selected: {
+        id: 'p1',
+        name: 'brand',
+        config,
+        ramp: generateRamp(config, 'srgb'),
+        edited: false,
+      },
+      palettes: [],
+      gamut: 'srgb',
+      stepsLocked: false,
+      setBase: () => {},
+      setGamut: () => {},
+      setBaseIndex: () => {},
+      setBaseLocked: () => {},
+      setPaletteSteps: () => {},
+      rederive: () => {},
+      rename: () => {},
+    }
+    const markup = renderToStaticMarkup(<Toolbox doc={mockDoc} shareHref="" />)
+    expect(markup).toContain('class="number toolbox__input-steps"')
+    expect(markup).toContain('value="9"')
   })
 
   it('provides toggle hover states for buttons', () => {

@@ -249,16 +249,65 @@ export function App() {
             </select>
           </label>
 
-          <NumberField
-            label="Steps"
-            title="Number of steps, across every palette in the document"
-            value={selected.config.steps}
-            min={MIN_STEPS}
-            max={MAX_STEPS}
-            step={1}
-            decimals={0}
-            onCommit={doc.setSteps}
-          />
+          <div className="controls__steps">
+            <NumberField
+              label="Steps"
+              title={
+                doc.stepsLocked
+                  ? 'Number of steps, shared across every palette in the document'
+                  : 'Global steps — lock to synchronize all palettes to this step count'
+              }
+              value={selected.config.steps}
+              min={MIN_STEPS}
+              max={MAX_STEPS}
+              step={1}
+              decimals={0}
+              onCommit={doc.setSteps}
+            />
+            <button
+              type="button"
+              className={`controls__btn-lock ${doc.stepsLocked ? 'is-locked' : 'is-unlocked'}`}
+              aria-label={doc.stepsLocked ? 'Unlock steps per palette' : 'Lock steps across all palettes'}
+              title={
+                doc.stepsLocked
+                  ? 'Steps are shared across all palettes — click to unlock and customize per palette'
+                  : 'Steps are independent per palette — click to lock all palettes to this step count'
+              }
+              onClick={() => doc.setStepsLocked(!doc.stepsLocked)}
+            >
+              {doc.stepsLocked ? (
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="11" width="18" height="11" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              ) : (
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="11" width="18" height="11" />
+                  <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
 
         <span className="spacer" />
@@ -292,6 +341,8 @@ export function App() {
             format={format}
             gamut={gamut}
             copiedKey={copied}
+            stepsLocked={doc.stepsLocked}
+            onStepsChange={(steps) => doc.setPaletteSteps(palette.id, steps)}
             onSelect={() => {
               doc.select(palette.id)
               triggerScroll()

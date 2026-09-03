@@ -47,6 +47,11 @@ export type DocumentState = {
    * travels in the link and in storage with everything else.
    */
   gamut: Gamut
+  /**
+   * Whether the step count is locked/shared across all palettes (true by default),
+   * or independent per palette (false).
+   */
+  stepsLocked: boolean
 }
 
 export type DocumentAction =
@@ -61,6 +66,8 @@ export type DocumentAction =
   | { type: 'reorder'; sourceId: string; targetId: string }
   | { type: 'rename'; id: string; name: string }
   | { type: 'setSteps'; value: number }
+  | { type: 'setPaletteSteps'; id: string; value: number }
+  | { type: 'setStepsLocked'; value: boolean }
   | { type: 'setGamut'; value: Gamut }
   | { type: 'syncChannel'; key: CurveKey }
 
@@ -122,13 +129,13 @@ export function createDocument(
   seeds: PaletteSeed[] = [],
   selected = -1,
   gamut: Gamut = 'srgb',
+  stepsLocked = true,
 ): DocumentState {
-  // A document has a unified global step count across all palettes.
   const globalSteps = seeds.length ? seeds[0].config.steps : DEFAULT_STEPS
   const palettes = seeds.length
     ? seeds.map((seed) => {
         const entry = makeEntry(seed.config, seed.name, undefined, gamut)
-        if (entry.state.config.steps !== globalSteps) {
+        if (stepsLocked && entry.state.config.steps !== globalSteps) {
           entry.state = paletteReducer(
             entry.state,
             { type: 'setSteps', value: globalSteps },
@@ -141,7 +148,7 @@ export function createDocument(
   // Default to the last one: that is the working palette, the one the toolbox
   // opens under, with the finished ones stacked above it.
   const index = selected >= 0 && selected < palettes.length ? selected : palettes.length - 1
-  return { palettes, selectedId: palettes[index].id, gamut }
+  return { palettes, selectedId: palettes[index].id, gamut, stepsLocked }
 }
 
 export const selectedEntry = (state: DocumentState): PaletteEntry =>
@@ -308,8 +315,37 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
       return sameStack(state, palettes)
     }
 
+    case 'setPaletteSteps': {
+      const steps = clamp(Math.round(action.value), MIN_STEPS, MAX_STEPS)
+      const target = state.palettes.find((entry) => entry.id === action.id)
+      if (!target || target.state.config.steps === steps) return state
+      const next = paletteReducer(target.state, { type: 'setSteps', value: steps }, state.gamut)
+      if (next === target.state) return state
+      return replaceEntry(state, action.id, (entry) => ({ ...entry, state: next }))
+    }
+
+    case 'setStepsLocked': {
+      const stepsLocked = action.value
+      if (stepsLocked === state.stepsLocked) return state
+      if (stepsLocked) {
+        // When locking, synchronize all palettes to the currently selected palette's step count
+        const currentSteps = selectedEntry(state).state.config.steps
+        const palettes = state.palettes.map((entry) => {
+          if (entry.state.config.steps === currentSteps) return entry
+          const next = paletteReducer(
+            entry.state,
+            { type: 'setSteps', value: currentSteps },
+            state.gamut,
+          )
+          return { ...entry, state: next }
+        })
+        return { ...state, stepsLocked: true, palettes }
+      }
+      return { ...state, stepsLocked: false }
+    }
+
     case 'palette': {
-      if (action.action.type === 'setSteps') {
+      if (action.action.type === 'setSteps' && state.stepsLocked) {
         return documentReducer(state, { type: 'setSteps', value: action.action.value })
       }
       const current = selectedEntry(state)
@@ -411,6 +447,9 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
 export function coalesceKey(action: DocumentAction): string | null {
   if (action.type === 'setSteps') {
     return 'steps'
+  }
+  if (action.type === 'setPaletteSteps') {
+    return `steps:${action.id}`
   }
 
   if (action.type !== 'palette') {

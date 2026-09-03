@@ -93,6 +93,12 @@ export function RampStrip({
               {markers && swatch.clipped && (
                 <span
                   className="swatch__clipped"
+                  style={{
+                    borderTopColor:
+                      swatch.contrastOnBlack >= swatch.contrastOnWhite
+                        ? '#000000'
+                        : '#ffffff',
+                  }}
                   title={`Requested chroma is outside ${gamutLabel(gamut)} — mapped to the nearest displayable colour`}
                 />
               )}

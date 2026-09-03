@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CHANNEL_ORDER, type Curve, type CurveControl } from '../color/curve'
 import { parseToOklch } from '../color/oklch'
-import { FALLBACK_BASE, type CurveKey } from '../color/presets'
+import { FALLBACK_BASE, MAX_STEPS, MIN_STEPS, type CurveKey } from '../color/presets'
 import { chromaCeilingProfile } from '../color/ramp'
 import type { DocumentApi } from '../state/useDocument'
 import { BaseColorInput } from './BaseColorInput'
 import { CurvePanel } from './CurvePanel'
 import { ExportPanel } from './ExportPanel'
+import { NumberField } from './NumberField'
 
 const STORAGE_KEY = 'colors.pantoine.com/toolbox-graph-h'
 const DEFAULT_GRAPH_H = 228
@@ -132,6 +133,23 @@ export function Toolbox({ doc, shareHref }: Props) {
               onGamut={doc.setGamut}
             />
           </div>
+
+          {!doc.stepsLocked && (
+            <div className="toolbox__param">
+              <NumberField
+                label="Steps"
+                title="Number of steps for this palette"
+                value={selected.config.steps}
+                min={MIN_STEPS}
+                max={MAX_STEPS}
+                step={1}
+                decimals={0}
+                stacked
+                inputClassName="toolbox__input-steps"
+                onCommit={(value) => doc.setPaletteSteps(selected.id, value)}
+              />
+            </div>
+          )}
 
           <div className="toolbox__param">
             <label className="field field--stacked">

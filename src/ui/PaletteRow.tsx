@@ -1,8 +1,10 @@
 import { useState, type DragEvent, type MouseEvent } from 'react'
 import type { Format, Gamut } from '../color/oklch'
+import { MAX_STEPS, MIN_STEPS } from '../color/presets'
 import { countDuplicateSteps } from '../color/ramp'
 import { copyPng } from '../export/image'
 import type { PaletteView } from '../state/useDocument'
+import { NumberField } from './NumberField'
 import { RampStrip } from './RampStrip'
 
 type Props = {
@@ -13,6 +15,8 @@ type Props = {
   index?: number
   gamut?: Gamut
   copiedKey: string | null
+  stepsLocked?: boolean
+  onStepsChange?: (value: number) => void
   onSelect: () => void
   onRemove: () => void
   onMove?: (by: -1 | 1) => void
@@ -27,6 +31,8 @@ export function PaletteRow({
   format,
   gamut = 'srgb',
   copiedKey,
+  stepsLocked = true,
+  onStepsChange,
   onSelect,
   onRemove,
   onReorder,
@@ -119,10 +125,24 @@ export function PaletteRow({
         </span>
         <span className="prow__name">{palette.name}</span>
         {selected && <span className="badge prow__badge">Editing</span>}
-        <span className="prow__note">
-          {palette.ramp.length} steps · {palette.config.base}
-        </span>
+        <span className="prow__note">{palette.config.base}</span>
         <span className="spacer" />
+        <NumberField
+          label="Steps"
+          title={
+            stepsLocked
+              ? 'Steps are locked across all palettes — unlock in the top bar to customize'
+              : 'Number of steps for this palette'
+          }
+          value={palette.config.steps}
+          min={MIN_STEPS}
+          max={MAX_STEPS}
+          step={1}
+          decimals={0}
+          disabled={stepsLocked || !onStepsChange}
+          inputClassName="prow__input-steps"
+          onCommit={onStepsChange ?? (() => {})}
+        />
         {duplicates > 0 && (
           <span
             className="prow__duplicates"
