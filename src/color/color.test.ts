@@ -10,7 +10,7 @@ import {
 } from './curve'
 import { isInSrgb, parseColorList, parseToOklch, toHex } from './oklch'
 import { createPalette } from './presets'
-import { generateRamp, stepLabels } from './ramp'
+import { calculateRampLabels, generateRamp, lightnessToLabel, stepLabels } from './ramp'
 
 describe('bezier', () => {
   it('inverts x(t) for a curve whose handles are evenly spaced', () => {
@@ -152,6 +152,40 @@ describe('ramp', () => {
     for (const steps of [5, 9, 11, 21]) {
       expect(generateRamp(createPalette('#7c3aed', steps))).toHaveLength(steps)
       expect(stepLabels(steps)).toHaveLength(steps)
+    }
+  })
+
+  it('converts lightness to step labels rounded to the closest 5 increment', () => {
+    // 0.9 lightness yields 10 (user specification)
+    expect(lightnessToLabel(0.9)).toBe('10')
+    expect(lightnessToLabel(1.0)).toBe('0')
+    expect(lightnessToLabel(0.97)).toBe('5')
+    expect(lightnessToLabel(0.88)).toBe('10')
+    expect(lightnessToLabel(0.86)).toBe('15')
+    expect(lightnessToLabel(0.85)).toBe('15')
+    expect(lightnessToLabel(0.5)).toBe('50')
+    expect(lightnessToLabel(0.16)).toBe('85')
+    expect(lightnessToLabel(0.0)).toBe('100')
+  })
+
+  it('resolves collisions to nearest available increments ensuring all labels are unique', () => {
+    // 3 swatches where raw positions are 2.8, 5.5, 10.0 (as in the user's yellow palette)
+    const l1 = [1 - 0.028, 1 - 0.055, 1 - 0.100]
+    expect(calculateRampLabels(l1)).toEqual(['3', '5', '10'])
+
+    // When the first is closer to 5 and second is at 7.0:
+    const l2 = [1 - 0.048, 1 - 0.070, 1 - 0.100]
+    expect(calculateRampLabels(l2)).toEqual(['5', '7', '10'])
+  })
+
+  it('guarantees unique labels across every generated ramp even with high step counts or compressed lightness', () => {
+    for (const hex of ['#facc15', '#7c3aed', '#00ff66', '#0044ff']) {
+      for (const steps of [5, 9, 11, 21]) {
+        const ramp = generateRamp(createPalette(hex, steps))
+        const labels = ramp.map((s) => s.label)
+        const unique = new Set(labels)
+        expect(unique.size).toBe(ramp.length)
+      }
     }
   })
 

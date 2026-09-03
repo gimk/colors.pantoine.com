@@ -927,7 +927,7 @@ describe('the review board', () => {
     expect(rows).not.toContain('swatch__meta')
     expect(rows.match(/class="swatch__stamp"/g)).toHaveLength(bases.length * DEFAULT_STEPS)
     expect(rows).toContain('>#7c3aed<')
-    expect(rows).toContain('>500<')
+    expect(rows).toContain('>50<')
     expect(rows).toContain('class="swatch__stamp-contrast"')
     expect(rows).toMatch(/W \d+(\.\d+)? · B \d+(\.\d+)?/)
     const stamp = declarations('.swatch__stamp')

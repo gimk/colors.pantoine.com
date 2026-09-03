@@ -1,4 +1,4 @@
-import { CHANNELS, clamp, sampleCurve } from './curve'
+import { CHANNELS, clamp, sampleCurve, type Curve } from './curve'
 import {
   contrastRatio,
   mapToGamut,
@@ -35,19 +35,120 @@ const WHITE_LUMINANCE = 1
 const BLACK_LUMINANCE = 0
 
 /**
- * Token names designers already expect. The common counts get the familiar
- * Tailwind-ish scale; anything else falls back to plain hundreds.
+ * Convert an OKLCH lightness (0 → 1) to a step label (0 → 100),
+ * rounded to the closest increment of 5.
+ *
+ * Examples:
+ * - Lightness 1.0 (pure white) -> '0'
+ * - Lightness 0.9 -> '10'
+ * - Lightness 0.5 -> '50'
+ * - Lightness 0.0 (pure black) -> '100'
  */
-export function stepLabels(steps: number): string[] {
-  const known: Record<number, number[]> = {
-    9: [100, 200, 300, 400, 500, 600, 700, 800, 900],
-    10: [50, 100, 200, 300, 400, 500, 600, 700, 800, 900],
-    11: [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950],
-    12: [25, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950],
+export function lightnessToLabel(lightness: number): string {
+  const raw = (1 - clamp(lightness, 0, 1)) * 100
+  return String(Math.round(raw / 5) * 5)
+}
+
+const NON_FIVE_PENALTY = 2.6
+
+/**
+ * Assign unique integer labels (0 → 100) to swatches based on their lightness,
+ * preferring multiples of 5, and resolving collisions with nearest available increments.
+ */
+export function calculateRampLabels(lightnesses: number[]): string[] {
+  const n = lightnesses.length
+  if (n === 0) return []
+  if (n === 1) return [lightnessToLabel(lightnesses[0])]
+
+  // Compute raw values: (1 - L) * 100
+  const raws = lightnesses.map((l) => (1 - clamp(l, 0, 1)) * 100)
+
+  // Track original indices and sort by raw lightness
+  const indices = Array.from({ length: n }, (_, i) => i)
+  indices.sort((a, b) => raws[a] - raws[b] || a - b)
+
+  const sortedRaws = indices.map((i) => raws[i])
+
+  // DP to find strictly increasing integers y_0 < y_1 < ... < y_{n-1}
+  // Range of possible labels: 0 to 100
+  const MAX_VAL = 100
+  const dp: number[][] = Array.from({ length: n }, () => new Array(MAX_VAL + 1).fill(Infinity))
+  const parent: number[][] = Array.from({ length: n }, () => new Array(MAX_VAL + 1).fill(-1))
+
+  const cost = (r: number, v: number) => {
+    const dist = Math.abs(v - r)
+    const penalty = v % 5 === 0 ? 0 : NON_FIVE_PENALTY
+    return dist + penalty
   }
-  const preset = known[steps]
-  if (preset) return preset.map(String)
-  return Array.from({ length: steps }, (_, i) => String((i + 1) * 100))
+
+  // Base case: i = 0
+  for (let v = 0; v <= MAX_VAL; v++) {
+    dp[0][v] = cost(sortedRaws[0], v)
+  }
+
+  // DP transitions: i from 1 to n - 1
+  for (let i = 1; i < n; i++) {
+    const r = sortedRaws[i]
+    let minPrevCost = Infinity
+    let bestPrevV = -1
+
+    for (let v = 0; v <= MAX_VAL; v++) {
+      const prevV = v - 1
+      if (prevV >= 0 && dp[i - 1][prevV] < minPrevCost) {
+        minPrevCost = dp[i - 1][prevV]
+        bestPrevV = prevV
+      }
+
+      if (minPrevCost < Infinity) {
+        dp[i][v] = minPrevCost + cost(r, v)
+        parent[i][v] = bestPrevV
+      }
+    }
+  }
+
+  // Find best ending value for swatch n - 1
+  let bestEndV = -1
+  let minTotalCost = Infinity
+  for (let v = 0; v <= MAX_VAL; v++) {
+    if (dp[n - 1][v] < minTotalCost) {
+      minTotalCost = dp[n - 1][v]
+      bestEndV = v
+    }
+  }
+
+  if (bestEndV === -1) {
+    return lightnesses.map(lightnessToLabel)
+  }
+
+  // Backtrack to recover assigned values
+  const sortedLabels: number[] = new Array(n)
+  let currV = bestEndV
+  for (let i = n - 1; i >= 0; i--) {
+    sortedLabels[i] = currV
+    currV = parent[i][currV]
+  }
+
+  // Map back to original order
+  const result: string[] = new Array(n)
+  for (let k = 0; k < n; k++) {
+    result[indices[k]] = String(sortedLabels[k])
+  }
+
+  return result
+}
+
+/**
+ * Token names representing the color position along the lightness ramp,
+ * following lightness, rounded to the closest increment of 5, and resolving collisions.
+ */
+export function stepLabels(steps: number, lightnessCurve?: Curve): string[] {
+  if (steps <= 0) return []
+  const last = Math.max(steps - 1, 1)
+  const lightnesses = Array.from({ length: steps }, (_, i) => {
+    const x = i / last
+    return lightnessCurve ? sampleCurve(lightnessCurve, x) : 1 - x
+  })
+  return calculateRampLabels(lightnesses)
 }
 
 /** The base colour resolved to OKLCH, with a fallback for invalid input. */
@@ -90,22 +191,27 @@ export function chromaCeilingProfile(
 
 export function generateRamp(config: PaletteConfig, gamut: Gamut = 'srgb'): Swatch[] {
   const base = resolveBase(config)
-  const labels = stepLabels(config.steps)
   const last = Math.max(config.steps - 1, 1)
 
-  return Array.from({ length: config.steps }, (_, index) => {
+  const colors: Oklch[] = Array.from({ length: config.steps }, (_, index) => {
     const x = index / last
-    const color: Oklch = {
+    return {
       l: clamp(sampleCurve(config.lightness, x), CHANNELS.lightness.min, CHANNELS.lightness.max),
       c: clamp(sampleCurve(config.chroma, x), CHANNELS.chroma.min, CHANNELS.chroma.max),
       h: normalizeHue(base.h + sampleCurve(config.hue, x)),
     }
+  })
+
+  const labels = calculateRampLabels(colors.map((c) => c.l))
+
+  return colors.map((color, index) => {
+    const x = index / last
     const mapped = mapToGamut(color, gamut)
     const luminance = relativeLuminance(color)
 
     return {
       index,
-      label: labels[index] ?? String(index),
+      label: labels[index] ?? lightnessToLabel(color.l),
       x,
       oklch: color,
       hex: mapped.hex,
