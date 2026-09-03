@@ -189,6 +189,70 @@ describe('the board as SVG', () => {
     expect(new Set(rectYs)).toEqual(new Set([0, 215]))
   })
 
+  /**
+   * With the steps unlocked, `stepWeights` is sized from the palette that
+   * happens to be selected, so a longer ramp runs off the end of it. Every
+   * step past the end used to be dropped for want of a width, which took the
+   * tail off any palette with more steps than that one.
+   */
+  it('draws every step of a palette longer than the shared weights', () => {
+    const long = generateRamp(createPalette('#0ea5e9', 17))
+    const short = generateRamp(createPalette('#7c3aed', 5))
+    expect(long).toHaveLength(17)
+
+    const mixed = boardSvg([{ name: 'Short', ramp: short }, { name: 'Long', ramp: long }], {
+      ...options,
+      // As the board hands them over: five entries, for the selected palette.
+      stepWeights: short.map(() => 1),
+      labels: false,
+    })
+
+    expect(mixed.match(/<rect /g)).toHaveLength(short.length + long.length)
+    for (const swatch of long) {
+      expect(mixed).toContain(`id="long-${swatch.label}"`)
+    }
+
+    // And each ramp still spans the full width, tiled edge to edge.
+    const band = mixed.slice(mixed.indexOf('<g id="long">'))
+    const xs = [...band.matchAll(/<rect [^>]*x="(\d+)"/g)].map((m) => Number(m[1]))
+    const widths = [...band.matchAll(/<rect [^>]*width="(\d+)"/g)].map((m) => Number(m[1]))
+    expect(xs[0]).toBe(0)
+    xs.forEach((x, index) => {
+      if (index === 0) return
+      expect(x).toBe(xs[index - 1] + widths[index - 1])
+    })
+    expect(xs[xs.length - 1] + widths[widths.length - 1]).toBe(1000)
+  })
+
+  it('fills every step of a longer palette on canvas too', () => {
+    const long = generateRamp(createPalette('#0ea5e9', 17))
+    const short = generateRamp(createPalette('#7c3aed', 5))
+    const filled: { w: number; h: number }[] = []
+    const ctx = {
+      fillStyle: '',
+      fillRect: (_x: number, _y: number, w: number, h: number) => filled.push({ w, h }),
+      fillText: () => {},
+      measureText: () => ({ width: 0 }),
+      textAlign: '',
+      textBaseline: '',
+      font: '',
+    }
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => ctx,
+    } as unknown as HTMLCanvasElement
+
+    drawBoard(canvas, [{ name: 'Short', ramp: short }, { name: 'Long', ramp: long }], {
+      ...options,
+      stepWeights: short.map(() => 1),
+      labels: false,
+    })
+
+    // One background fill, then every step of both ramps.
+    expect(filled).toHaveLength(1 + short.length + long.length)
+  })
+
   it('draws contrast-based labels on canvas when labels are enabled (without palette names)', () => {
     const filledTexts: { text: string; fillStyle: string }[] = []
     const filledRects: { x: number; y: number; w: number; h: number; fillStyle: string }[] = []

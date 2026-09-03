@@ -161,7 +161,13 @@ export type BoardOptions = {
   gap: number
   /** Share of the stacking axis per palette, in document order. */
   paletteWeights: number[]
-  /** Share of the ramp axis per step, shared by every palette. */
+  /**
+   * Share of the ramp axis per step, shared by every palette so they line up.
+   *
+   * Need not cover the longest ramp: with the steps unlocked a palette can
+   * have more steps than the array has entries, and a missing entry counts as
+   * one share, as it does on the board itself.
+   */
   stepWeights: number[]
   /** Palette names, and each step's value stamped on its block. */
   labels: boolean
@@ -200,6 +206,32 @@ export function tracks(
   })
 }
 
+/**
+ * Step tracks for one ramp, cached per step count.
+ *
+ * `stepWeights` is a single array shared by every palette, so that palettes of
+ * the same length line up step for step. With the steps unlocked they need not
+ * be the same length, and a longer ramp runs off the end of the array — so a
+ * missing entry counts as one share, exactly as the board's own flex layout
+ * treats it. Reading the width straight out of the array instead dropped every
+ * step past the end for want of one, which is how a palette with more steps
+ * than the others came out of the exporters short.
+ */
+function stepTracker(
+  weights: number[],
+  total: number,
+): (count: number) => { start: number; size: number }[] {
+  const cache = new Map<number, { start: number; size: number }[]>()
+  return (count) => {
+    const cached = cache.get(count)
+    if (cached) return cached
+    const own = Array.from({ length: count }, (_, index) => weights[index] ?? 1)
+    const laid = tracks(own, total, 0)
+    cache.set(count, laid)
+    return laid
+  }
+}
+
 function escapeXml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -231,11 +263,12 @@ export function drawBoard(
     rows ? canvas.height : canvas.width,
     Math.round(options.gap),
   )
-  const steps = tracks(options.stepWeights, rows ? canvas.width : canvas.height, 0)
+  const stepsFor = stepTracker(options.stepWeights, rows ? canvas.width : canvas.height)
 
   palettes.forEach((palette, index) => {
     const band = bands[index]
     if (!band) return
+    const steps = stepsFor(palette.ramp.length)
     palette.ramp.forEach((swatch, position) => {
       const step = steps[position]
       if (!step) return
@@ -255,6 +288,7 @@ export function drawBoard(
   palettes.forEach((palette, index) => {
     const band = bands[index]
     if (!band) return
+    const steps = stepsFor(palette.ramp.length)
 
     // Step labels: color number + value centred on each chip
     palette.ramp.forEach((swatch, position) => {
@@ -323,7 +357,7 @@ export function boardSvg(palettes: BoardPalette[], options: BoardOptions): strin
     rows ? height : width,
     Math.round(options.gap),
   )
-  const steps = tracks(options.stepWeights, rows ? width : height, 0)
+  const stepsFor = stepTracker(options.stepWeights, rows ? width : height)
   const fontPx = Math.round(Math.min(Math.max(width / 160, 9), 16))
   const subFontPx = Math.round(fontPx * 0.85)
   const contrastFontPx = Math.round(fontPx * 0.75)
@@ -333,6 +367,7 @@ export function boardSvg(palettes: BoardPalette[], options: BoardOptions): strin
       const band = bands[index]
       if (!band) return ''
       const slug = slugify(palette.name)
+      const steps = stepsFor(palette.ramp.length)
       const rects = palette.ramp
         .map((swatch, position) => {
           const step = steps[position]
