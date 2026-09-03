@@ -29,7 +29,8 @@ export type Restored = {
   stepsLocked?: boolean
 }
 
-const segmentOf = (seed: DecodedPalette) => encodePalette(seed.config, seed.name)
+const segmentOf = (seed: DecodedPalette) =>
+  encodePalette(seed.config, seed.name, seed.nameCustom)
 
 /** Every access is guarded: storage throws outright when a browser blocks it. */
 function readStored(): Restored | null {

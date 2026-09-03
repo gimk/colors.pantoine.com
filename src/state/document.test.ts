@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { flat } from '../color/curve'
+import { nameForColor } from '../color/names'
 import { formatColor, normalizeHue, parseToOklch, toHex } from '../color/oklch'
 import { createPalette } from '../color/presets'
 import {
   createDocument,
   documentReducer,
+  HUE_JITTER,
   MAX_PALETTES,
+  NEW_PALETTE_HUE_STEP,
   selectedEntry,
   type DocumentAction,
   type DocumentState,
@@ -46,14 +49,30 @@ describe('document', () => {
     const doc = run(createDocument(), { type: 'new' })
     expect(doc.palettes).toHaveLength(2)
     expect(selectedEntry(doc).id).toBe(doc.palettes[1].id)
-    expect(doc.palettes[1].name).toBe('Rowan')
+    // Named after whatever colour it landed on, which the quick-add varies.
+    expect(doc.palettes[1].name).toBe(nameForColor(doc.palettes[1].state.config.base))
   })
 
   it('starts a new palette elsewhere on the hue circle', () => {
     // Two identical purple ramps would be no use to anyone building a scheme.
-    const doc = run(createDocument(), { type: 'new' })
-    const [first, second] = doc.palettes.map((entry) => hueOf(entry.state.config.base))
-    expect(Math.abs(normalizeHue(second - first) - 72)).toBeLessThan(3)
+    // The step is the golden angle, give or take the jitter either side of it
+    // — plus a few degrees, since the base is stored as hex and a new one is
+    // picked at a fresh lightness and chroma, which quantises differently.
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const doc = run(createDocument(), { type: 'new' })
+      const [first, second] = doc.palettes.map((entry) => hueOf(entry.state.config.base))
+      const step = normalizeHue(second - first)
+      expect(Math.abs(step - NEW_PALETTE_HUE_STEP)).toBeLessThan(HUE_JITTER / 2 + 4)
+    }
+  })
+
+  it('does not hand out the same colour twice in a run of quick-adds', () => {
+    // The reason the step is jittered: a fixed one walks the wheel in a cycle
+    // and starts handing back colours the document already has.
+    let doc = createDocument()
+    for (let i = 0; i < MAX_PALETTES - 1; i++) doc = run(doc, { type: 'new' })
+    const bases = doc.palettes.map((entry) => entry.state.config.base)
+    expect(new Set(bases).size).toBe(bases.length)
   })
 
   it('edits only the selected palette', () => {
@@ -327,6 +346,144 @@ describe('setting base color', () => {
       action: { type: 'setBase', value: '#050505' },
     })
     expect(afterDarkBase.palettes[0].state.config.baseIndex).toBe(newIndex)
+  })
+
+  it('renames a still-derived palette to the colour that was picked', () => {
+    const doc = createDocument()
+    expect(doc.palettes[0].name).toBe('brand')
+
+    const orange = run(doc, {
+      type: 'palette',
+      action: { type: 'setBase', value: '#ff5722' },
+    })
+    expect(orange.palettes[0].name).toBe('Smashing Pumpkins')
+
+    // And again: the name tracks the colour for as long as it is derived.
+    const blue = run(orange, {
+      type: 'palette',
+      action: { type: 'setBase', value: '#1e88e5' },
+    })
+    expect(blue.palettes[0].name).toBe('Bleu de France')
+  })
+
+  it('leaves a name the designer typed alone', () => {
+    const start = createDocument()
+    const named = run(start, {
+      type: 'rename',
+      id: start.palettes[0].id,
+      name: 'My Custom Brand',
+    })
+    expect(named.palettes[0].name).toBe('My Custom Brand')
+
+    const edited = run(named, {
+      type: 'palette',
+      action: { type: 'setBase', value: '#00ff66' },
+    })
+    expect(edited.palettes[0].name).toBe('My Custom Brand')
+  })
+
+  it('holds the last good name while a hex is half typed', () => {
+    // The base field keeps unparseable input so the designer can finish
+    // typing; the name must not flicker through `nameForColor`'s fallback.
+    const start = run(createDocument(), {
+      type: 'palette',
+      action: { type: 'setBase', value: '#ff5722' },
+    })
+    expect(start.palettes[0].name).toBe('Smashing Pumpkins')
+
+    const midTyping = run(
+      start,
+      { type: 'palette', action: { type: 'setBase', value: '#' } },
+      { type: 'palette', action: { type: 'setBase', value: '#1' } },
+      { type: 'palette', action: { type: 'setBase', value: '#1e' } },
+    )
+    expect(midTyping.palettes[0].name).toBe('Smashing Pumpkins')
+
+    const finished = run(midTyping, {
+      type: 'palette',
+      action: { type: 'setBase', value: '#1e88e5' },
+    })
+    expect(finished.palettes[0].name).toBe('Bleu de France')
+  })
+
+  it('hands the name back to the colour when the field is cleared', () => {
+    const start = createDocument()
+    const id = start.palettes[0].id
+    const named = run(start, { type: 'rename', id, name: 'Mine' })
+    const cleared = run(named, { type: 'rename', id, name: '' })
+    // The name the default violet base derives to, not the `brand` it opened
+    // with: clearing the field asks for the colour's own name.
+    expect(cleared.palettes[0].name).toBe('Bluish Purple')
+
+    // Cleared is not just a name change: the palette follows the colour again.
+    const edited = run(cleared, {
+      type: 'palette',
+      action: { type: 'setBase', value: '#ff5722' },
+    })
+    expect(edited.palettes[0].name).toBe('Smashing Pumpkins')
+  })
+
+  it('does not take a name another palette is already using', () => {
+    const two = run(createDocument(), { type: 'add', bases: [{ base: '#ff5722' }] })
+    expect(two.palettes[1].name).toBe('Smashing Pumpkins')
+
+    // The second palette is selected after an add, so steer the first one
+    // onto the colour the second already answers to.
+    const collided = run(
+      two,
+      { type: 'select', id: two.palettes[0].id },
+      { type: 'palette', action: { type: 'setBase', value: '#ff5722' } },
+    )
+    expect(collided.palettes[0].name).toBe('Smashing Pumpkins 2')
+    expect(collided.palettes[1].name).toBe('Smashing Pumpkins')
+  })
+
+  it('carries whether the name was typed through a link and back', () => {
+    const start = createDocument()
+    const id = start.palettes[0].id
+    const doc = run(
+      start,
+      { type: 'rename', id, name: 'Mine' },
+      { type: 'add', bases: [{ base: '#1e88e5' }] },
+    )
+
+    const seeds = doc.palettes.map((entry) => ({
+      config: entry.state.config,
+      name: entry.name,
+      nameCustom: entry.nameCustom,
+    }))
+    const reopened = createDocument(decodeDocument(encodeDocument(seeds)))
+
+    expect(reopened.palettes.map((entry) => entry.name)).toEqual(['Mine', 'Bleu de France'])
+
+    // The typed name survives an edit; the derived one still follows.
+    const edited = run(
+      reopened,
+      { type: 'select', id: reopened.palettes[0].id },
+      { type: 'palette', action: { type: 'setBase', value: '#ff5722' } },
+      { type: 'select', id: reopened.palettes[1].id },
+      { type: 'palette', action: { type: 'setBase', value: '#facc15' } },
+    )
+    expect(edited.palettes.map((entry) => entry.name)).toEqual(['Mine', 'Goldenrod'])
+  })
+
+  it('infers a typed name from a link written before the flag existed', () => {
+    // Legacy segments carry no `nc`, so the name itself has to say. A derived
+    // name goes on following the colour; anything else is treated as typed.
+    const derived = decodePalette(encodePalette(createPalette('#7c3aed'), 'Bluish Purple'))!
+    expect(derived.nameCustom).toBeUndefined()
+    const followed = run(createDocument([derived]), {
+      type: 'palette',
+      action: { type: 'setBase', value: '#ff5722' },
+    })
+    expect(followed.palettes[0].name).toBe('Smashing Pumpkins')
+
+    const typed = decodePalette(encodePalette(createPalette('#7c3aed'), 'Grape Soda'))!
+    const kept = run(createDocument([typed]), {
+      type: 'palette',
+      action: { type: 'setBase', value: '#ff5722' },
+    })
+    expect(kept.palettes[0].name).toBe('Grape Soda')
   })
 })
 

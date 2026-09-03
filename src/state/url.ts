@@ -10,7 +10,14 @@ import { createPalette, MAX_STEPS, MIN_STEPS, type PaletteConfig } from '../colo
  * store anything in.
  */
 
-const KEYS = { base: 'c', name: 'n', steps: 's', baseIndex: 'b', locked: 'x' } as const
+const KEYS = {
+  base: 'c',
+  name: 'n',
+  steps: 's',
+  baseIndex: 'b',
+  locked: 'x',
+  nameCustom: 'nc',
+} as const
 
 /** Document-level, so it lives in its own segment rather than on a palette. */
 const GAMUT_KEY = 'g'
@@ -36,20 +43,29 @@ function decodeCurve(raw: string | null): Curve | null {
   return { start, end, h1: { x: h1x, y: h1y }, h2: { x: h2x, y: h2y } }
 }
 
-export function encodePalette(config: PaletteConfig, name: string): string {
+export function encodePalette(
+  config: PaletteConfig,
+  name: string,
+  nameCustom = false,
+): string {
   const params = new URLSearchParams()
   params.set(KEYS.base, config.base.replace(/^#/, ''))
   params.set(KEYS.name, name)
   params.set(KEYS.steps, String(config.steps))
   params.set(KEYS.baseIndex, String(config.baseIndex))
   if (config.baseLocked) params.set(KEYS.locked, '1')
+  // Written only when the designer typed the name themselves. A palette still
+  // carrying its derived colour name is the default, so omitting the flag
+  // there keeps ordinary links exactly the length they always were — and an
+  // older reader ignores the key the way it ignores any other it lacks.
+  if (nameCustom) params.set(KEYS.nameCustom, '1')
   params.set(CURVE_KEYS.lightness, encodeCurve(config.lightness))
   params.set(CURVE_KEYS.chroma, encodeCurve(config.chroma))
   params.set(CURVE_KEYS.hue, encodeCurve(config.hue))
   return params.toString()
 }
 
-export type DecodedPalette = { config: PaletteConfig; name: string }
+export type DecodedPalette = { config: PaletteConfig; name: string; nameCustom?: boolean }
 
 /**
  * Restores the saved base color string.
@@ -99,7 +115,14 @@ export function decodePalette(hash: string): DecodedPalette | null {
     if (curve) config[key] = clampCurve(curve, CHANNELS[key])
   }
 
-  return { config, name: params.get(KEYS.name) || 'brand' }
+  // Absent rather than `false` when the key is missing, so a link written
+  // before the flag existed stays undecided and lets `createDocument` infer
+  // it from the name instead of being told the wrong thing.
+  const nameCustom = params.has(KEYS.nameCustom)
+    ? params.get(KEYS.nameCustom) === '1'
+    : undefined
+
+  return { config, name: params.get(KEYS.name) || 'brand', nameCustom }
 }
 
 /**
@@ -117,7 +140,9 @@ export function encodeDocument(
   gamut: Gamut = 'srgb',
   stepsLocked = true,
 ): string {
-  const segments = palettes.map((entry) => encodePalette(entry.config, entry.name))
+  const segments = palettes.map((entry) =>
+    encodePalette(entry.config, entry.name, entry.nameCustom),
+  )
   // Carries no palette key, so `decodeDocument` drops it the way it drops any
   // other segment it cannot read — which is what lets an older reader open a
   // link from a newer one. Omitted at the default so ordinary links are

@@ -50,6 +50,7 @@ const historyReducer = withHistory(documentReducer, {
 export type PaletteView = {
   id: string
   name: string
+  nameCustom?: boolean
   config: PaletteConfig
   ramp: Swatch[]
   edited: boolean
@@ -121,6 +122,7 @@ export function useDocument(seed: Seed): DocumentApi {
       state.palettes.map((entry) => ({
         id: entry.id,
         name: entry.name,
+        nameCustom: entry.nameCustom,
         config: entry.state.config,
         ramp: rampFor(entry.state.config, state.gamut),
         edited: anyEdited(entry.state.edited),

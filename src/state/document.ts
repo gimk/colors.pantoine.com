@@ -1,5 +1,6 @@
 import { CHANNEL_ORDER, clamp, curvesEqual, type Curve } from '../color/curve'
 import { normalizeHue, parseGamut, parseToOklch, toHex, type Gamut } from '../color/oklch'
+import { maxChromaFor } from '../color/gamut'
 import { nameForColor } from '../color/names'
 import {
   chromaCurveFor,
@@ -35,6 +36,7 @@ import {
 export type PaletteEntry = {
   id: string
   name: string
+  nameCustom?: boolean
   state: PaletteState
 }
 
@@ -73,18 +75,23 @@ export type DocumentAction =
   | { type: 'syncChannel'; key: CurveKey }
 
 /**
- * A new palette starts a fifth of the way around the hue circle from the one
- * you were editing. Two identical purple ramps would be no use, and a scheme
- * is usually built by stepping around the wheel.
+ * How far around the hue circle a new palette lands from the one you were
+ * editing. The golden angle, so a run of quick-adds keeps landing in the gaps
+ * rather than retracing a fifth of the wheel back onto colours you already
+ * have — two near-identical ramps being no use to anyone building a scheme.
  */
-const NEW_PALETTE_HUE_STEP = 72
+export const NEW_PALETTE_HUE_STEP = 137.5
+
+/** Spread either side of that step, and of the lightness a new base takes. */
+export const HUE_JITTER = 60
+const LIGHTNESS_JITTER = 0.3
 
 let nextId = 0
 
 /** Ids are per-session handles for React keys and selection, never persisted. */
 const makeId = () => `p${++nextId}`
 
-export type PaletteSeed = { name: string; config: PaletteConfig }
+export type PaletteSeed = { name: string; config: PaletteConfig; nameCustom?: boolean }
 
 /**
  * A palette to create, named by whoever asked for it.
@@ -109,11 +116,13 @@ function makeEntry(
   name: string,
   steps?: number,
   gamut: Gamut = 'srgb',
+  nameCustom = false,
 ): PaletteEntry {
   if (typeof seed === 'string') {
     return {
       id: makeId(),
       name,
+      nameCustom,
       state: {
         config: createPalette(seed, steps ?? DEFAULT_STEPS, gamut),
         edited: { ...NOTHING_EDITED },
@@ -123,7 +132,7 @@ function makeEntry(
   // A config seed arrives fully formed, from a link or from storage, so
   // `steps` has nothing to derive and is deliberately unused:
   // overriding its curves here would discard someone's saved work.
-  return { id: makeId(), name, state: initialPaletteState(seed, gamut) }
+  return { id: makeId(), name, nameCustom, state: initialPaletteState(seed, gamut) }
 }
 
 export function createDocument(
@@ -135,7 +144,8 @@ export function createDocument(
   const globalSteps = seeds.length ? seeds[0].config.steps : DEFAULT_STEPS
   const palettes = seeds.length
     ? seeds.map((seed) => {
-        const entry = makeEntry(seed.config, seed.name, undefined, gamut)
+        const isCustom = seed.nameCustom ?? !looksDerived(seed.name, seed.config.base)
+        const entry = makeEntry(seed.config, seed.name, undefined, gamut, isCustom)
         if (stepsLocked && entry.state.config.steps !== globalSteps) {
           entry.state = paletteReducer(
             entry.state,
@@ -145,7 +155,7 @@ export function createDocument(
         }
         return entry
       })
-    : [makeEntry(FALLBACK_BASE, 'brand', globalSteps, gamut)]
+    : [makeEntry(FALLBACK_BASE, 'brand', globalSteps, gamut, false)]
   // Default to the last one: that is the working palette, the one the toolbox
   // opens under, with the finished ones stacked above it.
   const index = selected >= 0 && selected < palettes.length ? selected : palettes.length - 1
@@ -158,11 +168,22 @@ export const selectedEntry = (state: DocumentState): PaletteEntry =>
 const indexOfId = (state: DocumentState, id: string) =>
   state.palettes.findIndex((entry) => entry.id === id)
 
-/** Base colour for a new palette, stepped around the wheel from `from`. */
-function steppedBase(from: PaletteConfig | undefined): string {
+/**
+ * Base colour for a new palette, stepped around the wheel from `from` with
+ * enough variation that no two quick-adds hand you the same colour.
+ *
+ * Lightness and chroma wander as well as hue: stepping hue alone off a very
+ * dark or very washed-out base gives you a row of equally unusable ramps. The
+ * chroma is taken as a fraction of what this particular hue and lightness can
+ * actually hold, so a new base is vivid without being clipped on arrival.
+ */
+function steppedBase(from: PaletteConfig | undefined, gamut: Gamut = 'srgb'): string {
   if (!from) return FALLBACK_BASE
   const base = resolveBase(from)
-  return toHex({ ...base, h: normalizeHue(base.h + NEW_PALETTE_HUE_STEP) })
+  const h = normalizeHue(base.h + NEW_PALETTE_HUE_STEP + (Math.random() - 0.5) * HUE_JITTER)
+  const l = clamp(0.48 + (Math.random() - 0.5) * LIGHTNESS_JITTER, 0.38, 0.82)
+  const c = clamp(maxChromaFor(l, h, gamut) * (0.65 + Math.random() * 0.28), 0.08, 0.32)
+  return toHex({ l, c, h })
 }
 
 function replaceEntry(
@@ -272,6 +293,18 @@ function nameForBase(base: string): string {
   return nameForColor(base)
 }
 
+/**
+ * Whether a name looks derived from the colour rather than typed by a person.
+ *
+ * Only ever asked of a link or a saved document written before `nameCustom`
+ * travelled alongside the name; anything newer states the answer outright.
+ * The trailing ordinal is stripped first because `uniqueName` appends one when
+ * two palettes land on the same colour, and `Red 2` is still a derived name.
+ */
+function looksDerived(name: string, base: string): boolean {
+  return name === 'brand' || name.replace(/ \d+$/, '') === nameForBase(base)
+}
+
 /** `name`, or the first `name 2`, `name 3` … not already spoken for. Records
  *  whatever it hands out, so a batch cannot collide with itself. */
 function uniqueName(taken: Set<string>, name: string): string {
@@ -351,6 +384,29 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
       const current = selectedEntry(state)
       const next = paletteReducer(current.state, action.action, state.gamut)
       if (next === current.state) return state
+
+      // A palette still carrying the name this app gave it is really showing
+      // its colour, so picking a new base renames it to match. Once someone
+      // has typed a name of their own it is theirs, and no edit overwrites it.
+      //
+      // Only once the base parses, though. The field keeps half-typed input so
+      // the designer can finish the hex, and the name holds its last good
+      // colour the way the ramp does rather than flickering through the
+      // fallback on `#`, `#1`, `#1e`…
+      if (
+        action.action.type === 'setBase' &&
+        !current.nameCustom &&
+        parseToOklch(next.config.base) !== null
+      ) {
+        // Every other palette's name is spoken for; this one's is being
+        // replaced, so it is not counted against itself.
+        const taken = new Set(
+          state.palettes.filter((entry) => entry.id !== current.id).map((entry) => entry.name),
+        )
+        const name = uniqueName(taken, nameForBase(next.config.base))
+        return replaceEntry(state, current.id, (entry) => ({ ...entry, name, state: next }))
+      }
+
       return replaceEntry(state, current.id, (entry) => ({ ...entry, state: next }))
     }
 
@@ -374,7 +430,13 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
       // storage.ts de-dupes into one.
       const taken = new Set(state.palettes.map((entry) => entry.name))
       const entries = usable.map((entry) =>
-        makeEntry(entry.base, uniqueName(taken, entry.name || nameForBase(entry.base)), steps, state.gamut),
+        makeEntry(
+          entry.base,
+          uniqueName(taken, entry.name || nameForBase(entry.base)),
+          steps,
+          state.gamut,
+          Boolean(entry.name),
+        ),
       )
 
       return {
@@ -387,13 +449,14 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
     case 'new': {
       const currentConfig = selectedEntry(state).state.config
       const currentSteps = currentConfig.steps
-      const base = steppedBase(currentConfig)
+      const base = steppedBase(currentConfig, state.gamut)
       const taken = new Set(state.palettes.map((entry) => entry.name))
       const entry = makeEntry(
         base,
         uniqueName(taken, nameForBase(base)),
         currentSteps,
         state.gamut,
+        false,
       )
       return { ...state, palettes: [...state.palettes, entry], selectedId: entry.id }
     }
@@ -435,7 +498,16 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
     }
 
     case 'rename':
-      return replaceEntry(state, action.id, (entry) => ({ ...entry, name: action.name }))
+      return replaceEntry(state, action.id, (entry) => {
+        // Typing a name claims it: from here on the palette keeps it, whatever
+        // the base becomes. Clearing the field is how you hand it back — the
+        // derived name returns and starts following the colour again.
+        const nameCustom = action.name.trim().length > 0
+        const name = nameCustom ? action.name : nameForBase(entry.state.config.base)
+        return entry.name === name && entry.nameCustom === nameCustom
+          ? entry
+          : { ...entry, name, nameCustom }
+      })
   }
 }
 

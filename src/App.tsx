@@ -21,7 +21,11 @@ function readSession() {
 
 /** What the address bar and storage both hold: every palette, in order. */
 const seedsOf = (palettes: PaletteView[]) =>
-  palettes.map((entry) => ({ config: entry.config, name: entry.name }))
+  palettes.map((entry) => ({
+    config: entry.config,
+    name: entry.name,
+    nameCustom: entry.nameCustom,
+  }))
 
 export function App() {
   const [session] = useState(readSession)
@@ -189,8 +193,8 @@ export function App() {
             }}
           />
 
-          {/* The old behaviour, kept as a shortcut. A fifth of the wheel is a
-              poor guess for a scheme but a fine one for "just give me another
+          {/* The old behaviour, kept as a shortcut. A guessed colour is a poor
+              answer for a scheme but a fine one for "just give me another
               ramp", and that is worth not making anyone open a dialog for. */}
           <button
             type="button"
@@ -198,7 +202,7 @@ export function App() {
               doc.newPalette()
               triggerScroll()
             }}
-            title="Add a palette a fifth of the way around the hue wheel, without the dialog"
+            title="Add a palette in a fresh colour further round the hue wheel, without the dialog"
           >
             + Quick add
           </button>

@@ -7,6 +7,7 @@ import type { DocumentApi } from '../state/useDocument'
 import { BaseColorInput } from './BaseColorInput'
 import { CurvePanel } from './CurvePanel'
 import { ExportPanel } from './ExportPanel'
+import { NameField } from './NameField'
 import { NumberField } from './NumberField'
 
 const STORAGE_KEY = 'colors.pantoine.com/toolbox-graph-h'
@@ -109,18 +110,13 @@ export function Toolbox({ doc, shareHref }: Props) {
       <div className="toolbox__controls">
         <div className="toolbox__primary">
           <div className="toolbox__param">
-            <label className="field field--stacked">
-              <span className="field__tag">Name</span>
-              <input
-                type="text"
-                className="toolbox__input-name"
-                value={selected.name}
-                spellCheck={false}
-                autoComplete="off"
-                placeholder="Palette name"
-                onChange={(event) => doc.rename(selected.id, event.target.value)}
-              />
-            </label>
+            {/* Keyed so switching palettes brings a fresh field rather than
+                carrying a half-typed name across to the next one. */}
+            <NameField
+              key={selected.id}
+              name={selected.name}
+              onRename={(name) => doc.rename(selected.id, name)}
+            />
           </div>
 
           <div className="toolbox__param">
