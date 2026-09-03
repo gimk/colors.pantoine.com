@@ -237,6 +237,39 @@ describe('document', () => {
     expect(doc.palettes[1].state.config.steps).toBe(13)
   })
 
+  it('carries the steps lock through a link, so per-palette steps survive', () => {
+    // Encoding without the lock loses more than a toggle: reopening locked
+    // synchronises every palette to the first one's step count, so a 5-step
+    // palette comes back as an 11 and the work is gone.
+    const unlocked = run(
+      createDocument(),
+      { type: 'new' },
+      { type: 'setStepsLocked', value: false },
+    )
+    const doc = run(unlocked, {
+      type: 'setPaletteSteps',
+      id: unlocked.palettes[1].id,
+      value: 5,
+    })
+    expect(doc.palettes.map((entry) => entry.state.config.steps)).toEqual([11, 5])
+
+    const seeds = doc.palettes.map((entry) => ({
+      config: entry.state.config,
+      name: entry.name,
+    }))
+    const hash = encodeDocument(seeds, doc.gamut, doc.stepsLocked)
+    expect(decodeStepsLocked(hash)).toBe(false)
+
+    const reopened = createDocument(
+      decodeDocument(hash),
+      -1,
+      doc.gamut,
+      decodeStepsLocked(hash),
+    )
+    expect(reopened.stepsLocked).toBe(false)
+    expect(reopened.palettes.map((entry) => entry.state.config.steps)).toEqual([11, 5])
+  })
+
   it('syncs lightness across all palettes and aligns their base steps', () => {
     const doc = run(createDocument(), { type: 'new' })
 

@@ -82,8 +82,8 @@ export function App() {
   // Auto-save the document to local storage without writing giant strings to the address bar.
   useEffect(() => {
     const seeds = seedsOf(doc.palettes)
-    saveDocument(seeds, doc.selectedIndex, gamut)
-  }, [doc.palettes, doc.selectedIndex, gamut])
+    saveDocument(seeds, doc.selectedIndex, gamut, doc.stepsLocked)
+  }, [doc.palettes, doc.selectedIndex, gamut, doc.stepsLocked])
 
   const { selected } = doc
 
@@ -135,7 +135,9 @@ export function App() {
   }, [selected.id, scrollTrigger])
 
   const shareHref =
-    typeof window === 'undefined' ? '' : documentUrl(seedsOf(doc.palettes), gamut)
+    typeof window === 'undefined'
+      ? ''
+      : documentUrl(seedsOf(doc.palettes), gamut, doc.stepsLocked)
 
   /**
    * The board is a different page, not the editor with things switched off,
