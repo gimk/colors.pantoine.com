@@ -10,10 +10,12 @@ import {
 import type { Swatch } from '../color/ramp'
 
 /**
- * The graph is as wide as it is given and a fixed height tall.
+ * The graph is as wide and as tall as the panel gives it.
  *
- * Sized 20% taller (228px, up from 190px) to provide comfortable vertical headroom
- * for shaping Bézier curves with strict channel bounds.
+ * This is the height it asks for: 228px, up from 190px, for comfortable
+ * headroom when shaping a Bézier against strict channel bounds. What it gets
+ * is that plus whatever the rows above it did not need, and the plot is drawn
+ * to the height it got — see the measurement below.
  */
 export const DEFAULT_GRAPH_H = 228
 
@@ -71,22 +73,34 @@ export function CurveEditor({
 
   const span = channel.max - channel.min
 
-  // Measured on the svg itself, which is safe from a feedback loop: its width
-  // comes from the panel, never from the viewBox this sets.
-  const [viewW, setViewW] = useState(FALLBACK_W)
+  // Measured on the svg itself, which is safe from a feedback loop: both of
+  // its dimensions come from the panel's flex line, never from the viewBox
+  // this sets. Height is measured rather than taken from `graphH` because
+  // the panel gives the graph whatever its two rows of controls leave, and
+  // those are one line tall at some widths and two at others — a viewBox
+  // that disagreed would letterbox the plot inside its own frame.
+  const [view, setView] = useState({ w: FALLBACK_W, h: graphH })
   useLayoutEffect(() => {
     const svg = svgRef.current
     if (!svg || typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver((entries) => {
-      const next = Math.round(entries[0].contentRect.width)
-      if (next > 0) setViewW(next)
+      const { width, height } = entries[0].contentRect
+      const w = Math.round(width)
+      const h = Math.round(height)
+      setView((current) =>
+        (w > 0 && w !== current.w) || (h > 0 && h !== current.h)
+          ? { w: w > 0 ? w : current.w, h: h > 0 ? h : current.h }
+          : current,
+      )
     })
     observer.observe(svg)
     return () => observer.disconnect()
   }, [])
 
+  const viewW = view.w
+  const viewH = view.h
   const plotW = viewW - PAD.left - PAD.right
-  const plotH = graphH - PAD.top - PAD.bottom
+  const plotH = viewH - PAD.top - PAD.bottom
 
   const last = Math.max(swatches.length - 1, 1)
   const lockedX = lockedIndex === undefined ? null : lockedIndex / last
@@ -106,7 +120,7 @@ export function CurveEditor({
     if (!svg) return { x: 0, y: 0 }
     const rect = svg.getBoundingClientRect()
     const vx = ((clientX - rect.left) / rect.width) * viewW
-    const vy = ((clientY - rect.top) / rect.height) * graphH
+    const vy = ((clientY - rect.top) / rect.height) * viewH
 
     return {
       x: clamp((vx - PAD.left) / plotW, 0, 1),
@@ -217,7 +231,7 @@ export function CurveEditor({
     <svg
       ref={svgRef}
       className="graph"
-      viewBox={`0 0 ${viewW} ${graphH}`}
+      viewBox={`0 0 ${viewW} ${viewH}`}
       role="group"
       aria-label={`${channel.label} curve`}
     >

@@ -11,6 +11,14 @@ import { NumberField } from './NumberField'
 
 const STORAGE_KEY = 'colors.pantoine.com/toolbox-graph-h'
 const DEFAULT_GRAPH_H = 228
+/**
+ * How much taller a panel is than the graph the drag is sizing.
+ *
+ * An estimate, and it no longer has to be exact: the graph is a flex item
+ * that takes whatever the two rows of controls leave, so an error here moves
+ * the whole dock by a few pixels rather than leaving a band of dead paper
+ * under the plot — which is what it did when those rows stopped wrapping.
+ */
 const PANEL_CHROME_H = 108
 
 function initialGraphH(): number {

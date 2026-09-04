@@ -493,7 +493,12 @@ button.swatch:hover:not(:disabled) {
   }
 }
 
+/* A column, so the graph can take whatever the rows above it leave: their
+   height is not a constant anyone can predict — Start, End and the two apply
+   buttons sit on one line at some panel widths and two at others. */
 .panel {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--rule);
   min-width: 0;
   overflow: hidden;
@@ -551,10 +556,18 @@ button.swatch:hover:not(:disabled) {
   height: 24px;
 }
 
+/* Fills the panel in both directions. The height comes from the flex line
+   rather than from the viewBox's aspect ratio, and the editor measures what
+   it was given and matches its viewBox to it — so the plot reaches the frame
+   instead of being letterboxed inside it. */
 .graph {
   display: block;
   width: 100%;
-  height: auto;
+  flex: 1;
+  /* Below its intrinsic height when the panel is short — a flex item's
+     `min-height: auto` would refuse to — but never away to nothing, however
+     many lines the controls above it wrap onto. */
+  min-height: 120px;
   touch-action: none;
 }
 

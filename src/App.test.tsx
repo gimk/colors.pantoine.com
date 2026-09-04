@@ -444,8 +444,9 @@ describe('the sticky frame', () => {
 
 /**
  * The graph measures itself in real pixels — one user unit per pixel — so it
- * spreads into whatever width the dock gives it at a fixed height. A portrait
- * viewBox scaled to a full-width column came out taller than the dock.
+ * spreads into whatever box the panel gives it. A portrait viewBox scaled to
+ * a full-width column came out taller than the dock; a viewBox that named a
+ * height the panel did not give letterboxed the plot inside its own frame.
  */
 describe('the curve graphs', () => {
   const html = renderToStaticMarkup(<App />)
@@ -461,11 +462,22 @@ describe('the curve graphs', () => {
     }
   })
 
-  it('fills the width it is given', () => {
-    expect(declarations('.graph')).toContain('width: 100%')
+  /**
+   * Both directions, and the height by flexing rather than by aspect ratio:
+   * the rows above the graph are one line tall at some panel widths and two
+   * at others, so a graph sized from a constant left a band of dead paper
+   * under the plot at the widths where they fitted on one.
+   */
+  it('fills the box it is given, in both directions', () => {
+    const graph = declarations('.graph')
+    expect(graph).toContain('width: 100%')
+    expect(graph).toContain('flex: 1')
+    // Shrinkable, but never to nothing.
+    expect(graph).toMatch(/min-height: 1\d\dpx/)
+    expect(declarations('.panel')).toContain('flex-direction: column')
   })
 
-  it('is sized 20% taller (height 228) for comfortable curve editing', () => {
+  it('asks for 228 before it has been measured', () => {
     const boxes = html.match(/class="graph" viewBox="0 0 (\d+) (\d+)"/g) ?? []
     expect(boxes).toHaveLength(3)
     for (const box of boxes) {
