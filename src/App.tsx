@@ -160,7 +160,7 @@ export function App() {
   return (
     <div className="app">
       <header className="masthead">
-        <h1>colors.pantoine.com — tints &amp; shades</h1>
+        <h1>COLORS // PANTOINE — TINTS &amp; SHADES</h1>
         <span className="spacer" />
         <span className="masthead__credit">
           Made with dedication by{' '}
