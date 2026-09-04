@@ -314,6 +314,42 @@ describe('document', () => {
     expect(synced.palettes[0].state.config.hue.end).toBeCloseTo(10, 4)
     expect(synced.palettes[0].state.edited.hue).toBe(true)
   })
+
+  it('copies to the palettes named, and to no others', () => {
+    const doc = run(createDocument(), { type: 'new' }, { type: 'new' })
+    const withCustom = run(doc, {
+      type: 'palette',
+      action: { type: 'setCurve', key: 'hue', curve: flat(14) },
+    })
+    // `new` selects what it appends, so the edit above landed on the third.
+    const [first, second, third] = withCustom.palettes
+    expect(selectedEntry(withCustom).id).toBe(third.id)
+
+    const synced = run(withCustom, { type: 'syncChannel', key: 'hue', to: [second.id] })
+    expect(synced.palettes[1].state.config.hue.start).toBeCloseTo(14, 4)
+    expect(synced.palettes[1].state.edited.hue).toBe(true)
+    // By identity: an untouched palette must come back as the very entry it
+    // was, or the pass reads as an edit and history records one.
+    expect(synced.palettes[0]).toBe(first)
+  })
+
+  it('does nothing when the list of palettes to copy to is empty', () => {
+    const doc = run(createDocument(), { type: 'new' })
+    const withCustom = run(doc, {
+      type: 'palette',
+      action: { type: 'setCurve', key: 'hue', curve: flat(14) },
+    })
+    expect(run(withCustom, { type: 'syncChannel', key: 'hue', to: [] })).toBe(withCustom)
+  })
+
+  it('ignores a palette that has since been deleted', () => {
+    const doc = run(createDocument(), { type: 'new' })
+    const withCustom = run(doc, {
+      type: 'palette',
+      action: { type: 'setCurve', key: 'hue', curve: flat(14) },
+    })
+    expect(run(withCustom, { type: 'syncChannel', key: 'hue', to: ['gone'] })).toBe(withCustom)
+  })
 })
 
 /**

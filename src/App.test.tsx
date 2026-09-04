@@ -791,23 +791,33 @@ describe('the gamut ceiling in the rendered page', () => {
     expect(markup).toContain('graph__hatch')
   })
 
+  const plain = renderToStaticMarkup(
+    <CurvePanel
+      channelKey="lightness"
+      curve={config.lightness}
+      swatches={generateRamp(config, 'srgb')}
+      onChange={() => {}}
+      onEndpoint={() => {}}
+      onReset={() => {}}
+    />,
+  )
+
   it('leaves the header exactly as the other channels have it', () => {
-    const head = markup.slice(0, markup.indexOf('</header>'))
-    expect(head).toContain('OKLCH C')
-    expect(head).not.toContain('button')
+    // The ceiling belongs to the graph. Compared rather than merely inspected
+    // for chrome, so anything the chroma header grows has to be grown by every
+    // channel — the two differ by the channel's own name and axis, and nothing
+    // else.
+    const head = (rendered: string) =>
+      rendered
+        .slice(0, rendered.indexOf('</header>'))
+        .replace(/<span class="panel__title">[^<]*<\/span>/, '')
+        .replace(/<span class="panel__axis">[^<]*<\/span>/, '')
+
+    expect(markup).toContain('OKLCH C')
+    expect(head(markup)).toBe(head(plain))
   })
 
   it('draws no ceiling on a channel that has none', () => {
-    const plain = renderToStaticMarkup(
-      <CurvePanel
-        channelKey="lightness"
-        curve={config.lightness}
-        swatches={generateRamp(config, 'srgb')}
-        onChange={() => {}}
-        onEndpoint={() => {}}
-        onReset={() => {}}
-      />,
-    )
     expect(plain).not.toContain('graph__ceiling')
   })
 

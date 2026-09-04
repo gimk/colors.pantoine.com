@@ -72,7 +72,11 @@ export type DocumentAction =
   | { type: 'setPaletteSteps'; id: string; value: number }
   | { type: 'setStepsLocked'; value: boolean }
   | { type: 'setGamut'; value: Gamut }
-  | { type: 'syncChannel'; key: CurveKey }
+  /**
+   * Copy the selected palette's curve for one channel onto other palettes:
+   * every other palette in the document, or only the ones `to` names.
+   */
+  | { type: 'syncChannel'; key: CurveKey; to?: string[] }
 
 /**
  * How far around the hue circle a new palette lands from the one you were
@@ -320,8 +324,12 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
       if (state.palettes.length < 2) return state
       const current = selectedEntry(state)
       const sourceCurve = current.state.config[action.key]
+      // No list at all means the whole document. An empty list means nobody
+      // was picked, which is a different thing and must change nothing.
+      const chosen = action.to && new Set(action.to)
+      if (chosen && chosen.size === 0) return state
       const palettes = state.palettes.map((entry) =>
-        entry.id === current.id
+        entry.id === current.id || (chosen && !chosen.has(entry.id))
           ? entry
           : applyChannelSync(entry, action.key, sourceCurve, state.gamut),
       )

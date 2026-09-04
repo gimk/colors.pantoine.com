@@ -1909,3 +1909,138 @@ button.newpal__cand:hover {
   letter-spacing: var(--tracking-widest);
   text-transform: uppercase;
 }
+
+/* --- apply to --------------------------------------------------------- */
+
+/* Floating beside its button, like the colour picker and for the same reason:
+   the curve panels are at the foot of the window, and a centred modal would
+   cover the ramps being chosen between. Transparent backdrop so they stay
+   readable behind it. */
+.applyto {
+  position: fixed;
+  margin: 0;
+  inset: auto;
+  border: 1px solid var(--rule);
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  width: min(380px, calc(100vw - 32px));
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.2), 0 0 0 1px var(--rule);
+  z-index: 100;
+}
+
+.applyto::backdrop {
+  background: transparent;
+}
+
+.applyto__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+/* Capped and scrolled: a document runs to 24 palettes, and the panel is
+   anchored to a button near the bottom of the window. */
+.applyto__list {
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+}
+
+/* Qualified by the panel throughout, and it has to be: the dialog is opened
+   from inside `.panel__actions`, so it is still a DOM descendant of it however
+   far the top layer moves it, and that rule's 24px-high chrome buttons would
+   otherwise squash every row here. */
+.applyto .applyto__target {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  height: auto;
+  font-size: var(--text-xs);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.applyto .applyto__target:last-child {
+  border-bottom: none;
+}
+
+/* Out of the global button hover, which fills with ink: these rows carry a
+   ramp, and inverting a row would sit black behind the colours it is showing.
+   A wash marks both the hover and the pick instead. */
+.applyto button.applyto__target:hover:not(:disabled),
+.applyto button.applyto__target.is-picked {
+  background: var(--grid);
+  color: var(--ink);
+}
+
+/* A box that fills rather than a native checkbox: the row is the control, and
+   a real input inside a button is neither valid nor clickable as one. */
+.applyto__mark {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  line-height: 1;
+}
+
+.applyto__target.is-picked .applyto__mark {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.applyto__name {
+  width: 11ch;
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Flush, unlike the new-palette dialog's spaced squares: this is the ramp as
+   it stands, shown so a name you half remember is still recognisable. */
+.applyto__ramp {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  height: 16px;
+}
+
+.applyto__chip {
+  flex: 1;
+  min-width: 0;
+}
+
+.applyto__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.applyto__count {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+/* Smaller than the row's buttons and out of their way: Reset rides the
+   channel's header now, where it has to sit inside a single line of chrome. */
+.panel__reset {
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  height: 20px;
+}

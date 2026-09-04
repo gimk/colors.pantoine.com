@@ -1,6 +1,8 @@
 import { CHANNELS, type ChannelKey, type Curve, type CurveControl } from '../color/curve'
 import { SHAPES } from '../color/shapes'
 import type { Swatch } from '../color/ramp'
+import type { PaletteView } from '../state/useDocument'
+import { ApplyToDialog } from './ApplyToDialog'
 import { CurveEditor } from './CurveEditor'
 import { NumberField } from './NumberField'
 
@@ -15,6 +17,9 @@ type Props = {
   onReset: () => void
   canSync?: boolean
   onSync?: () => void
+  /** The palettes Apply to can copy this curve onto: everything but this one. */
+  syncTargets?: PaletteView[]
+  onSyncTo?: (ids: string[]) => void
   /** Chroma only: the gamut ceiling sampled across the ramp, for the graph. */
   ceiling?: number[]
   graphH?: number
@@ -30,6 +35,8 @@ export function CurvePanel({
   onReset,
   canSync,
   onSync,
+  syncTargets,
+  onSyncTo,
   ceiling,
   graphH,
 }: Props) {
@@ -46,6 +53,18 @@ export function CurvePanel({
       <header className="panel__head">
         <span className="panel__title">{channel.label}</span>
         <span className="panel__axis">{channel.axis}</span>
+        <span className="spacer" />
+        {/* Up here rather than beside Start and End, where it was competing
+            for a row that now has two ways to send this curve elsewhere.
+            Undoing your own edits belongs with the channel's name anyway. */}
+        <button
+          type="button"
+          className="panel__reset"
+          onClick={onReset}
+          title="Rebuild this channel's default from the base colour"
+        >
+          Reset
+        </button>
       </header>
 
       <div className="panel__row">
@@ -72,6 +91,16 @@ export function CurvePanel({
           onCommit={(value) => onEndpoint('end', value)}
         />
         <div className="panel__actions">
+          {onSyncTo && (
+            <ApplyToDialog
+              /* Keyed on the stack, so a palette added or removed while the
+                 panel is mounted cannot leave a pick pointing at nothing. */
+              key={syncTargets?.map((palette) => palette.id).join(',')}
+              channel={channel.label.toLowerCase()}
+              targets={syncTargets ?? []}
+              onApply={onSyncTo}
+            />
+          )}
           {onSync && (
             <button
               type="button"
@@ -86,13 +115,6 @@ export function CurvePanel({
               Apply all
             </button>
           )}
-          <button
-            type="button"
-            onClick={onReset}
-            title="Rebuild this channel's default from the base colour"
-          >
-            Reset
-          </button>
         </div>
       </div>
 

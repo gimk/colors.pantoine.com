@@ -92,6 +92,12 @@ export function Toolbox({ doc, shareHref }: Props) {
     ],
   )
 
+  /** Everything a curve could be copied onto: the stack, less the one it is on. */
+  const syncTargets = useMemo(
+    () => doc.palettes.filter((palette) => palette.id !== selected.id),
+    [doc.palettes, selected.id],
+  )
+
   return (
     <section
       className="toolbox"
@@ -220,6 +226,8 @@ export function Toolbox({ doc, shareHref }: Props) {
             }
             canSync={doc.palettes.length > 1}
             onSync={() => doc.syncChannel(key)}
+            syncTargets={syncTargets}
+            onSyncTo={(ids) => doc.syncChannel(key, ids)}
             ceiling={key === 'chroma' ? ceiling : undefined}
             graphH={graphH}
             onChange={(curve: Curve, moved?: CurveControl) => doc.setCurve(key, curve, moved)}

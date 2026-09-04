@@ -84,7 +84,8 @@ export type DocumentApi = {
   setEndpoint: (key: CurveKey, end: 'start' | 'end', value: number) => void
   resetCurve: (key: CurveKey) => void
   rederive: () => void
-  syncChannel: (key: CurveKey) => void
+  /** Copy one channel's curve onto the palettes `to` names, or onto all of them. */
+  syncChannel: (key: CurveKey, to?: string[]) => void
   /** The gamut the document is designed for, and what every ramp is mapped to. */
   gamut: Gamut
   setGamut: (value: Gamut) => void
@@ -194,7 +195,10 @@ export function useDocument(seed: Seed): DocumentApi {
       [send],
     ),
     rederive: useCallback(() => send({ type: 'palette', action: { type: 'rederive' } }), [send]),
-    syncChannel: useCallback((key: CurveKey) => send({ type: 'syncChannel', key }), [send]),
+    syncChannel: useCallback(
+      (key: CurveKey, to?: string[]) => send({ type: 'syncChannel', key, to }),
+      [send],
+    ),
     gamut: state.gamut,
     setGamut: useCallback((value: Gamut) => send({ type: 'setGamut', value }), [send]),
   }
