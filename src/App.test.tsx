@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { App } from './App'
 import { createPalette, DEFAULT_STEPS } from './color/presets'
 import { chromaCeilingProfile, generateRamp } from './color/ramp'
+import { MAX_PALETTES } from './state/document'
 import { useDocument } from './state/useDocument'
 import type { ReviewApi, ReviewAxis } from './state/useReview'
 import { CurvePanel } from './ui/CurvePanel'
@@ -618,6 +619,21 @@ describe('PaletteRow', () => {
     expect(row).toContain('class="prow__handle"')
     expect(row).toContain('draggable="true"')
     expect(row).toContain('title="Drag to reorder palette"')
+  })
+
+  it('carries a duplicate button and a separate one for the PNG copy', () => {
+    const row = render({ onDuplicate: () => {} })
+    expect(row).toContain('aria-label="Duplicate palette"')
+    expect(row).toContain('aria-label="Copy palette as PNG"')
+    // Two icon buttons, each with an icon of its own: the two-sheets glyph
+    // duplicates, and the picture copies the PNG.
+    expect(row.match(/class="prow__btn-icon"/g)).toHaveLength(2)
+    expect(row).not.toMatch(/aria-label="Duplicate palette"[^>]*disabled/)
+  })
+
+  it('stops offering to duplicate once the document is full', () => {
+    const row = render({ count: MAX_PALETTES, onDuplicate: () => {} })
+    expect(row).toMatch(/disabled[^>]*aria-label="Duplicate palette"/)
   })
 
   it('will not delete the only palette there is', () => {

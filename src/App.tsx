@@ -363,6 +363,10 @@ export function App() {
               doc.select(palette.id)
               triggerScroll()
             }}
+            onDuplicate={() => {
+              doc.duplicate(palette.id)
+              triggerScroll()
+            }}
             onRemove={() => doc.remove(palette.id)}
             onReorder={doc.reorder}
             onCopy={copy}

@@ -69,6 +69,8 @@ export type DocumentApi = {
   /** Append one palette per base colour and land on the first of them. */
   addPalettes: (bases: BaseSeed[]) => void
   select: (id: string) => void
+  /** Copy one palette in under the original, and land on the copy. */
+  duplicate: (id: string) => void
   remove: (id: string) => void
   move: (id: string, by: -1 | 1) => void
   reorder: (sourceId: string, targetId: string) => void
@@ -148,6 +150,7 @@ export function useDocument(seed: Seed): DocumentApi {
     newPalette: useCallback(() => send({ type: 'new' }), [send]),
     addPalettes: useCallback((bases: BaseSeed[]) => send({ type: 'add', bases }), [send]),
     select: useCallback((id: string) => send({ type: 'select', id }), [send]),
+    duplicate: useCallback((id: string) => send({ type: 'duplicate', id }), [send]),
     remove: useCallback((id: string) => send({ type: 'remove', id }), [send]),
     move: useCallback((id: string, by: -1 | 1) => send({ type: 'move', id, by }), [send]),
     reorder: useCallback(

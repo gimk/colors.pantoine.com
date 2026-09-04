@@ -127,6 +127,44 @@ describe('document', () => {
     expect(run(doc, { type: 'reorder', sourceId: a, targetId: 'nope' })).toBe(doc)
   })
 
+  it('duplicates a palette in under the original and lands on the copy', () => {
+    const doc = createDocument([
+      { name: 'brand', config: createPalette('#7c3aed'), nameCustom: true },
+      { name: 'accent', config: createPalette('#facc15'), nameCustom: true },
+    ])
+    const copied = run(doc, { type: 'duplicate', id: doc.palettes[0].id })
+    expect(copied.palettes.map((entry) => entry.name)).toEqual(['brand', 'brand 2', 'accent'])
+    expect(selectedEntry(copied).name).toBe('brand 2')
+    expect(copied.palettes[1].state.config).toBe(doc.palettes[0].state.config)
+    expect(copied.palettes[1].nameCustom).toBe(true)
+    expect(copied.palettes[1].id).not.toBe(doc.palettes[0].id)
+  })
+
+  it('leaves the original alone once the copy is edited', () => {
+    // The copy shares the config object it was made from, so the first edit
+    // on it has to replace that rather than reach into it.
+    const start = createDocument()
+    const copied = run(start, { type: 'duplicate', id: start.palettes[0].id })
+    const edited = run(copied, {
+      type: 'palette',
+      action: { type: 'setCurve', key: 'chroma', curve: flat(0.1) },
+    })
+    expect(edited.palettes[0].state).toBe(copied.palettes[0].state)
+    expect(edited.palettes[1].state.config.chroma).not.toEqual(
+      edited.palettes[0].state.config.chroma,
+    )
+  })
+
+  it('will not duplicate past the palette cap, or an id it does not have', () => {
+    let doc = createDocument()
+    for (let i = 0; i < MAX_PALETTES - 1; i++) doc = run(doc, { type: 'new' })
+    expect(doc.palettes).toHaveLength(MAX_PALETTES)
+    expect(run(doc, { type: 'duplicate', id: doc.palettes[0].id })).toBe(doc)
+
+    const room = createDocument()
+    expect(run(room, { type: 'duplicate', id: 'nope' })).toBe(room)
+  })
+
   it('deletes a palette and never empties the document', () => {
     const one = createDocument()
     expect(run(one, { type: 'remove', id: one.palettes[0].id })).toBe(one)

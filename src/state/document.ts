@@ -64,6 +64,8 @@ export type DocumentAction =
   /** Append one palette per base colour, in the order given. */
   | { type: 'add'; bases: BaseSeed[] }
   | { type: 'select'; id: string }
+  /** Copy one palette, landing the copy directly under the original. */
+  | { type: 'duplicate'; id: string }
   | { type: 'remove'; id: string }
   | { type: 'move'; id: string; by: -1 | 1 }
   | { type: 'reorder'; sourceId: string; targetId: string }
@@ -471,6 +473,30 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
 
     case 'select':
       return indexOfId(state, action.id) < 0 ? state : { ...state, selectedId: action.id }
+
+    case 'duplicate': {
+      if (state.palettes.length >= MAX_PALETTES) return state
+      const index = indexOfId(state, action.id)
+      if (index < 0) return state
+      const source = state.palettes[index]
+      const taken = new Set(state.palettes.map((entry) => entry.name))
+      // The copy shares the original's config object: configs are immutable
+      // and replaced on every edit, so nothing the copy does can reach back,
+      // and sharing means it also shares the cached ramp and costs nothing to
+      // derive. `edited` is per-palette bookkeeping, so it is cloned.
+      const entry: PaletteEntry = {
+        id: makeId(),
+        name: uniqueName(taken, source.name),
+        nameCustom: source.nameCustom,
+        state: { config: source.state.config, edited: { ...source.state.edited } },
+      }
+      // Directly under the original rather than at the foot of the stack: a
+      // copy is made to be compared against what it was copied from. It also
+      // takes the selection, since it is the one about to be changed.
+      const palettes = [...state.palettes]
+      palettes.splice(index + 1, 0, entry)
+      return { ...state, palettes, selectedId: entry.id }
+    }
 
     case 'remove': {
       // The document is never empty: with one palette left there is nothing to

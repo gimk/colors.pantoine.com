@@ -3,6 +3,7 @@ import type { Format, Gamut } from '../color/oklch'
 import { MAX_STEPS, MIN_STEPS } from '../color/presets'
 import { countDuplicateSteps } from '../color/ramp'
 import { copyPng } from '../export/image'
+import { MAX_PALETTES } from '../state/document'
 import type { PaletteView } from '../state/useDocument'
 import { NumberField } from './NumberField'
 import { RampStrip } from './RampStrip'
@@ -18,6 +19,7 @@ type Props = {
   stepsLocked?: boolean
   onStepsChange?: (value: number) => void
   onSelect: () => void
+  onDuplicate?: () => void
   onRemove: () => void
   onMove?: (by: -1 | 1) => void
   onReorder?: (sourceId: string, targetId: string) => void
@@ -34,6 +36,7 @@ export function PaletteRow({
   stepsLocked = true,
   onStepsChange,
   onSelect,
+  onDuplicate,
   onRemove,
   onReorder,
   onCopy,
@@ -54,6 +57,11 @@ export function PaletteRow({
       setCopiedPng(true)
       window.setTimeout(() => setCopiedPng(false), 1500)
     }
+  }
+
+  const handleDuplicate = (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation()
+    onDuplicate?.()
   }
 
   /**
@@ -156,6 +164,25 @@ export function PaletteRow({
             Edit
           </button>
         )}
+        {/* The two-sheets icon reads as "make another one of these", so that
+            is what it now does; the PNG copy sits beside it under a picture. */}
+        <button
+          type="button"
+          className="prow__btn-icon"
+          disabled={!onDuplicate || count >= MAX_PALETTES}
+          onClick={handleDuplicate}
+          title={
+            count >= MAX_PALETTES
+              ? `A document holds at most ${MAX_PALETTES} palettes`
+              : 'Duplicate this palette'
+          }
+          aria-label="Duplicate palette"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ display: 'block' }}>
+            <rect x="5.5" y="5.5" width="9" height="9" />
+            <path d="M3.5 10.5H1.5V1.5H10.5V3.5" />
+          </svg>
+        </button>
         <button
           type="button"
           className={`prow__btn-icon${copiedPng ? ' is-copied' : ''}`}
@@ -168,9 +195,13 @@ export function PaletteRow({
               <path d="M3 8.5L6.5 12L13 4" />
             </svg>
           ) : (
+            // A clipboard, since that is where the palette is going. The
+            // tooltip carries the "as PNG" half; at 13px the icon only has
+            // room for one idea, and nothing about a board and its clip
+            // echoes the two sheets next door.
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ display: 'block' }}>
-              <rect x="5.5" y="5.5" width="9" height="9" />
-              <path d="M3.5 10.5H1.5V1.5H10.5V3.5" />
+              <path d="M6 2.5H4.5C3.9 2.5 3.5 2.9 3.5 3.5V13C3.5 13.6 3.9 14 4.5 14H11.5C12.1 14 12.5 13.6 12.5 13V3.5C12.5 2.9 12.1 2.5 11.5 2.5H10" />
+              <rect x="6" y="1.25" width="4" height="2.5" rx="0.75" />
             </svg>
           )}
         </button>
