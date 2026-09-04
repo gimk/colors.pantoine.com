@@ -3,8 +3,8 @@ import { sampleCurve } from '../color/curve'
 import { createPalette } from '../color/presets'
 import { generateRamp } from '../color/ramp'
 import { decodePalette, encodePalette } from '../state/url'
-import { slugify, TEXT_FORMATS } from './formats'
-import { boardSvg, drawBoard, toSvg, type BoardOptions } from './image'
+import { buildText, slugify, TEXT_FORMATS } from './formats'
+import { boardSvg, drawBoard, rampsSvg, toSvg, type BoardOptions } from './image'
 
 const config = createPalette('#7c3aed')
 const ramp = generateRamp(config)
@@ -100,6 +100,95 @@ describe('text formats under a wide gamut', () => {
     expect(parsed.steps[5].hex).toBe(wide[5].hex)
     expect(parsed.steps[5].display).toBe(wide[5].displayColor)
     expect(JSON.parse(format('json').build(ramp, 'brand')).gamut).toBe('srgb')
+  })
+})
+
+/**
+ * Several palettes at once, which is what the export dialog asks for. One
+ * palette must still come out byte for byte as it always did: what someone
+ * pastes into a stylesheet cannot change shape because the document beside
+ * it grew.
+ */
+describe('text formats over a set of palettes', () => {
+  const sky = generateRamp(createPalette('#0ea5e9'))
+  const two = [
+    { name: 'brand', ramp },
+    { name: 'sky', ramp: sky },
+  ]
+  const one = [{ name: 'brand', ramp }]
+
+  it('leaves a single palette exactly as build wrote it', () => {
+    for (const entry of TEXT_FORMATS) {
+      expect(buildText(entry, one)).toBe(entry.build(ramp, 'brand'))
+    }
+  })
+
+  it('heads each block with its name, since a list has nowhere else to say it', () => {
+    const lines = buildText(format('hex'), two).split('\n')
+    expect(lines[0]).toBe('brand')
+    expect(lines[1]).toBe(ramp[0].hex)
+    expect(lines[ramp.length + 2]).toBe('sky')
+    expect(lines).toHaveLength(ramp.length + sky.length + 3)
+  })
+
+  it('keeps every palette inside one :root, not one block each', () => {
+    const css = buildText(format('css-hex'), two)
+    expect(css.match(/:root/g)).toHaveLength(1)
+    expect(css).toContain('--brand-')
+    expect(css).toContain('--sky-')
+    expect(css.trimEnd().endsWith('}')).toBe(true)
+  })
+
+  it('emits an array of palettes as JSON, so the whole thing parses', () => {
+    const parsed = JSON.parse(buildText(format('json'), two))
+    expect(Array.isArray(parsed)).toBe(true)
+    expect(parsed.map((entry: { name: string }) => entry.name)).toEqual(['brand', 'sky'])
+    expect(parsed[1].steps).toHaveLength(sky.length)
+  })
+
+  it('stacks Tailwind keys with no blank line, ready for a theme object', () => {
+    const js = buildText(format('tailwind'), two)
+    expect(js).toContain("brand: {")
+    expect(js).toContain("sky: {")
+    expect(js).not.toContain('\n\n')
+  })
+
+  it('separates SCSS maps, which are siblings at the top level of a file', () => {
+    const scss = buildText(format('scss'), two)
+    expect(scss).toContain('$brand: (')
+    expect(scss).toContain('$sky: (')
+    expect(scss).toContain(');\n\n$sky')
+  })
+})
+
+describe('a set of palettes as one SVG', () => {
+  const sky = generateRamp(createPalette('#0ea5e9'))
+  const svg = rampsSvg(
+    [
+      { name: 'Brand Purple', ramp },
+      { name: 'sky', ramp: sky },
+    ],
+    { size: 40, labels: false },
+  )
+
+  it('groups one named rect per step under one named group per palette', () => {
+    expect(svg.match(/<g /g)).toHaveLength(2)
+    expect(svg).toContain('<g id="brand-purple">')
+    expect(svg).toContain('<g id="sky">')
+    expect(svg.match(/<rect /g)).toHaveLength(ramp.length + sky.length)
+  })
+
+  it('bands the palettes down the image, edge to edge', () => {
+    expect(svg).toContain(`height="${40 * 2}"`)
+    expect(svg).toContain('y="0"')
+    expect(svg).toContain('y="40"')
+  })
+
+  it('matches the single-ramp export when there is only one palette', () => {
+    const alone = rampsSvg([{ name: 'Brand Purple', ramp }], { size: 64, labels: false })
+    const rects = alone.match(/<rect [^>]*>/g) ?? []
+    expect(rects).toHaveLength(ramp.length)
+    expect(alone).toContain(`width="${64 * ramp.length}" height="${64}"`)
   })
 })
 

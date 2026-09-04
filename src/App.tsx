@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { FORMATS, GAMUTS, type Format, type Gamut } from './color/oklch'
 import { MAX_STEPS, MIN_STEPS } from './color/presets'
 import { restoreDocument, saveDocument } from './state/storage'
-import { documentUrl } from './state/url'
 import { useDocument, type PaletteView } from './state/useDocument'
 import { useReview } from './state/useReview'
+import { ExportDialog } from './ui/ExportDialog'
 import { NewPaletteDialog } from './ui/NewPaletteDialog'
 import { NumberField } from './ui/NumberField'
 import { HelpDialog } from './ui/HelpDialog'
@@ -133,11 +133,6 @@ export function App() {
       if (rafId) cancelAnimationFrame(rafId)
     }
   }, [selected.id, scrollTrigger])
-
-  const shareHref =
-    typeof window === 'undefined'
-      ? ''
-      : documentUrl(seedsOf(doc.palettes), gamut, doc.stepsLocked)
 
   /**
    * The board is a different page, not the editor with things switched off,
@@ -344,6 +339,15 @@ export function App() {
           >
             {dark ? 'Light canvas' : 'Dark canvas'}
           </button>
+
+          {/* Last in the bar, with Review and the canvas: the three things
+              here that answer to the whole document rather than to the
+              palette the toolbox happens to be on. */}
+          <ExportDialog
+            palettes={doc.palettes}
+            gamut={gamut}
+            stepsLocked={doc.stepsLocked}
+          />
         </div>
       </div>
 
@@ -378,7 +382,7 @@ export function App() {
           so `position: sticky; bottom` pins it to the foot of the window while
           the palettes scroll behind, and it names the palette it is editing
           since it is no longer beside it. */}
-      <Toolbox doc={doc} shareHref={shareHref} />
+      <Toolbox doc={doc} />
     </div>
   )
 }

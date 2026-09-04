@@ -8,6 +8,7 @@ import { MAX_PALETTES } from './state/document'
 import { useDocument } from './state/useDocument'
 import type { ReviewApi, ReviewAxis } from './state/useReview'
 import { CurvePanel } from './ui/CurvePanel'
+import { ExportDialog } from './ui/ExportDialog'
 import { PaletteRow } from './ui/PaletteRow'
 import { RampStrip } from './ui/RampStrip'
 import { ReviewBoard } from './ui/ReviewBoard'
@@ -222,49 +223,114 @@ function declarations(selector: string) {
 }
 
 /**
- * Almost every hand-off is one of two gestures: paste the ramp into Figma as
- * pixels, or as layers. Those stay in the open with the one option that
- * changes what they produce; the eight text formats and the file downloads
- * are each right for one situation and wrong for the rest, so they fold away.
+ * A hand-off is the document leaving the tool, not an edit to one ramp, so
+ * export answers to the whole stack from the top bar. It used to be a fourth
+ * panel in the toolbox, beside curve editors it has nothing to do with and
+ * able to export only the palette the toolbox was on.
  */
-describe('the export panel', () => {
+describe('the export dialog', () => {
   const html = renderToStaticMarkup(<App />)
-  const panel = html.slice(html.indexOf('class="panel export"'))
-  const front = panel.slice(0, panel.indexOf('class="export__subhead"'))
+  const controls = html.slice(html.indexOf('class="controls"'), html.indexOf('class="stack"'))
 
-  it('keeps the two copies and the labels toggle in front', () => {
-    for (const control of ['Copy PNG', 'Copy SVG', '<span>Labels</span>']) {
-      expect(front).toContain(control)
-    }
+  const asView = (id: string, name: string, base: string) => {
+    const config = createPalette(base)
+    return { id, name, config, ramp: generateRamp(config, 'srgb'), edited: false }
+  }
+  const brand = asView('p1', 'brand', '#7c3aed')
+  const accent = asView('p2', 'accent', '#facc15')
+
+  const list = renderToStaticMarkup(
+    <ExportDialog palettes={[brand, accent]} gamut="srgb" stepsLocked defaultOpen />,
+  )
+  const picking = renderToStaticMarkup(
+    <ExportDialog
+      palettes={[brand, accent]}
+      gamut="srgb"
+      stepsLocked
+      defaultOpen
+      defaultActionId="hex"
+    />,
+  )
+
+  it('rides the top bar next to the canvas toggle, not the toolbox', () => {
+    expect(controls).toContain('>Export<')
+    expect(controls.indexOf('Dark canvas')).toBeLessThan(controls.indexOf('>Export<'))
+    expect(html).not.toContain('class="panel export"')
   })
 
-  it('keeps other formats directly visible without a collapse drawer', () => {
-    expect(panel).not.toContain('<details')
-    for (const label of ['Share palette', 'Hex list', 'Tailwind scale', 'Download PNG', 'Download SVG']) {
-      expect(panel).toContain(label)
+  it('offers the trigger and nothing else until it is opened', () => {
+    const shut = renderToStaticMarkup(
+      <ExportDialog palettes={[brand, accent]} gamut="srgb" stepsLocked />,
+    )
+    expect(shut).toContain('>Export<')
+    expect(shut).not.toContain('exportd__body')
+  })
+
+  it('groups every format by what comes out of it', () => {
+    for (const label of [
+      'Copy PNG',
+      'Copy SVG',
+      'Download PNG',
+      'Download SVG',
+      'Share link',
+      'Hex list',
+      'Tailwind scale',
+      '<span>Labels</span>',
+    ]) {
+      expect(list).toContain(label)
+    }
+    for (const legend of ['As an image', 'As text', 'As a link']) {
+      expect(list).toContain(legend)
     }
   })
 
   /**
-   * Size still governs the copies in front, so the panel says so rather
-   * than leaving a setting whose reach is surprising.
+   * Three headings on strips of their own, so the sections can be found
+   * before any of the buttons in them are read.
    */
-  it('says that the size setting applies to the copies', () => {
-    expect(panel).toContain('Size applies to the copies above')
+  it('gives each section a strip of its own', () => {
+    expect(list.match(/class="exportd__head"/g)).toHaveLength(3)
+    const strip = declarations('.exportd__head')
+    expect(strip).toContain('background: var(--grid)')
+    expect(strip).toContain('border-bottom: 1px solid var(--rule)')
   })
 
   /**
-   * Stretches to the height of the curve panels, with other formats scrolling
-   * inside .export__body rather than pushing the dock taller.
+   * Eight identical chips wrapped across a row is a wall to read. One format
+   * per line, with the extension it would carry at the end of it, can be
+   * scanned down — and answers which of the three CSS ones is wanted.
    */
-  it('scrolls the other formats within export__body and fixes to curve height', () => {
-    expect(panel).toContain('class="export__body"')
-    const body = declarations('.export__body')
-    expect(body).toContain('overflow-y: auto')
-    expect(body).toContain('min-height: 0')
-    const exp = declarations('.export')
-    expect(exp).toContain('height: 100%')
-    expect(exp).toContain('max-height: var(--panel-h, 336px)')
+  it('lists the text formats one to a line, with their extensions', () => {
+    expect(list.match(/class="exportd__format(?: [^"]*)?"/g)).toHaveLength(8)
+    for (const ext of ['.txt', '.css', '.js', '.scss', '.json']) {
+      expect(list).toContain(`class="exportd__ext">${ext}<`)
+    }
+  })
+
+  /** Pasting is the common hand-off; saving a file is the occasional one. */
+  it('leads with the two copies and keeps the downloads quieter', () => {
+    const image = list.slice(list.indexOf('As an image'), list.indexOf('As text'))
+    expect(image.indexOf('Copy PNG')).toBeLessThan(image.indexOf('Download PNG'))
+    expect(image).toMatch(/class="exportd__minor"[^>]*>Download PNG/)
+    expect(declarations('.exportd__minor')).toContain('color: var(--muted)')
+  })
+
+  it('asks which palettes once a format is chosen, with every one ticked', () => {
+    expect(picking).toContain('Hex list')
+    expect(picking).toContain('Which palettes')
+    expect(picking).toContain('class="plist"')
+    expect(picking.match(/aria-pressed="true"/g)).toHaveLength(2)
+    expect(picking).toContain('2 of 2 palettes')
+    // The shortcut rides the strip; the footer is left to the commit.
+    expect(picking).toContain('Select none')
+    // The confirm button says what it will do, and Back returns to the list.
+    expect(picking).toContain('>Copy<')
+    expect(picking).toContain('>Back<')
+  })
+
+  it('shows the format list rather than a picker until then', () => {
+    expect(list).not.toContain('class="plist"')
+    expect(list).not.toContain('>Back<')
   })
 })
 
@@ -776,7 +842,7 @@ describe('UI standardization and menu separation', () => {
       rederive: () => {},
       rename: () => {},
     }
-    const markup = renderToStaticMarkup(<Toolbox doc={mockDoc} shareHref="" />)
+    const markup = renderToStaticMarkup(<Toolbox doc={mockDoc} />)
     expect(markup).toContain('class="number toolbox__input-steps"')
     expect(markup).toContain('value="9"')
   })

@@ -1,5 +1,5 @@
 import type { Swatch } from '../color/ramp'
-import { slugify } from './formats'
+import { slugify, type NamedRamp } from './formats'
 
 export type ImageOptions = {
   /** Edge of one swatch block, in pixels. */
@@ -16,6 +16,9 @@ export const SIZE_PRESETS = [
 
 const LABEL_STRIP = 34
 const LABEL_FONT = '11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+/** Room above a band for the palette's name, when several are stacked. */
+const NAME_STRIP = 20
+const NAME_FONT = '12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
 
 /**
  * Flat blocks with no gaps, gridlines or borders.
@@ -30,11 +33,35 @@ export function drawRamp(
   ramp: Swatch[],
   options: ImageOptions,
 ): void {
+  drawRamps(canvas, [{ name: '', ramp }], options)
+}
+
+/**
+ * Several palettes as one image: a band each, stacked in the order picked.
+ *
+ * A single palette is drawn exactly as it always was — same width, same
+ * height, no name — so the quick copy off a palette header and a one-palette
+ * export still produce the same picture. The name strip only appears once
+ * there is more than one band to tell apart, and only with labels on, since
+ * labels off means "just the colours, nothing to read".
+ *
+ * Bands are as wide as their own ramp rather than padded to the longest. With
+ * the steps unlocked a palette can be shorter than its neighbour, and
+ * stretching it would misreport the step size everything here is drawn at.
+ */
+export function drawRamps(
+  canvas: HTMLCanvasElement,
+  palettes: NamedRamp[],
+  options: ImageOptions,
+): void {
   const size = Math.round(options.size)
   const labelStrip = options.labels ? LABEL_STRIP : 0
+  const nameStrip = options.labels && palettes.length > 1 ? NAME_STRIP : 0
+  const band = nameStrip + size + labelStrip
+  const steps = Math.max(1, ...palettes.map((palette) => palette.ramp.length))
 
-  canvas.width = size * ramp.length
-  canvas.height = size + labelStrip
+  canvas.width = size * steps
+  canvas.height = band * palettes.length
 
   const ctx = canvas.getContext('2d')
   if (!ctx) return
@@ -44,22 +71,34 @@ export function drawRamp(
     ctx.fillRect(0, 0, canvas.width, canvas.height)
   }
 
-  ramp.forEach((swatch, index) => {
-    ctx.fillStyle = swatch.hex
-    ctx.fillRect(index * size, 0, size, size)
-  })
+  palettes.forEach((palette, index) => {
+    const top = band * index + nameStrip
 
-  if (labelStrip === 0) return
+    palette.ramp.forEach((swatch, position) => {
+      ctx.fillStyle = swatch.hex
+      ctx.fillRect(position * size, top, size, size)
+    })
 
-  ctx.font = LABEL_FONT
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'alphabetic'
-  ramp.forEach((swatch, index) => {
-    const centre = index * size + size / 2
-    ctx.fillStyle = '#000000'
-    ctx.fillText(swatch.label, centre, size + 14)
-    ctx.fillStyle = '#767676'
-    ctx.fillText(swatch.hex, centre, size + 28)
+    if (!options.labels) return
+
+    ctx.textBaseline = 'alphabetic'
+
+    if (nameStrip > 0) {
+      ctx.font = `bold ${NAME_FONT}`
+      ctx.textAlign = 'left'
+      ctx.fillStyle = '#000000'
+      ctx.fillText(palette.name, 2, top - 6)
+    }
+
+    ctx.font = LABEL_FONT
+    ctx.textAlign = 'center'
+    palette.ramp.forEach((swatch, position) => {
+      const centre = position * size + size / 2
+      ctx.fillStyle = '#000000'
+      ctx.fillText(swatch.label, centre, top + size + 14)
+      ctx.fillStyle = '#767676'
+      ctx.fillText(swatch.hex, centre, top + size + 28)
+    })
   })
 }
 
@@ -138,6 +177,101 @@ export function toSvg(ramp: Swatch[], options: ImageOptions, name: string): stri
 export function downloadSvg(ramp: Swatch[], options: ImageOptions, name: string): void {
   const blob = new Blob([toSvg(ramp, options, name)], { type: 'image/svg+xml' })
   download(blob, `${slugify(name)}-ramp.svg`)
+}
+
+/* --- a chosen set of palettes as one image ---------------------------- */
+
+/*
+ * What the export dialog hands to the clipboard and to disk.
+ *
+ * The single-palette functions above stay as they are, and one palette
+ * through here produces the same bytes they do: `drawRamps` and `rampsSvg`
+ * both reduce to the one-band case. They keep their own names rather than
+ * being folded into `copyPng` because the palette-header copy has exactly one
+ * ramp by definition and should not have to say so in a list.
+ */
+
+/** One name for a file that holds several palettes. */
+function imageName(palettes: NamedRamp[]): string {
+  return palettes.length === 1 ? `${slugify(palettes[0].name)}-ramp` : 'palettes'
+}
+
+function rampsCanvas(palettes: NamedRamp[], options: ImageOptions): HTMLCanvasElement {
+  const canvas = document.createElement('canvas')
+  drawRamps(canvas, palettes, options)
+  return canvas
+}
+
+export function rampsPngBlob(
+  palettes: NamedRamp[],
+  options: ImageOptions,
+): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    rampsCanvas(palettes, options).toBlob((blob) => resolve(blob), 'image/png')
+  })
+}
+
+export async function copyRampsPng(
+  palettes: NamedRamp[],
+  options: ImageOptions,
+): Promise<boolean> {
+  const blob = await rampsPngBlob(palettes, options)
+  if (!blob || typeof ClipboardItem === 'undefined') return false
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function downloadRampsPng(
+  palettes: NamedRamp[],
+  options: ImageOptions,
+): Promise<boolean> {
+  const blob = await rampsPngBlob(palettes, options)
+  if (!blob) return false
+  download(blob, `${imageName(palettes)}.png`)
+  return true
+}
+
+/**
+ * The same stack as vector rectangles, one group per palette.
+ *
+ * Grouped and named so Figma receives a frame per palette rather than eighty
+ * loose rectangles it is up to you to sort out. Labels are left off here as
+ * they are in `toSvg`: the point of the vector export is editable layers, and
+ * baked text is the opposite of that.
+ */
+export function rampsSvg(palettes: NamedRamp[], options: ImageOptions): string {
+  const size = Math.round(options.size)
+  const steps = Math.max(1, ...palettes.map((palette) => palette.ramp.length))
+  const width = size * steps
+  const height = size * palettes.length
+
+  const groups = palettes
+    .map((palette, index) => {
+      const slug = slugify(palette.name)
+      const rects = palette.ramp
+        .map(
+          (swatch, position) =>
+            `    <rect id="${slug}-${swatch.label}" x="${position * size}" ` +
+            `y="${index * size}" width="${size}" height="${size}" fill="${swatch.hex}"/>`,
+        )
+        .join('\n')
+      return `  <g id="${slug}">\n${rects}\n  </g>`
+    })
+    .join('\n')
+
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" ` +
+    `viewBox="0 0 ${width} ${height}">\n${groups}\n</svg>`
+  )
+}
+
+export function downloadRampsSvg(palettes: NamedRamp[], options: ImageOptions): void {
+  const blob = new Blob([rampsSvg(palettes, options)], { type: 'image/svg+xml' })
+  download(blob, `${imageName(palettes)}.svg`)
 }
 
 /* --- the review board as one image ------------------------------------ */

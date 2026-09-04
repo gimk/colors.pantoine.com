@@ -6,7 +6,6 @@ import { chromaCeilingProfile } from '../color/ramp'
 import type { DocumentApi } from '../state/useDocument'
 import { BaseColorInput } from './BaseColorInput'
 import { CurvePanel } from './CurvePanel'
-import { ExportPanel } from './ExportPanel'
 import { NameField } from './NameField'
 import { NumberField } from './NumberField'
 
@@ -28,7 +27,6 @@ function initialGraphH(): number {
 
 type Props = {
   doc: DocumentApi
-  shareHref: string
 }
 
 /**
@@ -38,7 +36,7 @@ type Props = {
  * belong to a palette, not to the document: with a stack of palettes, a base
  * field far from the ramp it drives would be ambiguous.
  */
-export function Toolbox({ doc, shareHref }: Props) {
+export function Toolbox({ doc }: Props) {
   const { selected } = doc
   const parsedBase = parseToOklch(selected.config.base)
   const [graphH, setGraphH] = useState(initialGraphH)
@@ -108,8 +106,8 @@ export function Toolbox({ doc, shareHref }: Props) {
         onPointerDown={handleResizeStart}
         role="separator"
         aria-orientation="horizontal"
-        aria-label="Resize curves and export height"
-        title="Drag to resize curves and export panel"
+        aria-label="Resize the curve panels"
+        title="Drag to resize the curve panels"
       >
         <span className="toolbox__resizer-grip" />
       </div>
@@ -235,13 +233,6 @@ export function Toolbox({ doc, shareHref }: Props) {
             onReset={() => doc.resetCurve(key)}
           />
         ))}
-
-        <ExportPanel
-          ramp={selected.ramp}
-          name={selected.name}
-          gamut={doc.gamut}
-          shareHref={shareHref}
-        />
       </div>
     </section>
   )

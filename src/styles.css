@@ -475,35 +475,21 @@ button.swatch:hover:not(:disabled) {
 
 /* --- curve panels ---------------------------------------------------- */
 
+/* Three equal columns, one per channel, filling the dock.
+   There used to be a fourth, narrower track for the export panel; export is a
+   dialog off the top bar now, and the graphs take the room it was holding —
+   a wider graph is a finer grip on the curve, which is the whole job here. */
 .curves {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr minmax(200px, 240px);
+  grid-template-columns: repeat(3, 1fr);
   grid-auto-rows: var(--panel-h, 336px);
   gap: var(--space-4);
   align-items: stretch;
 }
 
-@media (max-width: 1100px) {
-  .curves {
-    grid-template-columns: 1fr 1fr 1fr;
-    grid-auto-rows: var(--panel-h, 336px);
-  }
-  .curves > :last-child {
-    grid-column: 1 / -1;
-    max-width: 320px;
-    height: var(--panel-h, 336px);
-  }
-}
-
 @media (max-width: 768px) {
   .curves {
     grid-template-columns: 1fr;
-    grid-auto-rows: var(--panel-h, 336px);
-  }
-  .curves > :last-child {
-    grid-column: 1;
-    max-width: 100%;
-    height: var(--panel-h, 336px);
   }
 }
 
@@ -823,85 +809,164 @@ body.is-dragging-hue * {
 
 /* --- export ---------------------------------------------------------- */
 
-.export__group {
-  border-bottom: 1px solid var(--rule);
-  padding: var(--space-4);
-}
-
-.export__group:last-of-type {
-  border-bottom: none;
-}
-
-.export__group > .legend {
-  display: block;
-  margin-bottom: var(--space-3);
-}
-
-.export__buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.export__btn--unavailable {
-  color: var(--muted);
-  opacity: 0.65;
-}
-
-.panel__row--flush {
-  border-bottom: none;
-  padding: 0 0 var(--space-4);
-}
-
-.export__hint {
-  margin: var(--space-4) 0 0;
-  color: var(--muted);
-  font-size: var(--text-xs);
-  line-height: 1.4;
-}
-
-/* The export panel is fixed to the height of the curve panels beside it (336px:
-   a 228px graph plus two rows, head, and rules).
-   The top group stays fixed in view while other formats remain directly
-   visible and scrollable inside .export__body rather than pushing the dock taller. */
-.export {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  max-height: var(--panel-h, 336px);
-  min-height: 0;
-  overflow: hidden;
-}
-
-.export__subhead {
-  display: flex;
-  align-items: center;
-  border-top: 1px solid var(--rule);
-  border-bottom: 1px solid var(--rule);
-  padding: var(--space-2) var(--space-4);
+/* Centred and dimmed, on the new-palette dialog's shape: export is one
+   decision that commits and closes, and it is reached from the top bar rather
+   than from beside a ramp, so there is nothing underneath it worth keeping in
+   view. Narrower than that dialog — this is a list of formats, not a canvas. */
+.exportd {
+  border: 1px solid var(--rule);
+  padding: 0;
   background: var(--paper);
+  color: var(--ink);
+  width: min(58ch, calc(100vw - 32px));
 }
 
-.export__body {
-  flex: 1;
-  min-height: 0;
+.exportd::backdrop {
+  background: rgb(0 0 0 / 0.55);
+}
+
+/* One left edge down the whole dialog: the panel head is sized for the dock,
+   where 8px of gutter is all there is to spare. */
+.exportd .panel__head {
+  padding: var(--space-4) var(--space-6);
+}
+
+/* Capped against the window so a long format list scrolls rather than
+   pushing the dialog off the top and bottom of the screen. */
+.exportd__body {
+  max-height: calc(100vh - 200px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin !important;
+  scrollbar-width: thin;
   scrollbar-color: var(--rule) transparent;
 }
 
-.export__body::-webkit-scrollbar {
-  display: block !important;
-  width: 5px !important;
+/* One rule between sections and nothing inside them: the strip below is what
+   separates a section's heading from its contents, so a second border here
+   would box every group twice. */
+.exportd__sect + .exportd__sect {
+  border-top: 1px solid var(--rule);
 }
 
-.export__body::-webkit-scrollbar-track {
-  background: transparent;
+/* A tinted strip per section, so the eye can find the three headings before
+   reading any of the buttons — and room at its right for the one setting, or
+   the one shortcut, that governs everything under it. */
+.exportd__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 28px;
+  padding: var(--space-3) var(--space-6);
+  border-bottom: 1px solid var(--rule);
+  background: var(--grid);
 }
 
-.export__body::-webkit-scrollbar-thumb {
-  background: var(--rule);
+/* Roomier than the panels in the dock: this is a dialog with one job, and the
+   old export panel was cramped because it was squeezed in beside three
+   graphs. */
+.exportd__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-6);
+}
+
+.exportd__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+/* The quieter half of a pair: downloads under the copies, select-all beside a
+   question. Muted until pointed at, so it reads as available rather than as
+   the thing to do next. */
+.exportd__minor {
+  font-size: var(--text-xs);
+  padding: 2px 6px;
+  color: var(--muted);
+  border-color: var(--muted);
+}
+
+.exportd__minor:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
+.exportd__hint {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-normal);
+}
+
+/* One format per line with its extension at the end, in two columns of
+   bordered rows. Eight identical chips wrapped across a row was a wall to
+   read; this can be scanned down, and the extension answers "which of these
+   three CSS ones do I want" without a tooltip. */
+.exportd__formats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid var(--rule);
+}
+
+.exportd__formats .exportd__format {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  height: auto;
+  padding: var(--space-3) var(--space-6);
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: left;
+}
+
+/* The right-hand column carries the dialog's own edge; the last row carries
+   the section's. */
+.exportd__formats .exportd__format:nth-child(2n) {
+  border-right: none;
+}
+
+.exportd__formats .exportd__format:nth-last-child(-n + 2) {
+  border-bottom: none;
+}
+
+.exportd__ext {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+/* Inverted on hover like every other button, so the extension has to come
+   with it rather than staying grey on black. */
+.exportd__formats .exportd__format:hover .exportd__ext {
+  color: var(--paper);
+}
+
+/* sRGB-only under a wider gamut: offered, but not without saying so. */
+.is-lossy {
+  color: var(--muted);
+}
+
+.exportd__pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-6);
+}
+
+/* What just happened, or why it could not: a strip under the header rather
+   than a line at the foot, so the answer is where the eye already is. */
+.exportd__note {
+  margin: 0;
+  padding: var(--space-3) var(--space-6);
+  border-bottom: 1px solid var(--rule);
+  background: var(--grid);
+  color: var(--ink);
+  font-size: var(--text-xs);
 }
 
 .field input[type='checkbox'] {
@@ -1941,8 +2006,12 @@ button.newpal__cand:hover {
 }
 
 /* Capped and scrolled: a document runs to 24 palettes, and the panel is
-   anchored to a button near the bottom of the window. */
-.applyto__list {
+   anchored to a button near the bottom of the window.
+
+   `plist`, not `picker`: that name is already the 26px colour swatch that
+   opens the colour picker, and a list wearing it comes out as a 26px square
+   with every row hidden inside. */
+.plist {
   display: flex;
   flex-direction: column;
   max-height: 260px;
@@ -1950,11 +2019,13 @@ button.newpal__cand:hover {
   border: 1px solid var(--rule);
 }
 
-/* Qualified by the panel throughout, and it has to be: the dialog is opened
-   from inside `.panel__actions`, so it is still a DOM descendant of it however
-   far the top layer moves it, and that rule's 24px-high chrome buttons would
-   otherwise squash every row here. */
-.applyto .applyto__target {
+/* Qualified by the list throughout, and it has to be: Apply to opens from
+   inside `.panel__actions`, so its rows are still DOM descendants of that
+   however far the top layer moves them, and that rule's 24px-high chrome
+   buttons would otherwise squash every row here. Qualifying by `.plist`
+   rather than by either dialog keeps the escape with the rows, so the export
+   dialog inherits it without naming itself. */
+.plist .plist__row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -1970,22 +2041,22 @@ button.newpal__cand:hover {
   cursor: pointer;
 }
 
-.applyto .applyto__target:last-child {
+.plist .plist__row:last-child {
   border-bottom: none;
 }
 
 /* Out of the global button hover, which fills with ink: these rows carry a
    ramp, and inverting a row would sit black behind the colours it is showing.
    A wash marks both the hover and the pick instead. */
-.applyto button.applyto__target:hover:not(:disabled),
-.applyto button.applyto__target.is-picked {
+.plist button.plist__row:hover:not(:disabled),
+.plist button.plist__row.is-picked {
   background: var(--grid);
   color: var(--ink);
 }
 
 /* A box that fills rather than a native checkbox: the row is the control, and
    a real input inside a button is neither valid nor clickable as one. */
-.applyto__mark {
+.plist__mark {
   flex-shrink: 0;
   width: 14px;
   height: 14px;
@@ -1997,12 +2068,12 @@ button.newpal__cand:hover {
   line-height: 1;
 }
 
-.applyto__target.is-picked .applyto__mark {
+.plist__row.is-picked .plist__mark {
   background: var(--ink);
   color: var(--paper);
 }
 
-.applyto__name {
+.plist__name {
   width: 11ch;
   flex-shrink: 0;
   font-size: var(--text-xs);
@@ -2013,26 +2084,26 @@ button.newpal__cand:hover {
 
 /* Flush, unlike the new-palette dialog's spaced squares: this is the ramp as
    it stands, shown so a name you half remember is still recognisable. */
-.applyto__ramp {
+.plist__ramp {
   display: flex;
   flex: 1;
   min-width: 0;
   height: 16px;
 }
 
-.applyto__chip {
+.plist__chip {
   flex: 1;
   min-width: 0;
 }
 
-.applyto__foot {
+.plist__foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
 }
 
-.applyto__count {
+.plist__count {
   color: var(--muted);
   font-size: var(--text-xs);
 }

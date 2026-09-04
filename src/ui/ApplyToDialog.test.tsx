@@ -47,15 +47,15 @@ describe('the apply-to dialog', () => {
   it('lists every other palette, with the ramp that says which one it is', () => {
     expect(open).toContain('>accent<')
     expect(open).toContain('>grey<')
-    expect(open.match(/applyto__target/g)?.length).toBeGreaterThanOrEqual(2)
-    expect(open.match(/applyto__chip/g)).toHaveLength(accent.ramp.length + grey.ramp.length)
+    expect(open.match(/plist__row/g)?.length).toBeGreaterThanOrEqual(2)
+    expect(open.match(/plist__chip/g)).toHaveLength(accent.ramp.length + grey.ramp.length)
   })
 
   it('opens with nothing picked, and cannot be applied until something is', () => {
     expect(open).not.toContain('is-picked')
     expect(open).toContain('aria-pressed="false"')
     expect(open).toContain('Pick the palettes to copy it to')
-    const foot = open.slice(open.indexOf('applyto__foot'))
+    const foot = open.slice(open.indexOf('plist__foot'))
     expect(foot).toContain('disabled')
   })
 
@@ -67,14 +67,26 @@ describe('the apply-to dialog', () => {
     expect(alone).toContain('Requires at least two palettes')
   })
 
+  it('keeps the list on a class of its own, not the colour swatch button', () => {
+    // `.picker` is the 26px square that opens the colour picker. A list
+    // wearing that name renders as a 26px box with every row hidden inside
+    // it — which is exactly how this list first shipped.
+    expect(open).toContain('class="plist"')
+    expect(open).not.toContain('class="picker"')
+    const box = declarations('.plist')
+    expect(box).toContain('max-height: 260px')
+    expect(box).toContain('overflow-y: auto')
+    expect(box).not.toContain('width: 26px')
+  })
+
   it('keeps its rows clear of the chrome sizing they sit inside', () => {
     // The dialog opens from `.panel__actions`, whose 24px buttons would
     // otherwise apply to every row in the list.
-    expect(declarations('.applyto .applyto__target')).toContain('height: auto')
+    expect(declarations('.plist .plist__row')).toContain('height: auto')
   })
 
   it('washes the picked row rather than filling it, so the ramp survives', () => {
-    const rule = declarations('button.applyto__target.is-picked')
+    const rule = declarations('button.plist__row.is-picked')
     expect(rule).toContain('background: var(--grid)')
     expect(rule).not.toContain('background: var(--ink)')
     expect(rule).toContain('color: var(--ink)')

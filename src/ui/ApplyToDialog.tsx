@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { PaletteView } from '../state/useDocument'
+import { PalettePicker } from './PalettePicker'
 
 type Props = {
   /** The channel being copied, lower-cased for prose: "lightness", "chroma", "hue". */
@@ -139,37 +140,10 @@ export function ApplyToDialog({ channel, targets, onApply, defaultOpen = false }
             </header>
 
             <div className="applyto__body">
-              <div className="applyto__list">
-                {targets.map((palette) => {
-                  const on = picked.includes(palette.id)
-                  return (
-                    <button
-                      key={palette.id}
-                      type="button"
-                      className={`applyto__target${on ? ' is-picked' : ''}`}
-                      aria-pressed={on}
-                      onClick={() => toggle(palette.id)}
-                    >
-                      <span className="applyto__mark" aria-hidden="true">
-                        {on ? '×' : ''}
-                      </span>
-                      <span className="applyto__name">{palette.name}</span>
-                      <span className="applyto__ramp">
-                        {palette.ramp.map((swatch) => (
-                          <span
-                            key={swatch.index}
-                            className="applyto__chip"
-                            style={{ background: swatch.displayColor }}
-                          />
-                        ))}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
+              <PalettePicker targets={targets} picked={picked} onToggle={toggle} />
 
-              <div className="applyto__foot">
-                <span className="applyto__count">
+              <div className="plist__foot">
+                <span className="plist__count">
                   {picked.length === 0
                     ? 'Pick the palettes to copy it to'
                     : `${picked.length} of ${targets.length} palette${targets.length > 1 ? 's' : ''}`}
