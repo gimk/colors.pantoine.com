@@ -12,18 +12,32 @@ export function useCopy() {
 
   useEffect(() => () => window.clearTimeout(timer.current), [])
 
-  const copy = useCallback(async (key: string, text: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      // Clipboard can be blocked (insecure origin, denied permission).
-      // Nothing to recover, but never leave a false "copied" behind.
-      return
-    }
+  /**
+   * The marker on its own, for a copy this hook did not write.
+   *
+   * An image goes to the clipboard as a blob rather than as text, so it
+   * cannot go through `copy` — but its button should still flash the way
+   * every other one in the panel does, for the same length of time.
+   */
+  const mark = useCallback((key: string) => {
     setCopied(key)
     window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => setCopied(null), FEEDBACK_MS)
   }, [])
 
-  return { copy, copied }
+  const copy = useCallback(
+    async (key: string, text: string) => {
+      try {
+        await navigator.clipboard.writeText(text)
+      } catch {
+        // Clipboard can be blocked (insecure origin, denied permission).
+        // Nothing to recover, but never leave a false "copied" behind.
+        return
+      }
+      mark(key)
+    },
+    [mark],
+  )
+
+  return { copy, copied, mark }
 }

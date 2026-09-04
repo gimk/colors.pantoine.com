@@ -22,7 +22,7 @@ type Props = {
 }
 
 export function ExportPanel({ ramp, name, shareHref, gamut = 'srgb' }: Props) {
-  const { copy, copied } = useCopy()
+  const { copy, copied, mark } = useCopy()
   const [sizeId, setSizeId] = useState(SIZE_PRESETS[1].id)
   const [labels, setLabels] = useState(false)
   const [imageNote, setImageNote] = useState<string | null>(null)
@@ -30,6 +30,13 @@ export function ExportPanel({ ramp, name, shareHref, gamut = 'srgb' }: Props) {
   const size = SIZE_PRESETS.find((preset) => preset.id === sizeId) ?? SIZE_PRESETS[1]
   const options: ImageOptions = { size: size.size, labels }
 
+  /**
+   * The note under the buttons is for the one thing a label cannot say.
+   *
+   * A success is reported on the button itself, like every other copy here.
+   * A blocked clipboard is advice — go and download it instead — and needs
+   * both more words and longer on screen than a flash.
+   */
   const announce = (message: string) => {
     setImageNote(message)
     window.setTimeout(() => setImageNote(null), 2000)
@@ -51,11 +58,12 @@ export function ExportPanel({ ramp, name, shareHref, gamut = 'srgb' }: Props) {
             type="button"
             onClick={async () => {
               const ok = await copyPng(ramp, options)
-              announce(ok ? 'PNG copied' : 'Clipboard blocked — use download')
+              if (ok) mark('png')
+              else announce('Clipboard blocked — use download')
             }}
             title="Paste onto a Figma canvas and eyedrop the steps"
           >
-            Copy PNG
+            {copied === 'png' ? 'PNG copied' : 'Copy PNG'}
           </button>
           <button
             type="button"
