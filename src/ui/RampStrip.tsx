@@ -1,4 +1,12 @@
-import { formatColor, gamutLabel, isInSrgb, type Format, type Gamut } from '../color/oklch'
+import { useMemo } from 'react'
+import {
+  formatColor,
+  gamutLabel,
+  isInSrgb,
+  mapToGamut,
+  type Format,
+  type Gamut,
+} from '../color/oklch'
 import type { Swatch } from '../color/ramp'
 import { inkOn, simulate, type Vision } from '../color/vision'
 
@@ -46,9 +54,9 @@ type Props = {
    *
    * The chip only. The value stamped on it, the tooltip and what a click
    * copies all stay the colour the document holds, because a simulation is a
-   * way of looking at a palette and never a way of changing one. Anything but
-   * `normal` also gives up wide-gamut display — the maths is defined for sRGB
-   * primaries — so the strip shows the sRGB rendition while it is on.
+   * way of looking at a palette and never a way of changing one. The chip
+   * itself is mapped for the document's gamut like any other colour, so a
+   * wide-gamut palette is checked as itself and not as its sRGB rendition.
    */
   vision?: Vision
   /** Namespaces the copy keys, so two strips cannot flash "copied" together. */
@@ -77,22 +85,43 @@ export function RampStrip({
   const className =
     `ramp${orientation === 'vertical' ? ' ramp--vertical' : ''}${fill ? ' ramp--fill' : ''}`
 
+  /**
+   * The ramp as the eye in force receives it, mapped for the display it is
+   * bound for — or nothing at all, which is the normal case and every strip
+   * in the editor.
+   *
+   * Held rather than recomputed because the strict gamut map is a search, and
+   * the review board re-renders every chip on every frame of a resize drag.
+   * The document memoises its ramps, so a ramp keeps its identity across
+   * those frames and this survives them.
+   */
+  const seen = useMemo(
+    () =>
+      vision === 'normal'
+        ? null
+        : ramp.map((swatch) => {
+            const color = simulate(swatch.oklch, vision)
+            return { display: mapToGamut(color, gamut).displayColor, ink: inkOn(color) }
+          }),
+    [ramp, vision, gamut],
+  )
+
   return (
     <div className={className}>
       {ramp.map((swatch, position) => {
         const value = formatColor(swatch.oklch, format, gamut)
-        /* The sRGB hex as the eye in force receives it — the swatch's own hex
-           when that eye is nobody's but yours. The chip still paints from
-           `displayColor` in the normal case, since that is the one case where
-           a wide-gamut colour can be shown as itself. */
-        const seen = simulate(swatch.hex, vision)
-        const chip = vision === 'normal' ? swatch.displayColor : seen
-        /* Every mark that lands on the chip takes its colour from here. Read
-           off the colour as seen rather than off the swatch's stored contrast
-           figures: under a simulation those describe a colour nobody is
-           looking at, and a saturated red that wants black type is a dark
-           brown to a protanope, which would swallow it. */
-        const ink = inkOn(seen)
+        const chip = seen ? seen[position].display : swatch.displayColor
+        /* Every mark that lands on the chip takes its colour from here. Under
+           a simulation it comes off the colour as seen, since the swatch's
+           own contrast figures then describe a colour nobody is looking at:
+           a saturated red that wants black type is a dark brown to a
+           protanope, which would swallow it. Otherwise the figures the swatch
+           already carries answer it for free. */
+        const ink = seen
+          ? seen[position].ink
+          : swatch.contrastOnBlack >= swatch.contrastOnWhite
+            ? '#000000'
+            : '#ffffff'
         const key = `${idPrefix}-${swatch.index}`
         const isCopied = copiedKey === key
         const isUnavailable =

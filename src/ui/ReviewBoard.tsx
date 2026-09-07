@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent, type PointerEvent } from 'react'
-import { FORMATS, formatColor, type Format, type Gamut } from '../color/oklch'
+import { FORMATS, formatColor, toHex, type Format, type Gamut } from '../color/oklch'
 import { VISIONS, inkOn, simulate, type Vision } from '../color/vision'
 import {
   boardSvg,
@@ -201,10 +201,15 @@ export function ReviewBoard({
       values: layout.labels
         ? palette.ramp.map((swatch) => formatColor(swatch.oklch, format, gamut))
         : undefined,
-      fills:
+      // The sRGB rendition of what is on screen, because a PNG's pixels and
+      // an SVG `fill` are sRGB whatever the board was being judged on.
+      seen:
         vision === 'normal'
           ? undefined
-          : palette.ramp.map((swatch) => simulate(swatch.hex, vision)),
+          : palette.ramp.map((swatch) => {
+              const color = simulate(swatch.oklch, vision)
+              return { fill: toHex(color), ink: inkOn(color) }
+            }),
     }))
 
   const handleCopyPng = async () => {
@@ -447,7 +452,9 @@ export function ReviewBoard({
                  visible advertisement that a band can be dragged. */
               <span
                 className="rband__name"
-                style={{ color: inkOn(simulate(palette.ramp[0]?.hex ?? '#ffffff', vision)) }}
+                style={{
+                  color: inkOn(simulate(palette.ramp[0]?.oklch ?? { l: 1, c: 0, h: 0 }, vision)),
+                }}
                 title="Drag to reorder"
               >
                 {palette.name}

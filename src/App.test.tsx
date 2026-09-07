@@ -2,6 +2,7 @@ import css from './styles.css?raw'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { App } from './App'
+import { parseToOklch, toHex } from './color/oklch'
 import { createPalette, DEFAULT_STEPS } from './color/presets'
 import { chromaCeilingProfile, generateRamp } from './color/ramp'
 import { MAX_PALETTES } from './state/document'
@@ -1107,7 +1108,9 @@ describe('the review board', () => {
     expect(rows).toContain('<span>Vision</span>')
     expect(rows).toContain('>Deuteranopia</option>')
 
-    const base = simulate('#7c3aed', 'grayscale')
+    // Mapped for the document's gamut like any other colour, which on an
+    // sRGB document is a hex.
+    const base = toHex(simulate(parseToOklch('#7c3aed')!, 'grayscale'))
     expect(base).not.toBe('#7c3aed')
     expect(grey).toContain(`background:${base}`)
     expect(rows).toContain('background:#7c3aed')
