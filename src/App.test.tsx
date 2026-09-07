@@ -10,6 +10,7 @@ import { schemeRamp } from './export/scheme'
 import type { SchemeApi } from './state/useScheme'
 import { SchemeBoard, spaceRolls, type KeyContext } from './ui/SchemeBoard'
 import { SchemeExportDialog } from './ui/SchemeExportDialog'
+import { ModeSwitch } from './ui/ModeSwitch'
 import { createPalette, DEFAULT_STEPS } from './color/presets'
 import { chromaCeilingProfile, generateRamp } from './color/ramp'
 import { MAX_PALETTES } from './state/document'
@@ -1342,12 +1343,14 @@ describe('scheme board', () => {
   it('offers both modes, and marks the one it is in', () => {
     const html = render(slotsOf())
     expect(html).toContain('Tints &amp; Shades')
-    // The switch holds two buttons and no nested spans, so the first closing
-    // span is its own.
-    const modes = html.match(/<span class="modes"[\s\S]*?<\/span>/)?.[0]
-    expect(modes).toBeDefined()
-    expect(modes!.match(/<button/g)).toHaveLength(2)
-    expect(modes!.match(/aria-pressed="true"/g)).toHaveLength(1)
+    // Sliced between the switch and what follows it in the masthead. Not
+    // matched to its own closing tag: the beta mark is a nested span, so the
+    // first `</span>` is no longer the switch's.
+    const start = html.indexOf('class="modes"')
+    const modes = html.slice(start, html.indexOf('class="masthead__end"'))
+    expect(start).toBeGreaterThan(-1)
+    expect(modes.match(/<button/g)).toHaveLength(2)
+    expect(modes.match(/aria-pressed="true"/g)).toHaveLength(1)
   })
 
   it('carries the same masthead the editor does, above its own toolbar', () => {
@@ -1764,5 +1767,27 @@ describe('a scheme bar’s tools', () => {
     const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
     expect(rules).toContain('.sbar__tools:focus-within')
     expect(rules).not.toContain('.sbar:focus-within')
+  })
+})
+
+describe('the mode switch', () => {
+  const html = renderToStaticMarkup(<ModeSwitch mode="ramps" onMode={() => {}} />)
+
+  it('marks the scheme half as beta, inside the label', () => {
+    expect(html).toContain('class="modes__beta"')
+    expect(html).toContain('>beta<')
+    // Inside the Scheme button, not floating beside the pair.
+    const scheme = html.slice(0, html.indexOf('Tints'))
+    expect(scheme).toContain('modes__beta')
+  })
+
+  it('leaves the switch two buttons wide', () => {
+    expect(html.match(/<button/g)).toHaveLength(2)
+  })
+
+  it('lets the mark take the colour of whichever half it is on', () => {
+    // The scheme half is filled when it is the mode in force, so a fixed
+    // colour here would be unreadable on one of the two states.
+    expect(declarations('.modes__beta')).not.toContain('color:')
   })
 })

@@ -2192,6 +2192,18 @@ button.newpal__cand:hover {
   margin-left: -1px;
 }
 
+/* Rides inside the label rather than beside it, so the switch stays two
+   buttons wide and the mark travels with the word it qualifies. Inherits its
+   colour, which is what keeps it legible on the filled half as well as the
+   empty one. */
+.modes__beta {
+  margin-left: var(--space-2);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-pill);
+  opacity: 0.55;
+  vertical-align: 1px;
+}
+
 /* --- scheme ------------------------------------------------------------ */
 
 /* The loudest thing in the app, on purpose. The editor is a workshop and looks

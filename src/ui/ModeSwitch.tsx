@@ -29,9 +29,13 @@ export function ModeSwitch({ mode, onMode }: Props) {
         className={mode === 'scheme' ? 'is-on' : undefined}
         aria-pressed={mode === 'scheme'}
         onClick={() => onMode('scheme')}
-        title="Build a palette of colours that go together"
+        title="Build a palette of colours that go together — new, and still settling"
       >
         Scheme
+        {/* Dimmed and small rather than parenthesised: the labels are already
+            uppercase and tracked, and `(BETA)` at that size reads as part of
+            the name instead of as a note about it. */}
+        <span className="modes__beta">beta</span>
       </button>
       <button
         type="button"
