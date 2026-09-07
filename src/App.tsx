@@ -1,23 +1,67 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { FORMATS, GAMUTS, type Format, type Gamut } from './color/oklch'
+import {
+  formatColor,
+  FORMATS,
+  GAMUTS,
+  parseToOklch,
+  type Format,
+  type Gamut,
+} from './color/oklch'
 import type { Vision } from './color/vision'
-import { MAX_STEPS, MIN_STEPS } from './color/presets'
-import { restoreDocument, saveDocument } from './state/storage'
+import { DEFAULT_STEPS, MAX_STEPS, MIN_STEPS } from './color/presets'
+import { resolveBase } from './color/ramp'
+import { MAX_SLOTS, type Slot } from './color/scheme'
+import { newSlot } from './state/scheme'
+import {
+  BLANK_SCHEME,
+  restoreDocument,
+  restoreScheme,
+  saveDocument,
+  saveScheme,
+} from './state/storage'
+import { decodeMode, type DecodedScheme } from './state/url'
 import { useDocument, type PaletteView } from './state/useDocument'
 import { useReview } from './state/useReview'
+import { useScheme } from './state/useScheme'
 import { ExportDialog } from './ui/ExportDialog'
+import { Masthead } from './ui/Masthead'
+import type { Mode } from './ui/ModeSwitch'
 import { NewPaletteDialog } from './ui/NewPaletteDialog'
 import { NumberField } from './ui/NumberField'
-import { HelpDialog } from './ui/HelpDialog'
 import { PaletteRow } from './ui/PaletteRow'
 import { ReviewBoard } from './ui/ReviewBoard'
+import { SchemeBoard } from './ui/SchemeBoard'
 import { Toolbox } from './ui/Toolbox'
 import { useCopy } from './ui/useCopy'
 
 /** Read once, at mount. Guarded so the tree also renders without a DOM. */
 function readSession() {
-  if (typeof window === 'undefined') return { seeds: [], selected: 0 }
-  return restoreDocument(window.location.hash)
+  if (typeof window === 'undefined') {
+    return { seeds: null, selected: 0, scheme: BLANK_SCHEME, mode: 'ramps' as Mode }
+  }
+  const { hash } = window.location
+  return {
+    ...restoreDocument(hash),
+    scheme: restoreScheme(hash) ?? BLANK_SCHEME,
+    mode: decodeMode(hash),
+  }
+}
+
+/**
+ * The stored scheme as slots.
+ *
+ * Colours arrive as text because that is what a link carries; anything that
+ * will not parse was already dropped by the decoder, so the fallback here is
+ * only ever reached by a colour that parses to nothing, and an empty list
+ * leaves `createScheme` to roll a fresh one.
+ */
+function slotsFrom(scheme: DecodedScheme): Slot[] {
+  return scheme.colors
+    .map((entry, index) => {
+      const color = parseToOklch(entry)
+      return color ? newSlot(color, scheme.locks[index] ?? false) : null
+    })
+    .filter((slot): slot is Slot => slot !== null)
 }
 
 /** What the address bar and storage both hold: every palette, in order. */
@@ -54,19 +98,49 @@ export function App() {
    * an axis, a spacing, and sizes — which a pair of toggles could not.
    */
   const [review, setReview] = useState(false)
+  /**
+   * Which half of the tool is up.
+   *
+   * A third view rather than a flag the editor reads: the scheme board shares
+   * the gamut, the format and the eye with the editor and nothing else, so
+   * every mode renders its own tree the way the review board already does.
+   */
+  const [mode, setMode] = useState<Mode>(session.mode)
   const { copy, copied } = useCopy()
+
+  /**
+   * The scheme, on its own history.
+   *
+   * Separate from the document on purpose: a press of Space here rolls five
+   * new colours, and if the two shared state that press would re-base every
+   * ramp in the stack and take an hour of curve work with it. What joins them
+   * is the pair of handoffs below, which are deliberate and one-directional.
+   */
+  const scheme = useScheme(
+    {
+      slots: slotsFrom(session.scheme),
+      rule: session.scheme.rule,
+      profile: session.scheme.profile,
+    },
+    gamut,
+  )
 
   const layout = useReview(
     doc.palettes.map((palette) => palette.id),
-    doc.selected.config.steps,
+    // The board lays out whatever the document holds, and an empty one holds
+    // no step count, so it falls back to the default rather than to nothing.
+    doc.selected?.config.steps ?? DEFAULT_STEPS,
   )
 
   useEffect(() => {
     document.documentElement.dataset.canvas = dark ? 'dark' : 'light'
   }, [dark])
 
-  // Ctrl/Cmd+Z and Ctrl+Shift+Z (or Ctrl+Y) on the document.
-  const { undo, redo } = doc
+  // Ctrl/Cmd+Z and Ctrl+Shift+Z (or Ctrl+Y), on whichever history is in view.
+  // The two modes keep separate stacks, so the shortcut has to follow the eye:
+  // undoing on the scheme board must step back a roll, not an edit made in the
+  // editor half an hour ago.
+  const { undo, redo } = mode === 'scheme' ? scheme : doc
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey) return
@@ -95,6 +169,13 @@ export function App() {
     const seeds = seedsOf(doc.palettes)
     saveDocument(seeds, doc.selectedIndex, gamut, doc.stepsLocked)
   }, [doc.palettes, doc.selectedIndex, gamut, doc.stepsLocked])
+
+  // The scheme saves to a key of its own, so a session that ends on the board
+  // opens back onto the colours it ended on rather than on a fresh roll.
+  const { state: schemeState } = scheme
+  useEffect(() => {
+    saveScheme(schemeState.slots, schemeState.rule, schemeState.profile)
+  }, [schemeState])
 
   const { selected } = doc
 
@@ -143,7 +224,51 @@ export function App() {
       clearTimeout(timer)
       if (rafId) cancelAnimationFrame(rafId)
     }
-  }, [selected.id, scrollTrigger])
+  }, [selected?.id, scrollTrigger])
+
+  /**
+   * The scheme board, which is the other half of the tool rather than another
+   * way of looking at this one. Same treatment as the review board: it
+   * replaces the tree, and every hook above still runs, so the document is
+   * still saved and still undoable while you are away from it.
+   */
+  if (mode === 'scheme') {
+    return (
+      <SchemeBoard
+        scheme={scheme}
+        mode={mode}
+        onMode={setMode}
+        format={format}
+        onFormat={setFormat}
+        gamut={gamut}
+        onGamut={doc.setGamut}
+        vision={vision}
+        onVision={setVision}
+        /* One palette per colour, in scheme order, named from the colour the
+           way every other derived palette is. The base goes across as
+           `oklch()` rather than as hex: a scheme made on a P3 document holds
+           colours sRGB cannot write down. */
+        onSendToRamps={() => {
+          doc.addPalettes(
+            scheme.slots.map((slot) => ({ base: formatColor(slot.color, 'oklch') })),
+          )
+          setMode('ramps')
+          triggerScroll()
+        }}
+        /* The other direction, and locked on arrival: a colour you already
+           chose and built a ramp from is not one a roll should overwrite. */
+        onSeedFromRamps={() =>
+          scheme.load(
+            doc.palettes
+              .slice(0, MAX_SLOTS)
+              .map((palette) => newSlot(resolveBase(palette.config), true)),
+          )
+        }
+        copiedKey={copied}
+        onCopy={copy}
+      />
+    )
+  }
 
   /**
    * The board is a different page, not the editor with things switched off,
@@ -172,27 +297,15 @@ export function App() {
 
   return (
     <div className="app">
-      <header className="masthead">
-        <h1>COLORS // PANTOINE — TINTS &amp; SHADES</h1>
-        <span className="spacer" />
-        <span className="masthead__credit">
-          Made with dedication by{' '}
-          <a
-            href="https://www.pantoine.com"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Antoine Pouligny
-          </a>
-        </span>
-        <span className="badge badge--solid">OKLCH</span>
-        <HelpDialog gamut={gamut} />
-      </header>
+      <Masthead mode={mode} onMode={setMode} gamut={gamut} />
 
       <div className="controls">
         <div className="controls__group">
           {/* First in the bar and filled solid: it is the one thing here that
-              adds to the document rather than adjusting it. */}
+              adds to the document rather than adjusting it. Both it and the
+              quick add stand down while the document is empty, where the same
+              pair is the whole of the page. */}
+          {selected && (
           <NewPaletteDialog
             palettes={doc.palettes}
             selected={selected}
@@ -202,10 +315,12 @@ export function App() {
               triggerScroll()
             }}
           />
+          )}
 
           {/* The old behaviour, kept as a shortcut. A guessed colour is a poor
               answer for a scheme but a fine one for "just give me another
               ramp", and that is worth not making anyone open a dialog for. */}
+          {selected && (
           <button
             type="button"
             onClick={() => {
@@ -216,6 +331,7 @@ export function App() {
           >
             + Quick add
           </button>
+          )}
 
           <button
             type="button"
@@ -273,6 +389,7 @@ export function App() {
             </select>
           </label>
 
+          {selected && (
           <div className="controls__steps">
             <NumberField
               label="Steps"
@@ -281,7 +398,7 @@ export function App() {
                   ? 'Number of steps, shared across every palette in the document'
                   : 'Global steps — lock to synchronize all palettes to this step count'
               }
-              value={selected.config.steps}
+              value={selected?.config.steps ?? DEFAULT_STEPS}
               min={MIN_STEPS}
               max={MAX_STEPS}
               step={1}
@@ -332,11 +449,15 @@ export function App() {
               )}
             </button>
           </div>
+          )}
         </div>
 
         <span className="spacer" />
 
         <div className="controls__group">
+          {/* Both of these answer to a stack of palettes, so neither has anything
+              to say about an empty one. */}
+          {selected && (
           <button
             type="button"
             onClick={() => setReview(true)}
@@ -344,6 +465,7 @@ export function App() {
           >
             Review
           </button>
+          )}
 
           <button
             type="button"
@@ -356,21 +478,54 @@ export function App() {
           {/* Last in the bar, with Review and the canvas: the three things
               here that answer to the whole document rather than to the
               palette the toolbox happens to be on. */}
+          {selected && (
           <ExportDialog
             palettes={doc.palettes}
             gamut={gamut}
             stepsLocked={doc.stepsLocked}
           />
+          )}
         </div>
       </div>
 
+      {/* An emptied document is a real state, not an error, so it gets the two
+          ways back into one rather than an apology. Centred and on its own,
+          because there is nothing else on the page to compete with — and the
+          same two controls the bar leads with, which is why the bar drops them
+          while this is up rather than offering each of them twice. */}
+      {!selected ? (
+        <div className="blank">
+          <p className="blank__note">No palettes.</p>
+          <div className="blank__actions">
+            <NewPaletteDialog
+              palettes={doc.palettes}
+              selected={selected}
+              gamut={gamut}
+              onAdd={(bases) => {
+                doc.addPalettes(bases)
+                triggerScroll()
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                doc.newPalette()
+                triggerScroll()
+              }}
+              title="Start from a colour picked for you"
+            >
+              + Quick add
+            </button>
+          </div>
+        </div>
+      ) : (
       <div className="stack">
         {doc.palettes.map((palette) => (
           <PaletteRow
             key={palette.id}
             palette={palette}
             count={doc.palettes.length}
-            selected={palette.id === selected.id}
+            selected={palette.id === selected?.id}
             format={format}
             gamut={gamut}
             copiedKey={copied}
@@ -390,12 +545,15 @@ export function App() {
           />
         ))}
       </div>
+      )}
 
       {/* Docked, not trailing the selection down the stack. Last in the tree
           so `position: sticky; bottom` pins it to the foot of the window while
           the palettes scroll behind, and it names the palette it is editing
-          since it is no longer beside it. */}
-      <Toolbox doc={doc} />
+          since it is no longer beside it. Gone entirely on an empty document,
+          where it would be a panel of controls for a palette that is not
+          there. */}
+      {selected && <Toolbox doc={doc} selected={selected} />}
     </div>
   )
 }

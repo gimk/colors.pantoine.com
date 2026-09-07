@@ -58,8 +58,9 @@ export type PaletteView = {
 
 export type DocumentApi = {
   palettes: PaletteView[]
-  selected: PaletteView
-  /** Index of the selected palette in the stack, for persisting the selection. */
+  /** The palette the toolbox is on, or null when the document is empty. */
+  selected: PaletteView | null
+  /** Index of the selected palette, or -1 when there is nothing selected. */
   selectedIndex: number
   undo: () => void
   redo: () => void
@@ -94,7 +95,8 @@ export type DocumentApi = {
 }
 
 type Seed = {
-  seeds: PaletteSeed[]
+  /** `null` means a first run; `[]` means a document emptied on purpose. */
+  seeds: PaletteSeed[] | null
   selected: number
   gamut?: Gamut
   stepsLocked?: boolean
@@ -133,15 +135,18 @@ export function useDocument(seed: Seed): DocumentApi {
     [state.palettes, state.gamut],
   )
 
-  const selectedId = selectedEntry(state).id
-  const selectedIndex = Math.max(
-    palettes.findIndex((entry) => entry.id === selectedId),
-    0,
-  )
+  // Nothing at all on an empty document, and `-1` for the index, which is what
+  // `saveDocument` records and `createDocument` ignores. Deliberately not
+  // clamped to 0 the way it used to be: on an empty stack that would name a
+  // palette that is not there.
+  const selectedId = selectedEntry(state)?.id
+  const selectedIndex = selectedId
+    ? Math.max(palettes.findIndex((entry) => entry.id === selectedId), 0)
+    : -1
 
   return {
     palettes,
-    selected: palettes[selectedIndex],
+    selected: selectedIndex < 0 ? null : palettes[selectedIndex],
     selectedIndex,
     canUndo: canUndo(history),
     canRedo: canRedo(history),

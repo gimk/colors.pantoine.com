@@ -1,6 +1,16 @@
 import { CHANNELS, clampCurve, type Curve } from '../color/curve'
-import { isGamut, type Gamut } from '../color/oklch'
+import { isGamut, parseToOklch, toHex, type Gamut } from '../color/oklch'
 import { createPalette, MAX_STEPS, MIN_STEPS, type PaletteConfig } from '../color/presets'
+import {
+  AUTO_RULE,
+  isProfileId,
+  isRuleId,
+  MAX_SLOTS,
+  MIN_SLOTS,
+  type ProfileId,
+  type RuleId,
+  type Slot,
+} from '../color/scheme'
 
 /**
  * The whole palette lives in the URL hash.
@@ -190,4 +200,124 @@ export function documentUrl(
 ): string {
   const { origin, pathname } = window.location
   return `${origin}${pathname}#${encodeDocument(palettes, gamut, stepsLocked)}`
+}
+
+/* --- the scheme ---------------------------------------------------------
+ *
+ * One more segment on the same `~`-separated hash. It carries no `c=` key, so
+ * `decodePalette` returns null for it and `decodeDocument` drops it the way it
+ * drops `g=` and `u=` — which is what lets a reader that has never heard of a
+ * scheme open a link that contains one.
+ *
+ * The colours travel as a bare hex list. Legible and hand-editable, which is
+ * the property the whole hash format is built around, and it happens to be
+ * the shape of link people already recognise from other palette tools.
+ */
+
+const SCHEME_KEYS = {
+  colors: 'sc',
+  locks: 'sl',
+  rule: 'sr',
+  profile: 'sp',
+} as const
+
+/** Which half of the tool a link opens in. */
+const MODE_KEY = 'm'
+
+export type DecodedScheme = {
+  colors: string[]
+  /** One flag per colour, in the same order. */
+  locks: boolean[]
+  rule: RuleId
+  profile: ProfileId
+}
+
+export function encodeScheme(
+  slots: Slot[],
+  rule: RuleId,
+  profile: ProfileId,
+): string {
+  const params = new URLSearchParams()
+  params.set(SCHEME_KEYS.colors, slots.map((slot) => toHex(slot.color).slice(1)).join('-'))
+  // A bitmask rather than a list of indices: it is one character per colour
+  // whatever is locked, and it cannot fall out of step with the order.
+  if (slots.some((slot) => slot.locked)) {
+    params.set(SCHEME_KEYS.locks, slots.map((slot) => (slot.locked ? '1' : '0')).join(''))
+  }
+  params.set(SCHEME_KEYS.rule, rule)
+  params.set(SCHEME_KEYS.profile, profile)
+  return params.toString()
+}
+
+/**
+ * The scheme a link carries, or null for a link that carries none.
+ *
+ * Everything is checked and everything falls back, exactly as a palette
+ * segment does: a truncated or hand-mangled link should open something
+ * usable rather than an error. A colour that will not parse is dropped, and a
+ * lock string of the wrong length is ignored rather than misapplied — locks
+ * pinned to the wrong colours are worse than no locks at all.
+ */
+export function decodeScheme(hash: string): DecodedScheme | null {
+  const raw = hash.replace(/^#/, '')
+  if (!raw) return null
+
+  for (const segment of raw.split(SEPARATOR)) {
+    const params = new URLSearchParams(segment)
+    const list = params.get(SCHEME_KEYS.colors)
+    if (!list) continue
+
+    const colors = list
+      .split('-')
+      .map((entry) => restoreBaseColor(entry.trim()))
+      .filter((entry) => parseToOklch(entry) !== null)
+      .slice(0, MAX_SLOTS)
+    if (colors.length < MIN_SLOTS) continue
+
+    const mask = params.get(SCHEME_KEYS.locks) ?? ''
+    const locks = colors.map((_unused, index) =>
+      mask.length === colors.length ? mask[index] === '1' : false,
+    )
+
+    const rule = params.get(SCHEME_KEYS.rule)
+    const profile = params.get(SCHEME_KEYS.profile)
+
+    return {
+      colors,
+      locks,
+      rule: isRuleId(rule) ? rule : AUTO_RULE,
+      profile: isProfileId(profile) ? profile : 'even',
+    }
+  }
+  return null
+}
+
+/** The mode a link was made in, defaulting to the editor. */
+export function decodeMode(hash: string): 'ramps' | 'scheme' {
+  const raw = hash.replace(/^#/, '')
+  if (!raw) return 'ramps'
+  for (const segment of raw.split(SEPARATOR)) {
+    if (new URLSearchParams(segment).get(MODE_KEY) === 'scheme') return 'scheme'
+  }
+  return 'ramps'
+}
+
+/**
+ * A link to the scheme alone.
+ *
+ * Separate from `documentUrl` rather than an argument to it. Sharing a scheme
+ * and sharing a document of ramps are two different things to send somebody,
+ * and a link that quietly carried both would open on whichever the recipient
+ * did not mean.
+ */
+export function schemeUrl(
+  slots: Slot[],
+  rule: RuleId,
+  profile: ProfileId,
+  gamut: Gamut = 'srgb',
+): string {
+  const { origin, pathname } = window.location
+  const segments = [`${MODE_KEY}=scheme`, encodeScheme(slots, rule, profile)]
+  if (gamut !== 'srgb') segments.unshift(`${GAMUT_KEY}=${gamut}`)
+  return `${origin}${pathname}#${segments.join(SEPARATOR)}`
 }

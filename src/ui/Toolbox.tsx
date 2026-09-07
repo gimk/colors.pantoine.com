@@ -3,7 +3,7 @@ import { CHANNEL_ORDER, type Curve, type CurveControl } from '../color/curve'
 import { parseToOklch } from '../color/oklch'
 import { FALLBACK_BASE, MAX_STEPS, MIN_STEPS, type CurveKey } from '../color/presets'
 import { chromaCeilingProfile } from '../color/ramp'
-import type { DocumentApi } from '../state/useDocument'
+import type { DocumentApi, PaletteView } from '../state/useDocument'
 import { BaseColorInput } from './BaseColorInput'
 import { CurvePanel } from './CurvePanel'
 import { NameField } from './NameField'
@@ -35,6 +35,10 @@ function initialGraphH(): number {
 
 type Props = {
   doc: DocumentApi
+  /** The palette being edited. Passed in rather than read off `doc`, because
+   *  the document can now be empty and this panel has no meaning without one —
+   *  so the caller decides whether there is anything to show. */
+  selected: PaletteView
 }
 
 /**
@@ -44,8 +48,7 @@ type Props = {
  * belong to a palette, not to the document: with a stack of palettes, a base
  * field far from the ramp it drives would be ambiguous.
  */
-export function Toolbox({ doc }: Props) {
-  const { selected } = doc
+export function Toolbox({ doc, selected }: Props) {
   const parsedBase = parseToOklch(selected.config.base)
   const [graphH, setGraphH] = useState(initialGraphH)
   const [isResizing, setIsResizing] = useState(false)

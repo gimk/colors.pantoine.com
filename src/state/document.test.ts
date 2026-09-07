@@ -36,7 +36,7 @@ describe('document', () => {
     const doc = createDocument()
     expect(doc.palettes).toHaveLength(1)
     expect(doc.palettes[0].name).toBe('brand')
-    expect(selectedEntry(doc).id).toBe(doc.palettes[0].id)
+    expect(selectedEntry(doc)!.id).toBe(doc.palettes[0].id)
   })
 
   it('selects the last palette, which is the one the toolbox opens under', () => {
@@ -44,13 +44,13 @@ describe('document', () => {
       { name: 'one', config: createPalette('#7c3aed') },
       { name: 'two', config: createPalette('#facc15') },
     ])
-    expect(selectedEntry(doc).name).toBe('two')
+    expect(selectedEntry(doc)!.name).toBe('two')
   })
 
   it('appends a new palette below and moves the selection to it', () => {
     const doc = run(createDocument(), { type: 'new' })
     expect(doc.palettes).toHaveLength(2)
-    expect(selectedEntry(doc).id).toBe(doc.palettes[1].id)
+    expect(selectedEntry(doc)!.id).toBe(doc.palettes[1].id)
     // Named after whatever colour it landed on, which the quick-add varies.
     expect(doc.palettes[1].name).toBe(nameForColor(doc.palettes[1].state.config.base))
   })
@@ -96,7 +96,7 @@ describe('document', () => {
   it('moves the selection on click, and ignores an id it does not have', () => {
     const doc = run(createDocument(), { type: 'new' })
     const first = doc.palettes[0].id
-    expect(selectedEntry(run(doc, { type: 'select', id: first })).id).toBe(first)
+    expect(selectedEntry(run(doc, { type: 'select', id: first }))!.id).toBe(first)
     expect(run(doc, { type: 'select', id: 'nope' })).toBe(doc)
   })
 
@@ -107,7 +107,7 @@ describe('document', () => {
     const moved = run(doc, { type: 'move', id: c, by: -1 })
     expect(moved.palettes.map((entry) => entry.id)).toEqual([a, c, b])
     // Reordering is not selecting: the palette you were editing stays selected.
-    expect(selectedEntry(moved).id).toBe(c)
+    expect(selectedEntry(moved)!.id).toBe(c)
 
     expect(run(doc, { type: 'move', id: a, by: -1 })).toBe(doc)
     expect(run(doc, { type: 'move', id: c, by: 1 })).toBe(doc)
@@ -134,7 +134,7 @@ describe('document', () => {
     ])
     const copied = run(doc, { type: 'duplicate', id: doc.palettes[0].id })
     expect(copied.palettes.map((entry) => entry.name)).toEqual(['brand', 'brand 2', 'accent'])
-    expect(selectedEntry(copied).name).toBe('brand 2')
+    expect(selectedEntry(copied)!.name).toBe('brand 2')
     expect(copied.palettes[1].state.config).toBe(doc.palettes[0].state.config)
     expect(copied.palettes[1].nameCustom).toBe(true)
     expect(copied.palettes[1].id).not.toBe(doc.palettes[0].id)
@@ -165,23 +165,26 @@ describe('document', () => {
     expect(run(room, { type: 'duplicate', id: 'nope' })).toBe(room)
   })
 
-  it('deletes a palette and never empties the document', () => {
+  it('deletes a palette, and will empty the document if asked', () => {
     const one = createDocument()
-    expect(run(one, { type: 'remove', id: one.palettes[0].id })).toBe(one)
+    const none = run(one, { type: 'remove', id: one.palettes[0].id })
+    expect(none.palettes).toEqual([])
+    expect(none.selectedId).toBe('')
+    expect(selectedEntry(none)).toBeUndefined()
 
     const doc = run(one, { type: 'new' }, { type: 'new' })
     const [a, b, c] = doc.palettes.map((entry) => entry.id)
     const gone = run(doc, { type: 'remove', id: b })
     expect(gone.palettes.map((entry) => entry.id)).toEqual([a, c])
-    expect(selectedEntry(gone).id).toBe(c)
+    expect(selectedEntry(gone)!.id).toBe(c)
   })
 
   it('hands the selection to a neighbour when the selected palette goes', () => {
     const doc = run(createDocument(), { type: 'new' }, { type: 'new' })
     const [, b, c] = doc.palettes.map((entry) => entry.id)
-    expect(selectedEntry(doc).id).toBe(c)
+    expect(selectedEntry(doc)!.id).toBe(c)
     const gone = run(doc, { type: 'remove', id: c })
-    expect(selectedEntry(gone).id).toBe(b)
+    expect(selectedEntry(gone)!.id).toBe(b)
   })
 
   it('renames without disturbing the palette itself', () => {
@@ -361,7 +364,7 @@ describe('document', () => {
     })
     // `new` selects what it appends, so the edit above landed on the third.
     const [first, second, third] = withCustom.palettes
-    expect(selectedEntry(withCustom).id).toBe(third.id)
+    expect(selectedEntry(withCustom)!.id).toBe(third.id)
 
     const synced = run(withCustom, { type: 'syncChannel', key: 'hue', to: [second.id] })
     expect(synced.palettes[1].state.config.hue.start).toBeCloseTo(14, 4)
@@ -649,7 +652,7 @@ describe('the document gamut', () => {
   })
 
   it('builds a new palette for the gamut the document is in', () => {
-    const wide = run(createDocument([], -1, 'rec2020'), { type: 'new' })
+    const wide = run(createDocument(null, -1, 'rec2020'), { type: 'new' })
     const narrow = run(createDocument(), { type: 'new' })
     expect(wide.palettes[1].state.config.chroma).not.toEqual(
       narrow.palettes[1].state.config.chroma,
@@ -852,7 +855,7 @@ describe('saving', () => {
     stubStorage()
     saveDocument([brand, accent], 1)
     const back = restoreDocument('')
-    expect(back.seeds.map((entry) => entry.name)).toEqual(['brand', 'accent'])
+    expect(back.seeds!.map((entry) => entry.name)).toEqual(['brand', 'accent'])
     expect(back.selected).toBe(1)
     expect(back.gamut).toBe('srgb')
   })
@@ -872,7 +875,7 @@ describe('saving', () => {
   it('opens a shared link on its own when there is nothing saved', () => {
     stubStorage()
     const back = restoreDocument(`#${encodeDocument([brand, accent])}`)
-    expect(back.seeds.map((entry) => entry.name)).toEqual(['brand', 'accent'])
+    expect(back.seeds!.map((entry) => entry.name)).toEqual(['brand', 'accent'])
     expect(back.selected).toBe(1)
   })
 
@@ -881,7 +884,7 @@ describe('saving', () => {
     stubStorage()
     saveDocument([brand], 0)
     const back = restoreDocument(`#${encodeDocument([accent])}`)
-    expect(back.seeds.map((entry) => entry.name)).toEqual(['brand', 'accent'])
+    expect(back.seeds!.map((entry) => entry.name)).toEqual(['brand', 'accent'])
     // And it lands on the palette the link was sent for.
     expect(back.selected).toBe(1)
   })
@@ -899,15 +902,17 @@ describe('saving', () => {
   it('falls back to nothing when storage holds rubbish', () => {
     const store = stubStorage()
     store.set('colors.pantoine.com/v1', '{not json')
-    expect(restoreDocument('').seeds).toEqual([])
+    expect(restoreDocument('').seeds).toBeNull()
     store.set('colors.pantoine.com/v1', JSON.stringify({ v: 99, hash: 'c=7c3aed' }))
-    expect(restoreDocument('').seeds).toEqual([])
+    expect(restoreDocument('').seeds).toBeNull()
   })
 
   it('survives a browser that refuses storage outright', () => {
     stubStorage(true)
     expect(() => saveDocument([brand], 0)).not.toThrow()
-    expect(restoreDocument('').seeds).toEqual([])
+    // Nothing readable is a first run, not a document that was emptied — the
+    // two are different answers now, and this one gets the default palette.
+    expect(restoreDocument('').seeds).toBeNull()
     // A link still opens: the address bar does not need permission.
     expect(restoreDocument(`#${encodeDocument([accent])}`).seeds).toHaveLength(1)
   })
@@ -937,7 +942,7 @@ describe('adding palettes in a batch', () => {
     // The same rule a shared link follows: the first one is the one whoever
     // asked for them named first.
     const doc = add(createDocument(), [{ base: '#ff0000' }, { base: '#00ff00' }])
-    expect(selectedEntry(doc).id).toBe(doc.palettes[1].id)
+    expect(selectedEntry(doc)!.id).toBe(doc.palettes[1].id)
   })
 
   it('hands back the state it was given when there is nothing to add', () => {
@@ -992,7 +997,7 @@ describe('adding palettes in a batch', () => {
   })
 
   it('inherits the document step count and gamut', () => {
-    const doc = run(createDocument([], -1, 'rec2020'), { type: 'setSteps', value: 15 })
+    const doc = run(createDocument(null, -1, 'rec2020'), { type: 'setSteps', value: 15 })
     const added = add(doc, [{ base: '#00ff66' }])
     expect(added.palettes[1].state.config.steps).toBe(15)
     // Derived against the wide ceiling, so the curve differs from the sRGB one.
@@ -1032,5 +1037,71 @@ describe('adding palettes in a batch', () => {
     const original = parseToOklch('#00ff66')!
     expect(revived.h).toBeCloseTo(original.h, 1)
     expect(revived.c).toBeCloseTo(original.c, 3)
+  })
+})
+
+describe('an empty document', () => {
+  const accent = { name: 'accent', config: createPalette('#facc15') }
+
+  it('tells a first run apart from a stack emptied on purpose', () => {
+    // `null` is nobody said, and gets the palette a first run opens on. `[]`
+    // is an answer, and has to be honoured or deleting the last palette would
+    // quietly undo itself on the next reload.
+    expect(createDocument().palettes).toHaveLength(1)
+    expect(createDocument(null).palettes).toHaveLength(1)
+    expect(createDocument([]).palettes).toEqual([])
+    expect(createDocument([]).selectedId).toBe('')
+  })
+
+  it('survives a save and a reload as empty', () => {
+    stubStorage()
+    saveDocument([], -1)
+    const back = restoreDocument('')
+    expect(back.seeds).toEqual([])
+    expect(createDocument(back.seeds).palettes).toEqual([])
+  })
+
+  it('still takes a shared link on top of nothing', () => {
+    stubStorage()
+    saveDocument([], -1)
+    const back = restoreDocument(`#${encodeDocument([accent])}`)
+    expect(back.seeds!.map((entry) => entry.name)).toEqual(['accent'])
+  })
+
+  it('adds a palette back, by either route', () => {
+    const none = createDocument([])
+    expect(run(none, { type: 'new' }).palettes).toHaveLength(1)
+
+    const pasted = run(none, { type: 'add', bases: [{ base: '#00ff66' }] })
+    expect(pasted.palettes).toHaveLength(1)
+    // No palette to inherit a step count from, so it starts at the default.
+    expect(pasted.palettes[0].state.config.steps).toBe(createPalette('#000').steps)
+    expect(selectedEntry(pasted)!.id).toBe(pasted.palettes[0].id)
+  })
+
+  it('declines every edit that needs a palette, rather than throwing', () => {
+    const none = createDocument([])
+    for (const action of [
+      { type: 'palette', action: { type: 'setBase', value: '#fff' } },
+      { type: 'syncChannel', key: 'hue' },
+      { type: 'remove', id: 'nope' },
+      { type: 'duplicate', id: 'nope' },
+      { type: 'rename', id: 'nope', name: 'x' },
+      { type: 'select', id: 'nope' },
+    ] as DocumentAction[]) {
+      expect(run(none, action)).toBe(none)
+    }
+    // Settings still apply — they describe the document, not a palette.
+    expect(run(none, { type: 'setStepsLocked', value: false }).stepsLocked).toBe(false)
+    expect(run(none, { type: 'setGamut', value: 'p3' }).gamut).toBe('p3')
+  })
+
+  it('is undoable, so deleting the last palette is not a trap', () => {
+    const one = createDocument()
+    const doomed = one.palettes[0]
+    const none = run(one, { type: 'remove', id: doomed.id })
+    expect(none.palettes).toEqual([])
+    // The reducer produced a new state, which is what history records against.
+    expect(none).not.toBe(one)
   })
 })

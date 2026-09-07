@@ -13,8 +13,9 @@ import type { PaletteView } from '../state/useDocument'
 
 type Props = {
   palettes: PaletteView[]
-  /** Where the harmony pane starts: the palette the toolbox is on. */
-  selected: PaletteView
+  /** Where the harmony pane starts: the palette the toolbox is on, or null
+   *  on an empty document, where there is no colour to rotate from. */
+  selected: PaletteView | null
   gamut: Gamut
   onAdd: (bases: BaseSeed[]) => void
   /** Only so `renderToStaticMarkup` can see the body. */
@@ -55,6 +56,9 @@ export function NewPaletteDialog({
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
   const [open, setOpen] = useState(defaultOpen ?? false)
+  // With nothing in the document the harmony pane has no seed to rotate
+  // from, so it is not offered and paste is the only way in.
+  const canHarmonise = palettes.length > 0
   const [pane, setPane] = useState<Pane>(defaultPane ?? 'paste')
   const [pasted, setPasted] = useState('')
   const [rule, setRule] = useState<string>(ALL_RULES)
@@ -74,10 +78,11 @@ export function NewPaletteDialog({
 
   // Held as a key rather than a colour so the ring follows the swatch, and so
   // an edit behind the dialog is reflected rather than frozen at pick time.
-  const activeKey = seedKey ?? `${selected.id}-${selected.config.baseIndex}`
+  const activeKey = seedKey ?? (selected ? `${selected.id}-${selected.config.baseIndex}` : '')
   const seed: Oklch =
     sources.flatMap((source) => source.swatches).find((entry) => entry.key === activeKey)?.swatch
-      .oklch ?? selected.ramp[selected.config.baseIndex].oklch
+      .oklch ??
+    selected?.ramp[selected.config.baseIndex].oklch ?? { l: 0.6, c: 0.15, h: 280 }
 
   const close = () => ref.current?.close()
 
@@ -135,6 +140,10 @@ export function NewPaletteDialog({
                 </button>
                 <button
                   type="button"
+                  /* Nothing in the document means nothing to rotate a hue
+                     from, so the pane is offered but says why it is shut. */
+                  disabled={!canHarmonise}
+                  title={canHarmonise ? undefined : 'Add a colour first — a harmony is built from one'}
                   className={pane === 'harmony' ? 'is-on' : undefined}
                   aria-pressed={pane === 'harmony'}
                   onClick={() => setPane('harmony')}

@@ -75,22 +75,43 @@ input,
 select {
   font: inherit;
   color: inherit;
-  background: var(--paper);
+  background-color: var(--paper);
   border: 1px solid var(--rule);
   border-radius: 0;
   padding: 4px 6px;
 }
 
+/* Hover paints a bar along the bottom edge and changes nothing else.
+
+   It used to invert the fill, which meant a hover ran in opposite directions
+   depending on where the button started: a paper button filled with ink, a
+   solid one emptied to paper. Side by side those read as two different
+   gestures, and a hovered primary looked exactly like a resting ordinary
+   button — the state and the interaction saying the same thing.
+
+   The bar is `currentColor`, so it is ink on a paper button and paper on a
+   solid one without either being named, and it works the same on a 22px icon
+   as on the widest control in the bar. Painted as a background image rather
+   than a pseudo-element so nothing needs a wrapper or a stacking context —
+   which also means any button that sets the `background` shorthand opts out
+   of it, and the few that do are the ones sitting on colour of their own. */
 button {
   cursor: pointer;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   white-space: nowrap;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  /* Default `background-origin` is the padding box, so the bar lands just
+     inside the border rather than under it. */
+  background-position: 0 100%;
+  background-size: 0% 2px;
+  transition: background-size 150ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-button:hover:not(:disabled) {
-  background: var(--ink);
-  color: var(--paper);
+button:hover:not(:disabled),
+button:focus-visible:not(:disabled) {
+  background-size: 100% 2px;
 }
 
 button:disabled {
@@ -131,12 +152,42 @@ select {
 
 /* --- header ---------------------------------------------------------- */
 
+/* Three columns rather than spacers: the outer two take equal shares of
+   whatever is left, so the mode switch is centred on the *window* and not on
+   the room the title and the credit happened to leave. It is the one control
+   here that says which half of the tool you are in, so it must not drift
+   sideways as the two ends change width. */
 .masthead {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: var(--space-5);
   border-bottom: 2px solid var(--rule);
   padding: var(--space-5) var(--space-7);
+}
+
+.masthead__end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+/* Once the three columns cannot hold their contents, centring the middle one
+   costs more than it is worth: the title and the credit start colliding with
+   the switch. Stack instead, and let the switch stay centred on its own row. */
+@media (max-width: 860px) {
+  .masthead {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: var(--space-4);
+  }
+
+  .masthead__end {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
 }
 
 .masthead h1 {
@@ -274,16 +325,11 @@ select {
   width: 26px;
   height: 26px;
   padding: 0;
-  background: var(--paper);
+  background-color: var(--paper);
   color: var(--ink);
   border: 1px solid var(--rule);
   cursor: pointer;
   flex-shrink: 0;
-}
-
-.controls__btn-lock:hover {
-  background: var(--ink);
-  color: var(--paper);
 }
 
 .controls__btn-lock.is-unlocked {
@@ -291,8 +337,11 @@ select {
   border-style: dashed;
 }
 
+/* Unlocked is drawn dashed and dimmed; hovering brings it up to full ink
+   rather than inverting it, which is a change along the same axis as the
+   state itself rather than a second, contradictory one. */
 .controls__btn-lock.is-unlocked:hover {
-  color: var(--paper);
+  color: var(--ink);
   border-style: solid;
 }
 
@@ -901,9 +950,11 @@ body.is-dragging-hue * {
   border-color: var(--muted);
 }
 
+/* Muted standing, so hover un-dims it instead of inverting it. The bar
+   arrives from the shared rule and is `currentColor`, so it comes up to full
+   ink with the label. */
 .exportd__minor:hover:not(:disabled) {
-  background: var(--ink);
-  color: var(--paper);
+  color: var(--ink);
   border-color: var(--ink);
 }
 
@@ -1051,26 +1102,16 @@ body.is-dragging-hue * {
 /* --- locked base ----------------------------------------------------- */
 
 button.is-on {
-  background: var(--ink);
+  background-color: var(--ink);
   color: var(--paper);
-}
-
-button.is-on:hover:not(:disabled) {
-  background: var(--paper);
-  color: var(--ink);
 }
 
 /* Filled standing, not as a state: the one control in the bar that adds to
    the document rather than adjusting it. `is-on` would be the wrong word for
    it — nothing is toggled. */
 button.is-primary {
-  background: var(--ink);
+  background-color: var(--ink);
   color: var(--paper);
-}
-
-button.is-primary:hover:not(:disabled) {
-  background: var(--paper);
-  color: var(--ink);
 }
 
 .graph__lock {
@@ -1452,11 +1493,7 @@ select:disabled {
   cursor: pointer;
 }
 
-.toolbox__btn-lock:hover:not(:disabled),
-.toolbox__btn-rederive:hover:not(:disabled) {
-  background: var(--ink);
-  color: var(--paper);
-}
+
 
 .field__swatch-wrap .picker {
   box-sizing: border-box;
@@ -2141,4 +2178,350 @@ button.newpal__cand:hover {
   font-size: var(--text-xs);
   padding: 1px 6px;
   height: 20px;
+}
+
+/* --- mode switch ------------------------------------------------------- */
+
+/* Two halves of one tool, so they read as one control — the same shape the
+   review board's axis switch uses, and for the same reason. */
+.modes {
+  display: flex;
+}
+
+.modes button + button {
+  margin-left: -1px;
+}
+
+/* --- scheme ------------------------------------------------------------ */
+
+/* The loudest thing in the app, on purpose. The editor is a workshop and looks
+   like one: rules, grids, numbers. This is the thing you stand back from, so
+   the colour runs edge to edge and every piece of chrome is either in the top
+   bar or hidden until the pointer is over the bar it belongs to. */
+.scheme {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.scheme__bar {
+  display: flex;
+  align-items: center;
+  /* Wraps rather than overflows, as the review bar does: a control pushed off
+     the end of a `nowrap` bar is simply gone. */
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  border-bottom: 2px solid var(--rule);
+  padding: var(--space-4) var(--space-7);
+}
+
+/* Which rule Auto landed on. Quiet, because it is a caption rather than a
+   control — but present, because it is the mode's answer to "why these". */
+.scheme__rolled {
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-pill);
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.scheme__bars {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* `flex-basis: 0` so a bar's width is exactly its share of the row, which is
+   what keeps a scheme of eight fitting the window as surely as a scheme of
+   two — the same invariant the review board's bands are built on. */
+.sbar {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+}
+
+/* Bare mode: nothing but the colours, and no seams between them. */
+.scheme--bare .sbar {
+  cursor: default;
+}
+
+/* The whole bar is the copy target. No border, no background of its own: the
+   one thing on this screen that is not paint would be a button's chrome. */
+.sbar__face {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  padding: var(--space-7);
+  display: flex;
+  flex-direction: column;
+  /* Along the foot of the bar and centred across it. The colour is what you
+     came to look at, so the reading sits out of the way of it and lines up
+     with the readings either side rather than each one hugging its own left
+     edge at a different distance from the last. */
+  justify-content: flex-end;
+  align-items: center;
+  text-transform: none;
+  letter-spacing: var(--tracking-normal);
+  cursor: pointer;
+}
+
+.sbar__face:hover:not(:disabled) {
+  background: none;
+  color: inherit;
+}
+
+.sbar__read {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 100%;
+  /* Held back from the colour rather than boxed against it: a bordered label
+     on a full-bleed bar puts a frame around the one thing worth looking at. */
+  opacity: 0.86;
+}
+
+.sbar__value {
+  font-size: var(--text-md);
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sbar__name {
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-normal);
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Only under the pointer, and always for a locked bar — a lock you cannot see
+   without hunting for it is one you will forget you set. */
+.sbar__tools {
+  position: absolute;
+  top: var(--space-5);
+  left: var(--space-6);
+  z-index: 3;
+  display: flex;
+  gap: var(--space-2);
+  opacity: 0;
+  /* Transparent is not gone: without this the hidden tools still take the
+     clicks meant for the colour under them, and they sit right where the
+     insert strip for this bar's left edge wants to be. */
+  pointer-events: none;
+  transition: opacity 90ms linear;
+}
+
+.sbar:hover .sbar__tools,
+.sbar:focus-within .sbar__tools,
+.sbar--locked .sbar__tools {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Borrows the bar's ink for both its border and its glyph, so it reads on a
+   near-white slot and a near-black one alike without a second colour. */
+.sbar__tool {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid currentColor;
+  opacity: 0.55;
+}
+
+.sbar__tool:hover:not(:disabled) {
+  background: none;
+  opacity: 1;
+}
+
+.sbar__tool:disabled {
+  opacity: 0.25;
+  border-color: currentColor;
+  color: inherit;
+}
+
+.sbar__tool.is-on {
+  opacity: 1;
+}
+
+/* A seam between two colours that opens under the pointer.
+
+   A real flex item of zero width, not something laid over the bars. That is
+   what makes the two colours actually move aside: widening its basis takes
+   room from the bars either side, so the gap grows where the pointer already
+   is and the row stays flush to both window edges. Shifting overlaid bars
+   instead would slide them across their outer neighbours, or pull the ends of
+   the row away from the edges and show the page through. */
+.scheme__seam {
+  position: relative;
+  flex: 0 0 0px;
+  align-self: stretch;
+  z-index: 2;
+  transition: flex-basis 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Nothing zero-wide can be hovered, so the hit area hangs out either side.
+   It stays this generous once the gap is open, which is what stops the
+   pointer falling out of the target the instant the layout shifts under it
+   and flickering the seam open and shut.
+
+   This strip is the reason the dwell is a timer in the component rather than
+   a `transition-delay` here: a delay would postpone the look of the seam and
+   not this, leaving an invisible band over every boundary that takes the
+   clicks meant for the colours either side of it. */
+.scheme__seam::before {
+  content: '';
+  position: absolute;
+  inset: 0 -14px;
+}
+
+.scheme__seam.is-open {
+  flex-basis: 36px;
+}
+
+/* The frame's own black and white, not either bar's ink: it sits astride two
+   colours and cannot borrow from one without disagreeing with the other.
+   Scaled up from small rather than faded in alone, so it reads as arriving
+   into the space the colours just made for it.
+
+   `pointer-events` is the whole safety property: until the seam is open this
+   cannot be clicked, so a click near a boundary goes to the bar and copies,
+   which is what was meant by it. */
+.scheme__insert {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  font-size: var(--text-md);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: var(--tracking-normal);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.3);
+  transition:
+    opacity 120ms linear,
+    transform 160ms cubic-bezier(0.2, 0, 0, 1),
+    background 90ms linear,
+    color 90ms linear;
+}
+
+.scheme__seam.is-open .scheme__insert,
+.scheme__insert:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* The travel is decoration; the dwell is not, and it is a timer rather than a
+   transition, so it survives this untouched. */
+@media (prefers-reduced-motion: reduce) {
+  .scheme__seam,
+  .scheme__insert {
+    transition-duration: 1ms;
+  }
+
+  .scheme__insert {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.scheme__foot {
+  border-top: 1px solid var(--rule);
+  padding: var(--space-3) var(--space-7);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-normal);
+}
+
+/* On a narrow window the bars stop being bars. Eight vertical slivers cannot
+   hold a hex, so the row becomes a column and the labels get their room back. */
+@media (max-width: 720px) {
+  .scheme__bars {
+    flex-direction: column;
+  }
+
+  .sbar__face {
+    justify-content: center;
+    padding: var(--space-5) var(--space-7);
+  }
+
+  /* The bars stack, so `flex-basis` is now a height and the hit area hangs
+     above and below instead of either side. Nothing else changes: the seam
+     opens along whichever axis the row runs. */
+  .scheme__seam::before {
+    inset: -14px 0;
+  }
+}
+
+/* --- empty document ---------------------------------------------------- */
+
+/* Takes the room the stack would have had, so the pair sits in the middle of
+   the window rather than tucked under the control bar. The shell is already a
+   full-height flex column with the stack taking the slack, so growing into
+   that same slack is all this needs to be centred. */
+.blank {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-7);
+  padding: var(--space-9) var(--space-7);
+}
+
+.blank__note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.blank__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+
+/* Roomier than the same two controls are in the bar, since here they are the
+   whole page. Nothing about their colours changes: hover is the shared bar,
+   so a solid button beside an outlined one no longer reads as two opposite
+   gestures the way it did when hovering inverted each of them. */
+.blank__actions button {
+  padding: var(--space-4) var(--space-7);
+  font-size: var(--text-md);
+}
+
+/* The bar is the affordance; the wipe is decoration. */
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition-duration: 1ms;
+  }
 }

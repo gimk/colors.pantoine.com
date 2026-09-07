@@ -59,7 +59,7 @@ const drag = (y: number): DocumentAction => ({
 })
 
 const chromaOf = (state: ReturnType<typeof createDocument>) =>
-  selectedEntry(state).state.config.chroma
+  selectedEntry(state)!.state.config.chroma
 
 describe('history', () => {
   it('starts with nothing to undo or redo', () => {
@@ -118,8 +118,8 @@ describe('history', () => {
     expect(s.depth).toBe(1)
 
     // A different field is a different entry, even mid-flow.
-    s.edit({ type: 'rename', id: selectedEntry(s.present).id, name: 'br' })
-    s.edit({ type: 'rename', id: selectedEntry(s.present).id, name: 'bra' })
+    s.edit({ type: 'rename', id: selectedEntry(s.present)!.id, name: 'br' })
+    s.edit({ type: 'rename', id: selectedEntry(s.present)!.id, name: 'bra' })
     expect(s.depth).toBe(2)
   })
 
@@ -195,8 +195,10 @@ describe('history', () => {
   it('records nothing for an action the document declined', () => {
     const s = session()
     s.edit({ type: 'select', id: 'nope' })
-    s.edit({ type: 'move', id: selectedEntry(s.present).id, by: -1 })
-    s.edit({ type: 'remove', id: selectedEntry(s.present).id })
+    s.edit({ type: 'move', id: selectedEntry(s.present)!.id, by: -1 })
+    // An id the document does not have. Removing the *selected* palette is no
+    // longer declined — emptying the stack is allowed, and that is a real edit.
+    s.edit({ type: 'remove', id: 'nope' })
     expect(s.depth).toBe(0)
   })
 
@@ -207,7 +209,7 @@ describe('history', () => {
     const first = s.present.palettes[0].id
     s.edit({ type: 'select', id: first })
     expect(s.depth).toBe(1)
-    expect(selectedEntry(s.present).id).toBe(first)
+    expect(selectedEntry(s.present)!.id).toBe(first)
 
     // Undoing the edit still returns to the palette it was made on.
     s.undo()

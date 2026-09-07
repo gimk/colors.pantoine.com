@@ -205,11 +205,17 @@ export function PaletteRow({
             </svg>
           )}
         </button>
+        {/* The last one can go too. The document is allowed to be empty, and
+            the editor answers that with the two ways back into a palette
+            rather than with a palette you are not allowed to be rid of. */}
         <button
           type="button"
-          disabled={count < 2}
           onClick={onRemove}
-          title={count < 2 ? 'The last palette cannot be deleted' : 'Delete this palette'}
+          title={
+            count < 2
+              ? 'Delete this palette, leaving the document empty'
+              : 'Delete this palette'
+          }
         >
           Delete
         </button>

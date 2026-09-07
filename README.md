@@ -1,6 +1,8 @@
 # colors.pantoine.com
 
-A tint and shade palette builder, driven by curves in OKLCH.
+Two colour tools that feed each other: a scheme generator for choosing colours
+that go together, and a tint and shade builder that opens any one of them out
+into a ramp, driven by curves in OKLCH.
 
 **[colors.pantoine.com](https://colors.pantoine.com)**
 
@@ -16,6 +18,22 @@ more subtle palettes — and I hope it helps other designers on their next
 rebranding.
 
 ## Features
+
+### Scheme
+
+- **A wall of colour, and a keyboard.** Space rolls a new scheme, a digit locks
+  a colour, click a bar to copy it. Every roll is its own undo entry, so you can
+  mash the key and then walk back to the one you liked.
+- **A rule and a weight, not just a rule.** The rule picks the hues — the eight
+  classic harmonies, or Auto, which rolls one and tells you which. The weight
+  profile spreads lightness and chroma across the colours, so a scheme comes out
+  with real tonal range instead of five colours at the same weight.
+- **Chroma is capped at the gamut, per colour.** Every generated colour is
+  inside the target gamut by construction, so none of them arrives clipped.
+- **Both directions.** Send a scheme to the ramp document and get a palette per
+  colour; or seed the scheme from the bases already in the document.
+
+### Tints & shades
 
 - **Three curves per palette** — lightness, chroma and hue, each a cubic Bézier
   you drag. This is the saturation correction and the hue shift the other tools
@@ -81,9 +99,15 @@ degree.
 src/
   color/     bezier, curves and the least-squares fit, gamut ceilings,
              culori wrappers, default curves, ramp generation, harmonies,
-             hue-slice geometry, colour naming
-  state/     document reducer, per-palette reducer, undo history,
-             URL hash and localStorage
+             the scheme generator, hue-slice geometry, colour naming
+  state/     document reducer, per-palette reducer, scheme reducer,
+             undo history, URL hash and localStorage
   export/    text formats, PNG and SVG
-  ui/        curve editor, ramp strips, toolbox, review board, pickers
+  ui/        mode switch, curve editor, ramp strips, toolbox,
+             review board, scheme board, pickers
 ```
+
+The two modes keep separate state, separate undo stacks and separate storage
+keys, and meet only at the two explicit handoffs. That is deliberate: a scheme
+is regenerated with a keypress, and sharing state would let one press re-base
+every ramp in the document.

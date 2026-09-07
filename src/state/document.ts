@@ -141,12 +141,26 @@ function makeEntry(
   return { id: makeId(), name, nameCustom, state: initialPaletteState(seed, gamut) }
 }
 
+/**
+ * A document from seeds.
+ *
+ * `null` and `[]` are deliberately different: `null` means nobody said, which
+ * is a first run and gets the default palette to start from, while `[]` means
+ * a document that was emptied on purpose and must come back empty. Before the
+ * stack could be emptied the two were the same thing and the parameter simply
+ * defaulted to `[]`; now that a document can legitimately hold nothing, the
+ * absence of an answer has to be distinguishable from the answer "none".
+ */
 export function createDocument(
-  seeds: PaletteSeed[] = [],
+  seeds: PaletteSeed[] | null = null,
   selected = -1,
   gamut: Gamut = 'srgb',
   stepsLocked = true,
 ): DocumentState {
+  if (seeds && !seeds.length) {
+    return { palettes: [], selectedId: '', gamut, stepsLocked }
+  }
+  seeds = seeds ?? []
   const globalSteps = seeds.length ? seeds[0].config.steps : DEFAULT_STEPS
   const palettes = seeds.length
     ? seeds.map((seed) => {
@@ -168,7 +182,8 @@ export function createDocument(
   return { palettes, selectedId: palettes[index].id, gamut, stepsLocked }
 }
 
-export const selectedEntry = (state: DocumentState): PaletteEntry =>
+/** The palette being edited, or nothing at all on an empty document. */
+export const selectedEntry = (state: DocumentState): PaletteEntry | undefined =>
   state.palettes.find((entry) => entry.id === state.selectedId) ?? state.palettes[0]
 
 const indexOfId = (state: DocumentState, id: string) =>
@@ -325,6 +340,7 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
     case 'syncChannel': {
       if (state.palettes.length < 2) return state
       const current = selectedEntry(state)
+      if (!current) return state
       const sourceCurve = current.state.config[action.key]
       // No list at all means the whole document. An empty list means nobody
       // was picked, which is a different thing and must change nothing.
@@ -372,7 +388,10 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
       if (stepsLocked === state.stepsLocked) return state
       if (stepsLocked) {
         // When locking, synchronize all palettes to the currently selected palette's step count
-        const currentSteps = selectedEntry(state).state.config.steps
+        // Nothing selected means nothing to synchronise to, so locking is
+        // just a setting change: the next palette added carries it.
+        const currentSteps = selectedEntry(state)?.state.config.steps
+        if (currentSteps === undefined) return { ...state, stepsLocked: true }
         const palettes = state.palettes.map((entry) => {
           if (entry.state.config.steps === currentSteps) return entry
           const next = paletteReducer(
@@ -392,6 +411,7 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
         return documentReducer(state, { type: 'setSteps', value: action.action.value })
       }
       const current = selectedEntry(state)
+      if (!current) return state
       const next = paletteReducer(current.state, action.action, state.gamut)
       if (next === current.state) return state
 
@@ -432,7 +452,9 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
         .slice(0, Math.max(0, MAX_PALETTES - state.palettes.length))
       if (!usable.length) return state
 
-      const steps = selectedEntry(state).state.config.steps
+      // On an empty document there is no palette to take a step count from,
+      // so a pasted batch starts at the default the way a first run does.
+      const steps = selectedEntry(state)?.state.config.steps ?? DEFAULT_STEPS
       // Seeded with the names already in the document and added to as the batch
       // runs. `palettes.length` cannot grow inside one reducer call, so an
       // ordinal scheme would hand every palette in the batch the same name —
@@ -457,8 +479,11 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
     }
 
     case 'new': {
-      const currentConfig = selectedEntry(state).state.config
-      const currentSteps = currentConfig.steps
+      // Undefined on an empty document, which both of these already handle:
+      // `steppedBase` answers with the fallback violet rather than stepping
+      // from a hue that is not there.
+      const currentConfig = selectedEntry(state)?.state.config
+      const currentSteps = currentConfig?.steps ?? DEFAULT_STEPS
       const base = steppedBase(currentConfig, state.gamut)
       const taken = new Set(state.palettes.map((entry) => entry.name))
       const entry = makeEntry(
@@ -499,12 +524,15 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
     }
 
     case 'remove': {
-      // The document is never empty: with one palette left there is nothing to
-      // switch to and the toolbox would have nothing to edit.
-      if (state.palettes.length < 2) return state
       const index = indexOfId(state, action.id)
       if (index < 0) return state
       const palettes = state.palettes.filter((entry) => entry.id !== action.id)
+      // The last one can go. An empty document is a real state — the editor
+      // shows the two ways back into one instead of the stack — and refusing
+      // the delete only left people with a palette they had to keep.
+      // `selectedId` is emptied rather than pointed at a neighbour that is no
+      // longer there, and `selectedEntry` answers with nothing.
+      if (!palettes.length) return { ...state, palettes, selectedId: '' }
       const selectedId =
         action.id === state.selectedId
           ? palettes[Math.min(index, palettes.length - 1)].id

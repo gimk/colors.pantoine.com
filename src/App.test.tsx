@@ -2,10 +2,18 @@ import css from './styles.css?raw'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { App } from './App'
-import { parseToOklch, toHex } from './color/oklch'
+import { formatColor, mapToGamut, parseToOklch, toHex, type Oklch } from './color/oklch'
+import { MAX_SLOTS, type Slot } from './color/scheme'
+import { schemeReducer, type SchemeState } from './state/scheme'
+import { buildText, TEXT_FORMATS } from './export/formats'
+import { schemeRamp } from './export/scheme'
+import type { SchemeApi } from './state/useScheme'
+import { SchemeBoard, spaceRolls, type KeyContext } from './ui/SchemeBoard'
+import { SchemeExportDialog } from './ui/SchemeExportDialog'
 import { createPalette, DEFAULT_STEPS } from './color/presets'
 import { chromaCeilingProfile, generateRamp } from './color/ramp'
 import { MAX_PALETTES } from './state/document'
+import { encodeDocument } from './state/url'
 import { useDocument } from './state/useDocument'
 import { simulate, type Vision } from './color/vision'
 import type { ReviewApi, ReviewAxis } from './state/useReview'
@@ -136,7 +144,7 @@ describe('App', () => {
     const bar = html.slice(html.indexOf('class="controls"'), html.indexOf('class="stack"'))
     expect(bar).toContain('class="is-primary"')
     expect(bar.indexOf('New palette')).toBeLessThan(bar.indexOf('Undo'))
-    expect(declarations('button.is-primary')).toContain('background: var(--ink)')
+    expect(declarations('button.is-primary')).toContain('background-color: var(--ink)')
   })
 
   it('paints the default ramp with real colours, not placeholders', () => {
@@ -716,9 +724,12 @@ describe('PaletteRow', () => {
     expect(row).toMatch(/disabled[^>]*aria-label="Duplicate palette"/)
   })
 
-  it('will not delete the only palette there is', () => {
-    expect(render({ count: 1 })).toMatch(/disabled[^>]*>Delete</)
+  it('will delete the only palette there is, leaving the document empty', () => {
+    // It used to refuse, which left people holding a palette they could not be
+    // rid of. The empty document is a real state with its own way back in.
+    expect(render({ count: 1 })).not.toMatch(/disabled[^>]*>Delete</)
     expect(render({ count: 2 })).not.toMatch(/disabled[^>]*>Delete</)
+    expect(render({ count: 1 })).toContain('leaving the document empty')
   })
 
   /**
@@ -856,13 +867,42 @@ describe('UI standardization and menu separation', () => {
       rederive: () => {},
       rename: () => {},
     }
-    const markup = renderToStaticMarkup(<Toolbox doc={mockDoc} />)
+    const markup = renderToStaticMarkup(<Toolbox doc={mockDoc} selected={mockDoc.selected} />)
     expect(markup).toContain('class="number toolbox__input-steps"')
     expect(markup).toContain('value="9"')
   })
 
-  it('provides toggle hover states for buttons', () => {
-    expect(declarations('button.is-on:hover:not(:disabled)')).toContain('background: var(--paper)')
+  /**
+   * Hover paints a bar and leaves the fill alone, everywhere.
+   *
+   * It used to invert, which ran in opposite directions depending on where a
+   * button started — a paper one filled, a solid one emptied — so two side by
+   * side read as two different gestures, and a hovered primary was
+   * indistinguishable from a resting ordinary button.
+   */
+  it('gives every button the same hover, whatever it is resting on', () => {
+    const base = declarations('button')
+    expect(base).toContain('background-image: linear-gradient(currentColor, currentColor)')
+    expect(base).toContain('background-size: 0% 2px')
+    expect(declarations('button:focus-visible:not(:disabled)')).toContain(
+      'background-size: 100% 2px',
+    )
+  })
+
+  it('leaves the resting fill alone on hover, so state and hover stay distinct', () => {
+    const hover = declarations('button:focus-visible:not(:disabled)')
+    expect(hover).not.toContain('color:')
+    expect(hover).not.toContain('background-color:')
+    // Nothing inverts any more: the solid states have no hover rule of their own.
+    expect(css).not.toContain('button.is-on:hover')
+    expect(css).not.toContain('button.is-primary:hover')
+  })
+
+  it('sets fills with background-color, or the bar would be wiped out', () => {
+    // `background` shorthand resets background-image, which is the bar.
+    for (const rule of ['button.is-primary', 'button.is-on', '.controls__btn-lock']) {
+      expect(declarations(rule)).not.toContain('background: var(')
+    }
   })
 })
 
@@ -1020,7 +1060,7 @@ describe('the review board', () => {
     return (
       <ReviewBoard
         doc={doc}
-        review={layoutOf(axis, doc.selected.config.steps, labels)}
+        review={layoutOf(axis, doc.selected!.config.steps, labels)}
         format="hex"
         onFormat={() => {}}
         gamut="srgb"
@@ -1210,5 +1250,412 @@ describe('the review board', () => {
   it('offers the board as pixels and as layers', () => {
     expect(rows).toContain('>Copy PNG</button>')
     expect(rows).toContain('>Copy SVG</button>')
+  })
+})
+
+/**
+ * The scheme board, on a fabricated api.
+ *
+ * The state comes from a hook and the hook needs no DOM, but the board's
+ * behaviour is keyboard and pointer, none of which `renderToStaticMarkup`
+ * can reach. What is left worth checking is what it paints: a bar per colour,
+ * the ink it chose to write on them, and that a locked slot says so.
+ */
+describe('scheme board', () => {
+  const colors: Oklch[] = [
+    { l: 0.94, c: 0.03, h: 80 },
+    { l: 0.72, c: 0.13, h: 200 },
+    { l: 0.5, c: 0.18, h: 320 },
+    { l: 0.24, c: 0.07, h: 20 },
+  ]
+
+  const slotsOf = (locked: number[] = []): Slot[] =>
+    colors.map((color, index) => ({
+      id: `s${index}`,
+      color,
+      locked: locked.includes(index),
+    }))
+
+  const apiOf = (slots: Slot[]): SchemeApi => ({
+    slots: slots.map((slot) => {
+      const mapped = mapToGamut(slot.color, 'srgb')
+      return {
+        id: slot.id,
+        color: slot.color,
+        locked: slot.locked,
+        displayColor: mapped.displayColor,
+        hex: mapped.hex,
+        clipped: mapped.clipped,
+        shown: slot.color,
+      }
+    }),
+    rule: 'auto',
+    rolled: 'triad',
+    profile: 'even',
+    state: { slots, rule: 'auto', rolled: 'triad', profile: 'even' },
+    canUndo: true,
+    canRedo: false,
+    undo: () => {},
+    redo: () => {},
+    generate: () => {},
+    toggleLock: () => {},
+    setColor: () => {},
+    add: () => {},
+    remove: () => {},
+    reorder: () => {},
+    setRule: () => {},
+    setProfile: () => {},
+    setCount: () => {},
+    load: () => {},
+  })
+
+  /** The hex printed on each bar, in the order they appear across the row. */
+  const barOrder = (htmlOrSlots: string | Slot[]) => {
+    const html = typeof htmlOrSlots === 'string' ? htmlOrSlots : render(htmlOrSlots)
+    return [...html.matchAll(/class="sbar__value">(#[0-9a-f]{6})</g)].map((match) => match[1])
+  }
+
+  const render = (slots: Slot[], vision: Vision = 'normal') =>
+    renderToStaticMarkup(
+      <SchemeBoard
+        scheme={apiOf(slots)}
+        mode="scheme"
+        onMode={() => {}}
+        format="hex"
+        onFormat={() => {}}
+        gamut="srgb"
+        onGamut={() => {}}
+        vision={vision}
+        onVision={() => {}}
+        onSendToRamps={() => {}}
+        onSeedFromRamps={() => {}}
+        copiedKey={null}
+        onCopy={() => {}}
+      />,
+    )
+
+  it('paints one bar per colour', () => {
+    const html = render(slotsOf())
+    expect(html.match(/class="sbar[ "]/g)).toHaveLength(colors.length)
+  })
+
+  it('offers both modes, and marks the one it is in', () => {
+    const html = render(slotsOf())
+    expect(html).toContain('Tints &amp; Shades')
+    // The switch holds two buttons and no nested spans, so the first closing
+    // span is its own.
+    const modes = html.match(/<span class="modes"[\s\S]*?<\/span>/)?.[0]
+    expect(modes).toBeDefined()
+    expect(modes!.match(/<button/g)).toHaveLength(2)
+    expect(modes!.match(/aria-pressed="true"/g)).toHaveLength(1)
+  })
+
+  it('carries the same masthead the editor does, above its own toolbar', () => {
+    const html = render(slotsOf())
+    expect(html).toContain('class="masthead"')
+    expect(html).toContain('COLORS // PANTOINE')
+    expect(html).toContain('Antoine Pouligny')
+    expect(html).toContain('badge badge--solid')
+    // And above, not inside: the mode's own bar follows it.
+    expect(html.indexOf('class="masthead"')).toBeLessThan(html.indexOf('class="scheme__bar"'))
+  })
+
+  it('centres the switch on the window rather than on the room left over', () => {
+    // Three grid columns, the outer two sharing the slack equally. With
+    // spacers instead, the switch would slide as the title or the credit
+    // changed width.
+    const bar = declarations('.masthead')
+    expect(bar).toContain('display: grid')
+    expect(bar).toContain('grid-template-columns: 1fr auto 1fr')
+  })
+
+  it('says which rule Auto rolled', () => {
+    expect(render(slotsOf())).toContain('Triad')
+  })
+
+  it('marks a locked bar as pressed, and an unlocked one as not', () => {
+    const html = render(slotsOf([1]))
+    expect(html).toContain('sbar sbar--locked')
+    // One lock control per bar, exactly one of them on.
+    const locks = html.match(/aria-pressed="(true|false)"[^>]*title="Locked/g) ?? []
+    expect(locks).toHaveLength(1)
+  })
+
+  it('writes on each bar in whichever of black and white can be read on it', () => {
+    // The near-white slot has to take black ink and the near-black one white,
+    // or the values are invisible on the two bars that need them most.
+    const html = render(slotsOf())
+    const ink = [...html.matchAll(/class="sbar[^"]*"[^>]*color:\s*(#[0-9a-f]{6})/g)].map(
+      (match) => match[1],
+    )
+    expect(ink[0]).toBe('#000000')
+    expect(ink[ink.length - 1]).toBe('#ffffff')
+  })
+
+  it('prints the value in the format the document is set to', () => {
+    const html = render(slotsOf())
+    for (const color of colors) expect(html).toContain(formatColor(color, 'hex'))
+  })
+
+  it('paints the colours as seen under a simulation, and still copies the truth', () => {
+    const html = render(slotsOf(), 'deuteranopia')
+    // The value on the bar is the colour the scheme holds, whatever eye is on.
+    for (const color of colors) expect(html).toContain(formatColor(color, 'hex'))
+    // The ground is not, or the simulation would be showing nothing.
+    expect(html).not.toBe(render(slotsOf()))
+  })
+
+  it('offers an insert at every boundary, including both ends', () => {
+    const html = render(slotsOf())
+    const inserts = html.match(/class="scheme__insert"/g) ?? []
+    // One more than there are colours: between each pair, and outside each end.
+    expect(inserts).toHaveLength(colors.length + 1)
+  })
+
+  /**
+   * The whole chain, in the terms you actually look at: which colour sits
+   * where across the row, before and after a seam is clicked. The reducer
+   * test and the seam-index test each check one link; this checks that
+   * clicking the third seam really does put the colour third on screen.
+   */
+  it('lands a clicked seam’s colour in that seam, not at the end of the row', () => {
+    const before = render(slotsOf())
+    const originals = colors.map(toHex)
+    expect(barOrder(before)).toEqual(originals)
+
+    for (const at of [0, 2, colors.length]) {
+      const state: SchemeState = {
+        slots: slotsOf(),
+        rule: 'triad',
+        rolled: null,
+        profile: 'even',
+      }
+      const order = barOrder(render(schemeReducer(state, { type: 'add', at }).slots))
+      expect(order).toHaveLength(colors.length + 1)
+      // Every original still in order, with exactly one new colour at `at`.
+      expect(order.filter((hex) => originals.includes(hex))).toEqual(originals)
+      expect(originals).not.toContain(order[at])
+    }
+  })
+
+  it('acts on the boundary it stands on, seam by seam', () => {
+    // The gap the other two tests leave: they check the reducer inserts at the
+    // index it is given, and that seams and bars alternate — neither checks
+    // that the Nth seam is the one that asks for index N.
+    const html = render(slotsOf())
+    const seams = [...html.matchAll(/class="scheme__insert" data-at="(\d+)"/g)].map((m) =>
+      Number(m[1]),
+    )
+    expect(seams).toEqual([0, 1, 2, 3, 4])
+  })
+
+  it('interleaves the inserts with the bars, so the row can part at a seam', () => {
+    // Laid over the bars they could not move them aside; as flex items between
+    // them, widening one takes room from the two colours either side.
+    const html = render(slotsOf())
+    const order = [...html.matchAll(/class="(scheme__insert|sbar)"/g)].map((m) => m[1])
+    expect(order).toEqual([
+      'scheme__insert',
+      'sbar',
+      'scheme__insert',
+      'sbar',
+      'scheme__insert',
+      'sbar',
+      'scheme__insert',
+      'sbar',
+      'scheme__insert',
+    ])
+  })
+
+
+  it('sets the reading along the foot of the bar and centred across it', () => {
+    const face = declarations('.sbar__face')
+    expect(face).toContain('justify-content: flex-end')
+    expect(face).toContain('align-items: center')
+    expect(declarations('.sbar__read')).toContain('text-align: center')
+  })
+
+  it('opens the seam rather than holding a gap open', () => {
+    // Zero width until opened, so a control that is not there costs the row
+    // nothing — and the hit area has to reach past zero to be reachable.
+    const seam = declarations('.scheme__seam')
+    expect(seam).toContain('flex: 0 0 0px')
+    expect(seam).toContain('transition')
+    expect(declarations('.scheme__seam::before')).toContain('inset: 0 -14px')
+    expect(declarations('.scheme__seam.is-open')).toContain('flex-basis: 36px')
+  })
+
+  /**
+   * The dwell is a timer in the component, not a CSS `transition-delay`, and
+   * that is a safety property rather than a style choice: a delay defers only
+   * how the seam *looks*. Its hit area would be live from the first moment,
+   * so every boundary would carry an invisible 28px strip taking clicks meant
+   * for the colour under it — click near a bar's edge to copy, and a colour is
+   * silently inserted instead.
+   */
+  it('cannot be clicked before it can be seen', () => {
+    expect(declarations('.scheme__insert')).toContain('pointer-events: none')
+    expect(declarations('.scheme__insert:focus-visible')).toContain('pointer-events: auto')
+    // And no seam rule reintroduces the delay-based version by the back door.
+    for (const rule of ['.scheme__seam', '.scheme__seam.is-open', '.scheme__insert']) {
+      expect(declarations(rule)).not.toContain('transition-delay')
+    }
+  })
+
+  it('drops the inserts once the scheme is full, and in bare mode', () => {
+    const full = Array.from({ length: MAX_SLOTS }, (_unused, index) => ({
+      id: `f${index}`,
+      color: { l: 0.5, c: 0.1, h: index * 40 },
+      locked: false,
+    }))
+    expect(render(full)).not.toContain('scheme__insert')
+  })
+
+  it('says how to drive it, since almost none of it is a visible control', () => {
+    const html = render(slotsOf())
+    expect(html).toContain('Space rolls a new scheme')
+  })
+
+  /**
+   * The board promises Space always rolls. A button keeps focus after a click
+   * and a focused button answers to Space, so without taking the key back one
+   * click on Generate quietly redefines Space as "press Generate again" — and
+   * one click on a lock redefines it as "toggle that lock".
+   */
+  describe('what Space belongs to', () => {
+    const at = (over: Partial<KeyContext> = {}): KeyContext => ({
+      inTextEntry: false,
+      inDialog: false,
+      ...over,
+    })
+
+    it('rolls, whatever has focus', () => {
+      // The whole point. A button keeps focus after a click and a select keeps
+      // it after you pick from one, and both answer to Space — so any rule
+      // that let focus keep the key turned Space into "do that last thing
+      // again" for the rest of the session.
+      expect(spaceRolls(at())).toBe(true)
+    })
+
+    it('leaves the key to text entry, where a space is a character', () => {
+      expect(spaceRolls(at({ inTextEntry: true }))).toBe(false)
+    })
+
+    it('never rolls behind an open dialog', () => {
+      expect(spaceRolls(at({ inDialog: true }))).toBe(false)
+      expect(spaceRolls(at({ inDialog: true, inTextEntry: true }))).toBe(false)
+    })
+  })
+})
+
+describe('scheme export', () => {
+  const slots: Slot[] = [
+    { id: 'a', color: { l: 0.9, c: 0.05, h: 60 }, locked: false },
+    { id: 'b', color: { l: 0.6, c: 0.15, h: 200 }, locked: false },
+    { id: 'c', color: { l: 0.3, c: 0.1, h: 300 }, locked: false },
+  ]
+
+  it('offers every text format the editor does', () => {
+    const html = renderToStaticMarkup(
+      <SchemeExportDialog slots={slots} gamut="srgb" defaultOpen />,
+    )
+    for (const format of TEXT_FORMATS) expect(html).toContain(format.label)
+  })
+
+  it('numbers the colours in scheme order rather than by lightness', () => {
+    // A scheme is not five tints of anything, so a weight token would be a
+    // claim about these colours that is not true.
+    const ramp = schemeRamp(slots, 'srgb', 'brand')
+    expect(ramp.ramp.map((swatch) => swatch.label)).toEqual(['1', '2', '3'])
+    const css = buildText(TEXT_FORMATS.find((f) => f.id === 'css-hex')!, [ramp], 'srgb')
+    expect(css).toContain('--brand-1')
+    expect(css).toContain('--brand-3')
+    expect(css).not.toContain('--brand-500')
+  })
+
+  it('writes a hex list of exactly the colours in the scheme', () => {
+    const ramp = schemeRamp(slots, 'srgb')
+    const list = buildText(TEXT_FORMATS.find((f) => f.id === 'hex')!, [ramp], 'srgb')
+    expect(list.split('\n')).toEqual(slots.map((slot) => toHex(slot.color)))
+  })
+
+  it('marks no colour as the base, because a scheme has none', () => {
+    for (const swatch of schemeRamp(slots, 'srgb').ramp) expect(swatch.isBase).toBe(false)
+  })
+})
+
+/**
+ * The editor with nothing in it.
+ *
+ * Reached by deleting the last palette, which the reducer now allows. The App
+ * reads its opening document from storage, so an emptied one is staged there —
+ * a stored empty list means "emptied on purpose", which is the whole reason
+ * storage tells that apart from having saved nothing at all.
+ */
+describe('the empty editor', () => {
+  const html = (() => {
+    const store = new Map<string, string>()
+    store.set(
+      'colors.pantoine.com/v1',
+      JSON.stringify({ v: 1, hash: encodeDocument([]), selected: -1 }),
+    )
+    ;(globalThis as { window?: unknown }).window = {
+      location: { hash: '', pathname: '/', search: '' },
+      localStorage: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => store.set(key, value),
+      },
+    }
+    try {
+      return renderToStaticMarkup(<App />)
+    } finally {
+      delete (globalThis as { window?: unknown }).window
+    }
+  })()
+
+  it('offers both ways back into a palette, in the middle of the page', () => {
+    expect(html).toContain('class="blank"')
+    expect(html).toContain('+ Quick add')
+    expect(html).toContain('+ New palette')
+  })
+
+  it('puts the toolbox away, since there is no palette to edit', () => {
+    expect(html).not.toContain('class="toolbox"')
+    expect(html).not.toContain('class="graph"')
+    expect(html).not.toContain('class="stack"')
+  })
+
+  it('drops the controls that answer to a palette', () => {
+    // Steps, Review and Export all act on a stack that is not there. Undo and
+    // the canvas still apply, so they stay.
+    expect(html).not.toContain('class="controls__steps"')
+    expect(html).not.toContain('>Review</button>')
+    expect(html).toContain('>Undo</button>')
+  })
+
+  it('offers each way in exactly once', () => {
+    // The bar stands its own pair down while the centred pair is up, or the
+    // page would carry two New palette buttons and two quick adds.
+    expect(html.match(/\+ Quick add/g)).toHaveLength(1)
+    expect(html.match(/\+ New palette/g)).toHaveLength(1)
+  })
+
+  it('centres the pair by taking the room the stack would have had', () => {
+    const blank = declarations('.blank')
+    expect(blank).toContain('flex: 1')
+    expect(blank).toContain('justify-content: center')
+    expect(blank).toContain('align-items: center')
+  })
+})
+
+describe('the two ways back into a palette', () => {
+  it('gives them room without giving them colours of their own', () => {
+    // They sit alone on the page, so they are larger — but the hover is the
+    // one the whole app uses, which is what stopped the solid one and the
+    // outlined one reading as opposite gestures.
+    const blank = declarations('.blank__actions button')
+    expect(blank).toContain('padding: var(--space-4) var(--space-7)')
+    expect(blank).not.toContain('background')
+    expect(blank).not.toContain('color:')
   })
 })

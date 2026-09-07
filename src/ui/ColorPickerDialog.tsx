@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react'
 import { formatColor, GAMUTS, gamutLabel, mapToGamut, type Gamut, type Oklch } from '../color/oklch'
 import { ColorPicker, type ColorPickerModel } from './ColorPicker'
 
@@ -14,6 +21,18 @@ type Props = {
    * wedge disagree with the ramp it is being picked for.
    */
   onGamut: (gamut: Gamut) => void
+  /**
+   * What opens the panel, given the opener and the ref it has to carry.
+   *
+   * The default is the filled swatch the toolbox puts beside its base field.
+   * The scheme board has a colour the size of the window already and wants a
+   * quiet pencil in the corner of it instead, so the trigger is the caller's
+   * to draw — the ref is not optional, since the panel positions itself
+   * against whatever opened it.
+   */
+  trigger?: (open: () => void, ref: RefObject<HTMLButtonElement | null>) => ReactNode
+  /** Names what is being picked. The toolbox picks a base; the board a slot. */
+  panelTitle?: string
   /** For testing, renders the modal body immediately without a click. */
   defaultOpen?: boolean
 }
@@ -32,6 +51,8 @@ export function ColorPickerDialog({
   gamut,
   onChange,
   onGamut,
+  trigger,
+  panelTitle = 'Base colour',
   defaultOpen = false,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -81,21 +102,27 @@ export function ColorPickerDialog({
     }
   }, [defaultOpen])
 
+  const openPanel = () => {
+    updatePosition()
+    setOpen(true)
+    ref.current?.showModal()
+  }
+
   return (
     <>
-      <button
-        ref={buttonRef}
-        type="button"
-        className="picker"
-        style={{ background: swatch }}
-        aria-label="Pick base colour"
-        title={`Pick the base colour in OKLCH — ${gamutLabel(gamut)}`}
-        onClick={() => {
-          updatePosition()
-          setOpen(true)
-          ref.current?.showModal()
-        }}
-      />
+      {trigger ? (
+        trigger(openPanel, buttonRef)
+      ) : (
+        <button
+          ref={buttonRef}
+          type="button"
+          className="picker"
+          style={{ background: swatch }}
+          aria-label="Pick base colour"
+          title={`Pick the base colour in OKLCH — ${gamutLabel(gamut)}`}
+          onClick={openPanel}
+        />
+      )}
 
       <dialog
         ref={ref}
@@ -121,7 +148,7 @@ export function ColorPickerDialog({
           <div className="cdialog__panel">
             <header className="panel__head">
               <span className="panel__title" id="cpick-title">
-                Base colour
+                {panelTitle}
               </span>
               <label className="field">
                 <span>Model</span>
