@@ -7,6 +7,7 @@ import {
   type BoardOptions,
   type BoardPalette,
 } from '../export/image'
+import { shownColor } from '../color/ramp'
 import type { DocumentApi } from '../state/useDocument'
 import { MAX_GAP, type ReviewApi } from '../state/useReview'
 import { RampStrip } from './RampStrip'
@@ -207,7 +208,7 @@ export function ReviewBoard({
         vision === 'normal'
           ? undefined
           : palette.ramp.map((swatch) => {
-              const color = simulate(swatch.oklch, vision)
+              const color = simulate(shownColor(swatch), vision)
               return { fill: toHex(color), ink: inkOn(color) }
             }),
     }))
@@ -453,7 +454,12 @@ export function ReviewBoard({
               <span
                 className="rband__name"
                 style={{
-                  color: inkOn(simulate(palette.ramp[0]?.oklch ?? { l: 1, c: 0, h: 0 }, vision)),
+                  color: inkOn(
+                    simulate(
+                      palette.ramp[0] ? shownColor(palette.ramp[0]) : { l: 1, c: 0, h: 0 },
+                      vision,
+                    ),
+                  ),
                 }}
                 title="Drag to reorder"
               >

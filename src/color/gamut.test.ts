@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { maxChromaFor } from './gamut'
 import { formatColor, isInGamut, mapToGamut, toColorCss, toHex, type Oklch } from './oklch'
 import { chromaCeilings, chromaCurveFor, createPalette } from './presets'
-import { chromaCeilingProfile, countDuplicateSteps, generateRamp, resolveBase } from './ramp'
+import {
+  chromaCeilingProfile,
+  countDuplicateSteps,
+  generateRamp,
+  resolveBase,
+  shownColor,
+} from './ramp'
 import { linear, sampleCurve } from './curve'
 
 describe('gamut detection and mapping', () => {
@@ -73,6 +79,53 @@ describe('gamut detection and mapping', () => {
 
     expect(p3Ceiling).toBeGreaterThan(srgbCeiling)
     expect(a98Ceiling).toBeGreaterThan(srgbCeiling)
+  })
+})
+
+/**
+ * `oklch` on a swatch is what the curves asked for, which on a clipped step
+ * is more chroma than the gamut has. Anything reasoning about how a step
+ * *looks* — a colourblindness simulation above all — has to start from what
+ * the screen actually emits instead, or it simulates a colour nobody saw.
+ */
+describe('the colour a step is shown as', () => {
+  const config = {
+    ...createPalette('#0066ff'),
+    chroma: { start: 0.32, end: 0.32, h1: { x: 1 / 3, y: 0.32 }, h2: { x: 2 / 3, y: 0.32 } },
+  }
+
+  it('is the request with the clipped chroma taken back off', () => {
+    const ramp = generateRamp(config, 'srgb')
+    const clipped = ramp.filter((swatch) => swatch.clipped)
+    expect(clipped.length).toBeGreaterThan(0)
+
+    for (const swatch of clipped) {
+      const shown = shownColor(swatch)
+      // Lightness and hue are what the strict map holds; only chroma moves.
+      expect(shown.l).toBe(swatch.oklch.l)
+      expect(shown.h).toBe(swatch.oklch.h)
+      expect(shown.c).toBeLessThan(swatch.oklch.c)
+      // And what it moves to is on the gamut boundary, not past it: the same
+      // colour the swatch shows, to within the last 8-bit step the second
+      // pass through the bisection can cost.
+      expect(isInGamut(shown, 'srgb')).toBe(true)
+      const shownHex = toHex(shown)
+      for (let channel = 1; channel < 7; channel += 2) {
+        expect(
+          Math.abs(
+            parseInt(shownHex.slice(channel, channel + 2), 16) -
+              parseInt(swatch.hex.slice(channel, channel + 2), 16),
+          ),
+        ).toBeLessThanOrEqual(1)
+      }
+    }
+  })
+
+  it('is the request itself when the gamut could give it in full', () => {
+    for (const swatch of generateRamp(createPalette('#767676'), 'srgb')) {
+      expect(swatch.clipped).toBe(false)
+      expect(shownColor(swatch)).toEqual(swatch.oklch)
+    }
   })
 })
 

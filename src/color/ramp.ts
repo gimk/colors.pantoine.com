@@ -35,6 +35,26 @@ const WHITE_LUMINANCE = 1
 const BLACK_LUMINANCE = 0
 
 /**
+ * The colour the display actually emits for this step.
+ *
+ * `oklch` is what the curves asked for, which on a clipped step is more
+ * chroma than the gamut has. The strict map answers by holding lightness and
+ * hue and taking chroma back, so what is on screen is the request with
+ * `chromaLost` removed — no second search needed to say so.
+ *
+ * Anything reasoning about how a step *looks*, rather than about what it was
+ * asked to be, wants this one: a colourblindness simulation of a colour the
+ * screen never showed is a simulation of nothing.
+ */
+export function shownColor(swatch: Swatch): Oklch {
+  return {
+    l: swatch.oklch.l,
+    c: Math.max(0, swatch.oklch.c - swatch.chromaLost),
+    h: swatch.oklch.h,
+  }
+}
+
+/**
  * Convert an OKLCH lightness (0 → 1) to a step label (0 → 100),
  * rounded to the closest increment of 5.
  *

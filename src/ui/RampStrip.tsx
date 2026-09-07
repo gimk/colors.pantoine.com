@@ -7,7 +7,7 @@ import {
   type Format,
   type Gamut,
 } from '../color/oklch'
-import type { Swatch } from '../color/ramp'
+import { shownColor, type Swatch } from '../color/ramp'
 import { inkOn, simulate, type Vision } from '../color/vision'
 
 type Props = {
@@ -100,7 +100,7 @@ export function RampStrip({
       vision === 'normal'
         ? null
         : ramp.map((swatch) => {
-            const color = simulate(swatch.oklch, vision)
+            const color = simulate(shownColor(swatch), vision)
             return { display: mapToGamut(color, gamut).displayColor, ink: inkOn(color) }
           }),
     [ramp, vision, gamut],
