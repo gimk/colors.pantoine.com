@@ -121,8 +121,19 @@ export function SchemeBar({
         <span className="sbar__tools">
           <button
             type="button"
-            className={`sbar__tool${slot.locked ? ' is-on' : ''}`}
-            style={{ color: ink, borderColor: ink }}
+            /* Deliberately not `is-on`. That class carries a document-wide
+               fill in the app's own black, which on a light bar landed a
+               black glyph on a black square — the tools here are painted in
+               the bar's contrast colour, not the frame's. */
+            className={`sbar__tool${slot.locked ? ' sbar__tool--locked' : ''}`}
+            /* Filled while locked, in the same two colours the bar already
+               uses: the ink it chose for legibility, and the bar's own ground
+               showing back through the glyph. */
+            style={
+              slot.locked
+                ? { color: background, backgroundColor: ink, borderColor: ink }
+                : { color: ink, borderColor: ink }
+            }
             aria-pressed={slot.locked}
             onClick={onToggleLock}
             title={

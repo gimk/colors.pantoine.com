@@ -1659,3 +1659,110 @@ describe('the two ways back into a palette', () => {
     expect(blank).not.toContain('color:')
   })
 })
+
+describe('a scheme bar’s tools', () => {
+  const colors: Oklch[] = [
+    { l: 0.94, c: 0.03, h: 80 },
+    { l: 0.24, c: 0.07, h: 20 },
+  ]
+
+  const slotsOf = (locked: number[] = []): Slot[] =>
+    colors.map((color, index) => ({
+      id: `s${index}`,
+      color,
+      locked: locked.includes(index),
+    }))
+
+  const render = (slots: Slot[]) =>
+    renderToStaticMarkup(
+      <SchemeBoard
+        scheme={
+          {
+            slots: slots.map((slot) => {
+              const mapped = mapToGamut(slot.color, 'srgb')
+              return {
+                id: slot.id,
+                color: slot.color,
+                locked: slot.locked,
+                displayColor: mapped.displayColor,
+                hex: mapped.hex,
+                clipped: mapped.clipped,
+                shown: slot.color,
+              }
+            }),
+            rule: 'auto',
+            rolled: null,
+            profile: 'even',
+            state: { slots, rule: 'auto', rolled: null, profile: 'even' },
+            canUndo: false,
+            canRedo: false,
+            undo: () => {},
+            redo: () => {},
+            generate: () => {},
+            toggleLock: () => {},
+            setColor: () => {},
+            add: () => {},
+            remove: () => {},
+            reorder: () => {},
+            setRule: () => {},
+            setProfile: () => {},
+            setCount: () => {},
+            load: () => {},
+          } as SchemeApi
+        }
+        mode="scheme"
+        onMode={() => {}}
+        format="hex"
+        onFormat={() => {}}
+        gamut="srgb"
+        onGamut={() => {}}
+        vision="normal"
+        onVision={() => {}}
+        onSendToRamps={() => {}}
+        onSeedFromRamps={() => {}}
+        copiedKey={null}
+        onCopy={() => {}}
+      />,
+    )
+
+  /**
+   * `is-on` carries a document-wide fill in the frame's own black. The tools
+   * on a bar are painted in the bar's contrast colour instead, so on a light
+   * colour — where that contrast colour is also black — a locked lock came out
+   * as a black glyph on a black square.
+   */
+  it('keeps the locked lock off the app-wide toggle fill', () => {
+    const html = render(slotsOf([0]))
+    expect(html).toContain('sbar__tool--locked')
+    expect(html).not.toContain('sbar__tool is-on')
+  })
+
+  it('fills a locked lock in the bar’s own two colours', () => {
+    // The light bar takes black ink, so the fill is black and the glyph is the
+    // bar showing back through it. Never black on black.
+    const light = render(slotsOf([0]))
+    const ground = mapToGamut(colors[0], 'srgb').displayColor
+    expect(light).toContain(`color:${ground};background-color:#000000`)
+
+    // And the dark bar the other way round, from the same rule.
+    const dark = render(slotsOf([1]))
+    expect(dark).toContain(`color:${mapToGamut(colors[1], 'srgb').displayColor};background-color:#ffffff`)
+  })
+
+  it('leaves an unlocked tool unfilled', () => {
+    expect(render(slotsOf())).toContain('style="color:#000000;border-color:#000000"')
+  })
+
+  /**
+   * The bar's face is a button covering the whole bar, so clicking a colour to
+   * copy it focuses that button — and focus outlives the pointer. Scoped to
+   * the bar, that left the tools showing on a bar the cursor had left.
+   */
+  it('holds the tools open for focus only when focus is on one of them', () => {
+    // Comments stripped first: the rule explains itself by naming the selector
+    // it replaced, which a plain search through the stylesheet would find.
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(rules).toContain('.sbar__tools:focus-within')
+    expect(rules).not.toContain('.sbar:focus-within')
+  })
+})

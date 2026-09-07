@@ -2324,8 +2324,16 @@ button.newpal__cand:hover {
   transition: opacity 90ms linear;
 }
 
+/* `.sbar__tools:focus-within`, not `.sbar:focus-within`. The bar's face is
+   a button covering the whole bar, so clicking a colour to copy it focuses
+   that button — and focus outlives the pointer, which left the tools showing
+   on a bar the cursor had long since left. Scoped to the tools themselves,
+   focus only holds them open when focus is actually on one of them, which is
+   the case it was there for: they are still reachable by tab while hidden,
+   since neither zero opacity nor `pointer-events` takes a control out of the
+   focus order. */
 .sbar:hover .sbar__tools,
-.sbar:focus-within .sbar__tools,
+.sbar__tools:focus-within,
 .sbar--locked .sbar__tools {
   opacity: 1;
   pointer-events: auto;
@@ -2356,7 +2364,7 @@ button.newpal__cand:hover {
   color: inherit;
 }
 
-.sbar__tool.is-on {
+.sbar__tool--locked {
   opacity: 1;
 }
 
