@@ -1,5 +1,6 @@
 import { formatColor, gamutLabel, isInSrgb, type Format, type Gamut } from '../color/oklch'
 import type { Swatch } from '../color/ramp'
+import { inkOn, simulate, type Vision } from '../color/vision'
 
 type Props = {
   ramp: Swatch[]
@@ -40,6 +41,16 @@ type Props = {
    * would collide.
    */
   stamp?: boolean
+  /**
+   * Whose eyes the chips are painted for.
+   *
+   * The chip only. The value stamped on it, the tooltip and what a click
+   * copies all stay the colour the document holds, because a simulation is a
+   * way of looking at a palette and never a way of changing one. Anything but
+   * `normal` also gives up wide-gamut display — the maths is defined for sRGB
+   * primaries — so the strip shows the sRGB rendition while it is on.
+   */
+  vision?: Vision
   /** Namespaces the copy keys, so two strips cannot flash "copied" together. */
   idPrefix?: string
   /** Overrides the tooltip when a click does something other than copy. */
@@ -57,6 +68,7 @@ export function RampStrip({
   fill = false,
   weights,
   stamp = false,
+  vision = 'normal',
   copiedKey,
   idPrefix = 'swatch',
   swatchTitle,
@@ -69,6 +81,18 @@ export function RampStrip({
     <div className={className}>
       {ramp.map((swatch, position) => {
         const value = formatColor(swatch.oklch, format, gamut)
+        /* The sRGB hex as the eye in force receives it — the swatch's own hex
+           when that eye is nobody's but yours. The chip still paints from
+           `displayColor` in the normal case, since that is the one case where
+           a wide-gamut colour can be shown as itself. */
+        const seen = simulate(swatch.hex, vision)
+        const chip = vision === 'normal' ? swatch.displayColor : seen
+        /* Every mark that lands on the chip takes its colour from here. Read
+           off the colour as seen rather than off the swatch's stored contrast
+           figures: under a simulation those describe a colour nobody is
+           looking at, and a saturated red that wants black type is a dark
+           brown to a protanope, which would swallow it. */
+        const ink = inkOn(seen)
         const key = `${idPrefix}-${swatch.index}`
         const isCopied = copiedKey === key
         const isUnavailable =
@@ -89,33 +113,23 @@ export function RampStrip({
             onClick={() => onCopy(key, value)}
             title={swatchTitle ? swatchTitle(value) : `Copy ${value}`}
           >
-            <span className="swatch__chip" style={{ background: swatch.displayColor }}>
+            <span className="swatch__chip" style={{ background: chip }}>
               {markers && swatch.clipped && (
                 <span
                   className="swatch__clipped"
-                  style={{
-                    borderTopColor:
-                      swatch.contrastOnBlack >= swatch.contrastOnWhite
-                        ? '#000000'
-                        : '#ffffff',
-                  }}
+                  style={{ borderTopColor: ink }}
                   title={`Requested chroma is outside ${gamutLabel(gamut)} — mapped to the nearest displayable colour`}
                 />
               )}
               {markers && swatch.isBase && <span className="swatch__base">base</span>}
               {/* The stamp is already the one mark in the middle of the chip,
                   so it reports the copy itself rather than having a second
-                  mark land on top of it. Subtle text in white or black depending
-                  on the swatch contrast. */}
+                  mark land on top of it. Subtle text, in whichever of white
+                  and black the chip can be read against. */}
               {stamp && (
                 <span
                   className={`swatch__stamp${isCopied ? ' is-copied' : ''}`}
-                  style={{
-                    color:
-                      swatch.contrastOnBlack >= swatch.contrastOnWhite
-                        ? '#000000'
-                        : '#ffffff',
-                  }}
+                  style={{ color: ink }}
                 >
                   {isCopied ? (
                     'copied'

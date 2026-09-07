@@ -6,6 +6,7 @@ import { createPalette, DEFAULT_STEPS } from './color/presets'
 import { chromaCeilingProfile, generateRamp } from './color/ramp'
 import { MAX_PALETTES } from './state/document'
 import { useDocument } from './state/useDocument'
+import { simulate, type Vision } from './color/vision'
 import type { ReviewApi, ReviewAxis } from './state/useReview'
 import { CurvePanel } from './ui/CurvePanel'
 import { ExportDialog } from './ui/ExportDialog'
@@ -1005,7 +1006,15 @@ describe('the review board', () => {
   })
 
   /** A host only for the document, which does have to come from its hook. */
-  function Board({ axis, labels = true }: { axis: ReviewAxis; labels?: boolean }) {
+  function Board({
+    axis,
+    labels = true,
+    vision = 'normal',
+  }: {
+    axis: ReviewAxis
+    labels?: boolean
+    vision?: Vision
+  }) {
     const doc = useDocument({ seeds, selected: 0 })
     return (
       <ReviewBoard
@@ -1014,6 +1023,8 @@ describe('the review board', () => {
         format="hex"
         onFormat={() => {}}
         gamut="srgb"
+        vision={vision}
+        onVision={() => {}}
         dark={false}
         onDark={() => {}}
         onExit={() => {}}
@@ -1026,6 +1037,7 @@ describe('the review board', () => {
   const rows = renderToStaticMarkup(<Board axis="rows" />)
   const columns = renderToStaticMarkup(<Board axis="columns" />)
   const unlabelled = renderToStaticMarkup(<Board axis="rows" labels={false} />)
+  const grey = renderToStaticMarkup(<Board axis="rows" vision="grayscale" />)
 
   it('shows every palette at once', () => {
     expect(rows.match(/class="rband"/g)).toHaveLength(bases.length)
@@ -1082,6 +1094,36 @@ describe('the review board', () => {
   it('carries no annotations on the chips', () => {
     expect(rows).not.toContain('swatch__base')
     expect(rows).not.toContain('swatch__clipped')
+  })
+
+  /**
+   * The board can be looked through somebody else's eyes: grey, to catch two
+   * steps that only hue was separating, or one of the dichromacies. It paints
+   * the chips and nothing else — a simulation answers "does this survive",
+   * never "what should this be", so the value on a chip and what clicking it
+   * copies stay the colour the document holds.
+   */
+  it('repaints the chips for the eye being checked, and nothing else', () => {
+    expect(rows).toContain('<span>Vision</span>')
+    expect(rows).toContain('>Deuteranopia</option>')
+
+    const base = simulate('#7c3aed', 'grayscale')
+    expect(base).not.toBe('#7c3aed')
+    expect(grey).toContain(`background:${base}`)
+    expect(rows).toContain('background:#7c3aed')
+    expect(grey).not.toContain('background:#7c3aed')
+
+    // The colours are still the document's: the stamp reads the real hex,
+    // and so does the copy behind it.
+    expect(grey).toContain('>#7c3aed<')
+    expect(grey).toContain('title="Copy #7c3aed"')
+  })
+
+  /** A board that has stopped showing the true colours says so in the bar. */
+  it('marks the control while a simulation is on', () => {
+    expect(rows).not.toContain('field--simulating')
+    expect(grey).toContain('field--simulating')
+    expect(declarations('.field--simulating select')).toContain('background: var(--ink)')
   })
 
   it('keeps the page title and a way back, and little else', () => {

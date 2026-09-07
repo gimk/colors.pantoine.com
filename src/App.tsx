@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FORMATS, GAMUTS, type Format, type Gamut } from './color/oklch'
+import type { Vision } from './color/vision'
 import { MAX_STEPS, MIN_STEPS } from './color/presets'
 import { restoreDocument, saveDocument } from './state/storage'
 import { useDocument, type PaletteView } from './state/useDocument'
@@ -33,6 +34,16 @@ export function App() {
   const { gamut } = doc
   const [format, setFormat] = useState<Format>('hex')
   const [dark, setDark] = useState(false)
+  /**
+   * Whose eyes the review board is painted for.
+   *
+   * Sits here beside the canvas rather than in the board's stored layout,
+   * because it is the same kind of thing — a condition the palettes are being
+   * judged under — and because the two want the same lifetime: kept while you
+   * duck back into the editor to fix what the check turned up, and gone by
+   * the next session, so nobody ever opens the tool on a grey board.
+   */
+  const [vision, setVision] = useState<Vision>('normal')
   /**
    * The review board, which is a mode rather than a set of things hidden.
    *
@@ -148,6 +159,8 @@ export function App() {
         format={format}
         onFormat={setFormat}
         gamut={gamut}
+        vision={vision}
+        onVision={setVision}
         dark={dark}
         onDark={() => setDark((on) => !on)}
         onExit={() => setReview(false)}

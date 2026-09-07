@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent, type PointerEvent } from 'react'
 import { FORMATS, formatColor, type Format, type Gamut } from '../color/oklch'
+import { VISIONS, inkOn, simulate, type Vision } from '../color/vision'
 import {
   boardSvg,
   copyBoardPng,
@@ -22,6 +23,16 @@ type Props = {
    */
   onFormat: (format: Format) => void
   gamut: Gamut
+  /**
+   * Whose eyes the board is painted for.
+   *
+   * A viewing condition, like the canvas behind it — held by the app rather
+   * than by the board's stored layout, so stepping back to the editor and
+   * returning keeps the eye you were checking against, and a fresh session
+   * never opens on a grey board wondering what broke.
+   */
+  vision: Vision
+  onVision: (vision: Vision) => void
   dark: boolean
   onDark: () => void
   onExit: () => void
@@ -76,6 +87,8 @@ export function ReviewBoard({
   format,
   onFormat,
   gamut,
+  vision,
+  onVision,
   dark,
   onDark,
   onExit,
@@ -174,6 +187,13 @@ export function ReviewBoard({
     }
   }
 
+  /**
+   * Both copies carry the simulation, because both copies are of the board.
+   * The point of taking a picture of a deuteranope's view is to show it to
+   * somebody, and an image that quietly swapped the true colours back in
+   * would be the wrong picture — while a stamped value that changed with the
+   * mode would be a wrong colour, so the values stay what the document holds.
+   */
   const boardPalettes = (): BoardPalette[] =>
     palettes.map((palette) => ({
       name: palette.name,
@@ -181,6 +201,10 @@ export function ReviewBoard({
       values: layout.labels
         ? palette.ramp.map((swatch) => formatColor(swatch.oklch, format, gamut))
         : undefined,
+      fills:
+        vision === 'normal'
+          ? undefined
+          : palette.ramp.map((swatch) => simulate(swatch.hex, vision)),
     }))
 
   const handleCopyPng = async () => {
@@ -293,6 +317,27 @@ export function ReviewBoard({
           </select>
         </label>
 
+        {/* Beside the canvas switch, because they are the same kind of thing:
+            not what the palettes are, but the conditions they are being
+            looked at under. Nothing here edits a colour — the stamped values
+            and the copies stay what the document holds — so the select is
+            marked while it is on, the one warning that the board is no
+            longer showing the truth. */}
+        <label className={`field${vision === 'normal' ? '' : ' field--simulating'}`}>
+          <span>Vision</span>
+          <select
+            value={vision}
+            onChange={(event) => onVision(event.target.value as Vision)}
+            title={VISIONS.find((option) => option.id === vision)?.hint}
+          >
+            {VISIONS.map((option) => (
+              <option key={option.id} value={option.id} title={option.hint}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <button type="button" onClick={onDark} title="Judge the palettes against the other ground">
           {dark ? 'Light canvas' : 'Dark canvas'}
         </button>
@@ -402,12 +447,7 @@ export function ReviewBoard({
                  visible advertisement that a band can be dragged. */
               <span
                 className="rband__name"
-                style={{
-                  color:
-                    palette.ramp[0]?.contrastOnBlack >= palette.ramp[0]?.contrastOnWhite
-                      ? '#000000'
-                      : '#ffffff',
-                }}
+                style={{ color: inkOn(simulate(palette.ramp[0]?.hex ?? '#ffffff', vision)) }}
                 title="Drag to reorder"
               >
                 {palette.name}
@@ -423,6 +463,7 @@ export function ReviewBoard({
               fill
               weights={steps}
               stamp={layout.labels}
+              vision={vision}
               copiedKey={copiedKey}
               idPrefix={palette.id}
               onCopy={onCopy}

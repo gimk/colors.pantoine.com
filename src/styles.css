@@ -1698,6 +1698,10 @@ button.newpal__cand:hover {
   grid-area: bar;
   display: flex;
   align-items: center;
+  /* Wraps rather than overflows: the bar's row in the grid is `auto`, so a
+     second line costs the board a little height and nothing else, while a
+     control pushed off the end of a `nowrap` bar is simply gone. */
+  flex-wrap: wrap;
   gap: var(--space-4);
   border-bottom: 2px solid var(--rule);
   padding: var(--space-4) var(--space-7);
@@ -1718,6 +1722,16 @@ button.newpal__cand:hover {
 
 .review__group button + button {
   margin-left: -1px;
+}
+
+/* Inverted while a simulation is on, the way a pressed button is. Every other
+   control in this bar arranges the board; this is the only one that makes it
+   stop showing the true colours, and a board gone grey with nothing in the
+   chrome to say why reads as a bug rather than as a test. */
+.field--simulating select {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
 }
 
 /* Brutalist range: a 1px track and a square thumb. The base input rule paints

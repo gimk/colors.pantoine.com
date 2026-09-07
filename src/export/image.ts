@@ -1,4 +1,5 @@
 import type { Swatch } from '../color/ramp'
+import { inkOn } from '../color/vision'
 import { slugify, type NamedRamp } from './formats'
 
 export type ImageOptions = {
@@ -286,6 +287,18 @@ export type BoardPalette = {
    * board about what a step reads as.
    */
   values?: string[]
+  /**
+   * What to paint each step, when that is not the step's own colour: the
+   * board under a colourblindness simulation. Indexed by step, computed
+   * outside for the same reason the values are, and absent — the normal case
+   * — means every block is painted the colour it holds.
+   *
+   * Deliberately separate from `values`: the picture carries the simulation
+   * because it is a picture of the board, while the value stamped on a block
+   * stays the colour the document holds, so nobody reads a hex off an image
+   * and gets one they never chose.
+   */
+  fills?: string[]
 }
 
 export type BoardOptions = {
@@ -406,7 +419,7 @@ export function drawBoard(
     palette.ramp.forEach((swatch, position) => {
       const step = steps[position]
       if (!step) return
-      ctx.fillStyle = swatch.hex
+      ctx.fillStyle = palette.fills?.[position] ?? swatch.hex
       if (rows) ctx.fillRect(step.start, band.start, step.size, band.size)
       else ctx.fillRect(band.start, step.start, band.size, step.size)
     })
@@ -433,8 +446,9 @@ export function drawBoard(
       const cellW = rows ? step.size : band.size
       const cellH = rows ? band.size : step.size
 
-      const textColor =
-        swatch.contrastOnBlack >= swatch.contrastOnWhite ? '#000000' : '#ffffff'
+      // Off the block as painted, not off the swatch's stored contrast: on a
+      // simulated board those figures belong to a colour that is not there.
+      const textColor = inkOn(palette.fills?.[position] ?? swatch.hex)
       ctx.fillStyle = textColor
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
@@ -512,7 +526,7 @@ export function boardSvg(palettes: BoardPalette[], options: BoardOptions): strin
           const h = rows ? band.size : step.size
           return (
             `    <rect id="${slug}-${swatch.label}" x="${x}" y="${y}" ` +
-            `width="${w}" height="${h}" fill="${swatch.hex}"/>`
+            `width="${w}" height="${h}" fill="${palette.fills?.[position] ?? swatch.hex}"/>`
           )
         })
         .filter(Boolean)
@@ -529,8 +543,7 @@ export function boardSvg(palettes: BoardPalette[], options: BoardOptions): strin
             const cellW = rows ? step.size : band.size
             const cellH = rows ? band.size : step.size
 
-            const textColor =
-              swatch.contrastOnBlack >= swatch.contrastOnWhite ? '#000000' : '#ffffff'
+            const textColor = inkOn(palette.fills?.[position] ?? swatch.hex)
             const cx = Math.round(cellX + cellW / 2)
             const cy = Math.round(cellY + cellH / 2)
             const value = palette.values?.[position]
