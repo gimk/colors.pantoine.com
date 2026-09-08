@@ -10,7 +10,10 @@ import {
   MIN_SLOTS,
   PROFILES,
   profileFor,
+  RANDOM,
   type ProfileId,
+  type ProfileSetting,
+  type RuleId,
   type Slot,
 } from './scheme'
 import { mulberry32 } from '../state/random'
@@ -220,7 +223,7 @@ describe('generateScheme', () => {
     for (let seed = 0; seed < 60; seed += 1) {
       const { rule } = generateScheme(slotsOf(4), AUTO_RULE, 'even', 'srgb', mulberry32(seed))
       expect(HARMONIES.some((harmony) => harmony.id === rule)).toBe(true)
-      rolled.add(rule)
+      rolled.add(rule!)
     }
     // Not pinned to every rule — that would be a test of the PRNG — but a roll
     // that only ever landed on one would not be a roll.
@@ -276,3 +279,74 @@ describe('generateScheme', () => {
   })
 })
 
+
+/**
+ * `auto` rolls a rule and then follows it, so a scheme it makes can still say
+ * why its colours go together. `random` is the setting that means there was
+ * no reason — the escape hatch from a tool whose whole argument is structure.
+ */
+describe('rolling instead of ruling', () => {
+  it('reports no rule at all, where auto reports the one it rolled', () => {
+    for (let seed = 0; seed < 10; seed += 1) {
+      expect(generateScheme(slotsOf(5), RANDOM, 'even', 'srgb', mulberry32(seed)).rule).toBeNull()
+    }
+  })
+
+  it('puts the hues anywhere, where a rule puts them in one place', () => {
+    // A rule rotates fixed offsets off the anchor, so the gap between the
+    // first two slots is the same every roll bar the jitter. No rule makes
+    // that gap a roll of its own, and thirty of them land all round the wheel.
+    const gaps = (rule: RuleId) =>
+      new Set(
+        Array.from({ length: 30 }, (_unused, seed) => {
+          const { slots } = generateScheme(slotsOf(5), rule, 'even', 'srgb', mulberry32(seed))
+          return Math.round(normalizeHue(slots[1].color.h - slots[0].color.h) / 30)
+        }),
+      )
+    expect(gaps('triad').size).toBeLessThanOrEqual(2)
+    expect(gaps(RANDOM).size).toBeGreaterThan(6)
+  })
+
+  it('gives every slot its own weight, where a profile gives them a spread', () => {
+    // `even` runs light to dark across the row, so its first slot is the
+    // lightest every single time. A rolled weight answers to nothing, so the
+    // first slot is the lightest about as often as any other is.
+    const lightestFirst = (profile: ProfileSetting) =>
+      Array.from({ length: 30 }, (_unused, seed) => {
+        const { slots } = generateScheme(slotsOf(5), 'triad', profile, 'srgb', mulberry32(seed))
+        return slots[0].color.l === Math.max(...slots.map((slot) => slot.color.l))
+      }).filter(Boolean).length
+
+    expect(lightestFirst('even')).toBe(30)
+    expect(lightestFirst(RANDOM)).toBeLessThan(20)
+  })
+
+  it('rolls a weight inside the range the named profiles cover', () => {
+    // Free of a spread, not free of the bounds: the roll can land anywhere any
+    // profile reaches, and nowhere none of them do.
+    for (let seed = 0; seed < 20; seed += 1) {
+      const { slots } = generateScheme(slotsOf(6), 'triad', RANDOM, 'srgb', mulberry32(seed))
+      for (const slot of slots) {
+        expect(slot.color.l).toBeGreaterThanOrEqual(0.22)
+        expect(slot.color.l).toBeLessThanOrEqual(0.92)
+      }
+    }
+  })
+
+  it('stays inside the gamut with neither a rule nor a profile', () => {
+    // Chroma is a share of the ceiling at the slot's own lightness and hue
+    // however the two were arrived at, so the promise holds here too.
+    for (const gamut of gamuts) {
+      const { slots } = generateScheme(slotsOf(MAX_SLOTS), RANDOM, RANDOM, gamut, mulberry32(4))
+      for (const slot of slots) expect(isInGamut(slot.color, gamut)).toBe(true)
+    }
+  })
+
+  it('still holds a locked colour, and still repeats for a seed', () => {
+    const before = slotsOf(4, [1])
+    const a = generateScheme(before, RANDOM, RANDOM, 'srgb', mulberry32(9))
+    const b = generateScheme(before, RANDOM, RANDOM, 'srgb', mulberry32(9))
+    expect(a.slots[1]).toBe(before[1])
+    expect(a.slots).toEqual(b.slots)
+  })
+})

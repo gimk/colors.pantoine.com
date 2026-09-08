@@ -386,6 +386,26 @@ stack, since centring costs more than it is worth once they collide. The review
 board keeps its own bar and is untouched: it is a way of looking at a document
 rather than a third mode, so the switch has no business there.
 
+**Both controls can also be told to roll.** `random`, in the rule and in the
+weight alike, and it is the opposite of `auto` rather than a second helping of
+it: `auto` rolls a *rule* and then follows it, so the scheme can still say why
+its colours go together, while `random` rolls the colours. Free hues, or a
+lightness and a chroma share per slot answering to nothing — which is why a
+rolled weight can hand back five colours at much the same weight, the way
+`vivid` deliberately does, or scattered across the whole range. It is the
+escape hatch from a tool whose whole argument is structure, and it earns its
+place by reaching starting points the eight rules never would.
+
+Two things hold anyway. Chroma is still a share of the ceiling at each slot's
+own lightness and hue, so a rolled scheme is in gamut by construction like
+every other one; and lightness still rolls inside the bounds the named
+profiles cover, since free of a spread is not free of the range.
+
+`Generated.rule` became `HarmonyId | null` for it — `null` being the honest
+answer to *which rule was this* — and `rolled` in the state already meant
+exactly that, so the board reports nothing rather than the last rule it
+happened to use.
+
 **A third way to set a colour: its own shades.** A tool on the bar opens the
 tints and shades of that colour over it, one click each. It is deliberately
 not a lightness ladder invented for the board — it is `createPalette` and
@@ -463,7 +483,7 @@ quick-add's colour is now something they can name rather than bound.
 | `src/ui/ModeSwitch.tsx` | the masthead control |
 | `src/export/scheme.ts` | a slot dressed as a `Swatch` |
 
-Tests: 23 in `color/scheme.test.ts`, 41 in `state/scheme.test.ts` (reducer,
+Tests: 29 in `color/scheme.test.ts`, 43 in `state/scheme.test.ts` (reducer,
 undo, and the link round-trip), 5 in `state/random.test.ts`, and more in
 `App.test.tsx` for the board, the export, the shades and which half opens. 576
 across the suite, all green.

@@ -34,17 +34,33 @@ export const MAX_SLOTS = 8
 export const DEFAULT_SLOTS = 5
 
 /**
- * What the rule control offers: any of the harmonies, or `auto`.
+ * The setting both controls offer beside their named choices: no structure.
  *
- * `auto` is not "no rule" — it rolls one. Every scheme this tool produces can
- * then answer *why these colours go together*, which is the whole difference
- * between it and a random colour generator, and the roll is reported back so
- * the board can say which rule it landed on.
+ * The opposite of `auto`, which rolls a *rule* and then follows it. `random`
+ * rolls the colours themselves — free hues, or a lightness and a chroma per
+ * slot that answer to nothing — so a scheme made this way cannot say why its
+ * colours go together, because they were not chosen to. That is what it is
+ * for: the escape hatch from a tool whose whole argument is structure, and a
+ * way to find a starting point the eight rules would never have handed you.
  */
-export type RuleId = HarmonyId | 'auto'
+export const RANDOM = 'random'
+
+/**
+ * What the rule control offers: any of the harmonies, `auto`, or `random`.
+ *
+ * `auto` is not "no rule" — it rolls one. Every scheme it produces can then
+ * answer *why these colours go together*, which is the whole difference
+ * between this and a random colour generator, and the roll is reported back so
+ * the board can say which rule it landed on. `random` is the one that really
+ * does mean no rule, and says so in the control rather than in the result.
+ */
+export type RuleId = HarmonyId | typeof AUTO_RULE | typeof RANDOM
 export const AUTO_RULE = 'auto'
 
 export type ProfileId = 'even' | 'anchored' | 'vivid' | 'muted' | 'pastel'
+
+/** What the weight control holds: one of the profiles, or the roll. */
+export type ProfileSetting = ProfileId | typeof RANDOM
 
 export type Profile = {
   id: ProfileId
@@ -142,9 +158,33 @@ export function isProfileId(value: string | null | undefined): value is ProfileI
   return PROFILES.some((profile) => profile.id === value)
 }
 
-export function isRuleId(value: string | null | undefined): value is RuleId {
-  return value === AUTO_RULE || HARMONIES.some((harmony) => harmony.id === value)
+export function isProfileSetting(value: string | null | undefined): value is ProfileSetting {
+  return value === RANDOM || isProfileId(value)
 }
+
+export function isRuleId(value: string | null | undefined): value is RuleId {
+  return (
+    value === AUTO_RULE || value === RANDOM || HARMONIES.some((harmony) => harmony.id === value)
+  )
+}
+
+/**
+ * The bounds a rolled weight works between.
+ *
+ * The widest the named profiles reach, so `random` can land anywhere any of
+ * them can and anywhere between. Each slot rolls its own, independently: this
+ * is the setting that means *no profile*, and a spread would be a profile.
+ * The consequence is real and intended — five colours can come back at much
+ * the same weight, the way `vivid` deliberately does, or scattered across the
+ * whole range. Chroma is still a share of the ceiling at the slot's own
+ * lightness and hue, so a rolled scheme is in gamut by construction like
+ * every other one.
+ */
+const ROLLED_LIGHT: [number, number] = [SPREAD_DARK, SPREAD_LIGHT]
+const ROLLED_SHARE: [number, number] = [0.25, 1]
+
+/** Hue wobble for a rolled weight: the middle of what the profiles ask for. */
+const ROLLED_HUE_JITTER = 8
 
 /** A roll in `[-amount, +amount]`. */
 const wobble = (rng: () => number, amount: number) => (rng() * 2 - 1) * amount
@@ -203,8 +243,11 @@ function rollAnchor(gamut: Gamut, rng: () => number): Oklch {
 
 export type Generated = {
   slots: Slot[]
-  /** The rule actually applied, which is the roll when `auto` was asked for. */
-  rule: HarmonyId
+  /**
+   * The rule actually applied — the roll, when `auto` was asked for — or
+   * `null` when there was none, which is what `random` means.
+   */
+  rule: HarmonyId | null
 }
 
 /**
@@ -222,19 +265,25 @@ export type Generated = {
 export function generateScheme(
   slots: Slot[],
   rule: RuleId,
-  profileId: ProfileId,
+  profileId: ProfileSetting,
   gamut: Gamut = 'srgb',
   rng: () => number = Math.random,
 ): Generated {
   const count = slots.length
+  // `null` for `random`, which is the absence of a rule rather than one more
+  // of them: there is nothing to rotate from and nothing to report afterwards.
   const harmony =
-    rule === AUTO_RULE
-      ? HARMONIES[Math.min(Math.floor(rng() * HARMONIES.length), HARMONIES.length - 1)]
-      : (HARMONIES.find((entry) => entry.id === rule) ?? HARMONIES[0])
+    rule === RANDOM
+      ? null
+      : rule === AUTO_RULE
+        ? HARMONIES[Math.min(Math.floor(rng() * HARMONIES.length), HARMONIES.length - 1)]
+        : (HARMONIES.find((entry) => entry.id === rule) ?? HARMONIES[0])
 
-  if (!count) return { slots, rule: harmony.id }
+  if (!count) return { slots, rule: harmony?.id ?? null }
 
-  const profile = profileFor(profileId)
+  // And `null` for a rolled weight, for the same reason: every slot answers
+  // to its own roll rather than to a shared spread.
+  const profile = profileId === RANDOM ? null : profileFor(profileId)
 
   // The first locked slot with a hue worth rotating. A locked grey is still
   // held, but it cannot anchor anything: every rule would rotate nothing and
@@ -242,7 +291,11 @@ export function generateScheme(
   const anchorIndex = slots.findIndex((slot) => slot.locked && hasUsableHue(slot.color))
   const anchor = anchorIndex >= 0 ? slots[anchorIndex].color : rollAnchor(gamut, rng)
 
-  const hues = hueSequence(anchor.h, harmony.offsets, count, rng, profile.jitter.h)
+  // A rule rotates its offsets off the anchor; no rule rolls each hue on its
+  // own, which is the whole of what `random` does to the hue axis.
+  const hues = harmony
+    ? hueSequence(anchor.h, harmony.offsets, count, rng, profile?.jitter.h ?? ROLLED_HUE_JITTER)
+    : Array.from({ length: count }, () => rng() * 360)
 
   const next = slots.map((slot, index) => {
     if (slot.locked) return slot
@@ -250,20 +303,25 @@ export function generateScheme(
     const t = position(index, count)
     const h = hues[index]
 
-    const holdAnchor = profile.holdsAnchor && index === anchorIndex
+    const holdAnchor = profile?.holdsAnchor && index === anchorIndex
     const l = holdAnchor
       ? anchor.l
-      : clamp(lerp(profile.light[0], profile.light[1], t) + wobble(rng, profile.jitter.l), 0.08, 0.98)
+      : profile
+        ? clamp(
+            lerp(profile.light[0], profile.light[1], t) + wobble(rng, profile.jitter.l),
+            0.08,
+            0.98,
+          )
+        : lerp(ROLLED_LIGHT[0], ROLLED_LIGHT[1], rng())
 
-    const share = clamp(
-      lerp(profile.chroma[0], profile.chroma[1], t) + wobble(rng, profile.jitter.c),
-      0,
-      1,
-    )
+    const share = profile
+      ? clamp(lerp(profile.chroma[0], profile.chroma[1], t) + wobble(rng, profile.jitter.c), 0, 1)
+      : lerp(ROLLED_SHARE[0], ROLLED_SHARE[1], rng())
+
     const c = maxChromaFor(l, h, gamut) * share
 
     return { ...slot, color: { l, c, h } }
   })
 
-  return { slots: next, rule: harmony.id }
+  return { slots: next, rule: harmony?.id ?? null }
 }

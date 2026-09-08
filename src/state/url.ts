@@ -3,11 +3,11 @@ import { isGamut, parseToOklch, toHex, type Gamut } from '../color/oklch'
 import { createPalette, MAX_STEPS, MIN_STEPS, type PaletteConfig } from '../color/presets'
 import {
   AUTO_RULE,
-  isProfileId,
+  isProfileSetting,
   isRuleId,
   MAX_SLOTS,
   MIN_SLOTS,
-  type ProfileId,
+  type ProfileSetting,
   type RuleId,
   type Slot,
 } from '../color/scheme'
@@ -230,13 +230,13 @@ export type DecodedScheme = {
   /** One flag per colour, in the same order. */
   locks: boolean[]
   rule: RuleId
-  profile: ProfileId
+  profile: ProfileSetting
 }
 
 export function encodeScheme(
   slots: Slot[],
   rule: RuleId,
-  profile: ProfileId,
+  profile: ProfileSetting,
 ): string {
   const params = new URLSearchParams()
   params.set(SCHEME_KEYS.colors, slots.map((slot) => toHex(slot.color).slice(1)).join('-'))
@@ -287,7 +287,7 @@ export function decodeScheme(hash: string): DecodedScheme | null {
       colors,
       locks,
       rule: isRuleId(rule) ? rule : AUTO_RULE,
-      profile: isProfileId(profile) ? profile : 'even',
+      profile: isProfileSetting(profile) ? profile : 'even',
     }
   }
   return null
@@ -321,7 +321,7 @@ export function decodeMode(hash: string): Mode | null {
 export function schemeUrl(
   slots: Slot[],
   rule: RuleId,
-  profile: ProfileId,
+  profile: ProfileSetting,
   gamut: Gamut = 'srgb',
 ): string {
   const { origin, pathname } = window.location

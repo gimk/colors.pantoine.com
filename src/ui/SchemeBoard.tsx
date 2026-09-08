@@ -6,7 +6,8 @@ import {
   MAX_SLOTS,
   MIN_SLOTS,
   PROFILES,
-  type ProfileId,
+  RANDOM,
+  type ProfileSetting,
   type RuleId,
 } from '../color/scheme'
 import { VISIONS, type Vision } from '../color/vision'
@@ -259,7 +260,14 @@ export function SchemeBoard({
             onChange={(event) => scheme.setRule(event.target.value as RuleId)}
             title="Which hues the unlocked colours are allowed to take, measured from the locked one"
           >
-            <option value={AUTO_RULE}>Auto</option>
+            {/* The two that roll, above the eight that decide. Auto picks a
+                rule and follows it; Random is the one that means none. */}
+            <option value={AUTO_RULE} title="Roll one of the eight rules, and say which">
+              Auto
+            </option>
+            <option value={RANDOM} title="No rule at all — every hue rolled on its own">
+              Random
+            </option>
             {HARMONIES.map((harmony) => (
               <option key={harmony.id} value={harmony.id} title={harmony.hint}>
                 {harmony.label}
@@ -280,9 +288,15 @@ export function SchemeBoard({
           <span>Weight</span>
           <select
             value={scheme.profile}
-            onChange={(event) => scheme.setProfile(event.target.value as ProfileId)}
+            onChange={(event) => scheme.setProfile(event.target.value as ProfileSetting)}
             title="How lightness and chroma are spread across the scheme"
           >
+            <option
+              value={RANDOM}
+              title="No profile — every colour's lightness and chroma rolled on its own"
+            >
+              Random
+            </option>
             {PROFILES.map((profile) => (
               <option key={profile.id} value={profile.id} title={profile.hint}>
                 {profile.label}

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useReducer } from 'react'
 import type { HarmonyId } from '../color/harmony'
 import { mapToGamut, type Gamut, type Oklch } from '../color/oklch'
-import type { ProfileId, RuleId, Slot } from '../color/scheme'
+import type { ProfileSetting, RuleId, Slot } from '../color/scheme'
 import { canRedo, canUndo, initHistory, withHistory } from './history'
 import { rollSeed } from './random'
 import {
@@ -33,7 +33,7 @@ export type SchemeApi = {
   rule: RuleId
   /** The rule the last roll used, for a board that has to explain itself. */
   rolled: HarmonyId | null
-  profile: ProfileId
+  profile: ProfileSetting
   undo: () => void
   redo: () => void
   canUndo: boolean
@@ -46,7 +46,7 @@ export type SchemeApi = {
   remove: (id: string) => void
   reorder: (sourceId: string, targetId: string) => void
   setRule: (value: RuleId) => void
-  setProfile: (value: ProfileId) => void
+  setProfile: (value: ProfileSetting) => void
   setCount: (value: number) => void
   load: (slots: Slot[]) => void
   /** The raw state, for encoding into the link and into storage. */
@@ -56,7 +56,7 @@ export type SchemeApi = {
 type Seed = {
   slots?: Slot[]
   rule?: RuleId
-  profile?: ProfileId
+  profile?: ProfileSetting
 }
 
 /**
@@ -145,7 +145,7 @@ export function useScheme(seed: Seed, gamut: Gamut): SchemeApi {
       [send],
     ),
     setRule: useCallback((value: RuleId) => send({ type: 'setRule', value }), [send]),
-    setProfile: useCallback((value: ProfileId) => send({ type: 'setProfile', value }), [send]),
+    setProfile: useCallback((value: ProfileSetting) => send({ type: 'setProfile', value }), [send]),
     setCount: useCallback((value: number) => send({ type: 'setCount', value }), [send]),
     load: useCallback((next: Slot[]) => send({ type: 'load', slots: next }), [send]),
   }

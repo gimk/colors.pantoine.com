@@ -27,7 +27,9 @@ rebranding.
 - **A rule and a weight, not just a rule.** The rule picks the hues — the eight
   classic harmonies, or Auto, which rolls one and tells you which. The weight
   profile spreads lightness and chroma across the colours, so a scheme comes out
-  with real tonal range instead of five colours at the same weight.
+  with real tonal range instead of five colours at the same weight. Either
+  control can be set to Random, which is the one setting that means no
+  structure at all: free hues, or a lightness and a chroma per colour.
 - **Shades without leaving the board.** Hover a colour for a strip of its
   tints and shades — the ramp the other half would build from it — and click
   one to take it. The step you are on is marked, so it is a move from where

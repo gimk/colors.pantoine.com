@@ -1,5 +1,5 @@
 import type { Gamut } from '../color/oklch'
-import { AUTO_RULE, type ProfileId, type RuleId, type Slot } from '../color/scheme'
+import { AUTO_RULE, type ProfileSetting, type RuleId, type Slot } from '../color/scheme'
 import { DEFAULT_MODE, isMode, type Mode } from './mode'
 import {
   decodeDocument,
@@ -140,7 +140,7 @@ const SCHEME_KEY = 'colors.pantoine.com/scheme/v1'
 
 type StoredScheme = { v: 1; hash: string }
 
-export function saveScheme(slots: Slot[], rule: RuleId, profile: ProfileId): void {
+export function saveScheme(slots: Slot[], rule: RuleId, profile: ProfileSetting): void {
   try {
     const value: StoredScheme = { v: 1, hash: encodeScheme(slots, rule, profile) }
     window.localStorage.setItem(SCHEME_KEY, JSON.stringify(value))

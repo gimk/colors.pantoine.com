@@ -1386,6 +1386,18 @@ describe('scheme board', () => {
     expect(render(slotsOf())).toContain('Triad')
   })
 
+  it('offers a roll in both controls, above the named choices', () => {
+    // Rule and Weight both take one: Auto rolls a rule and follows it, and
+    // Random is the setting that means there is no rule and no profile.
+    const html = render(slotsOf())
+    expect(html.match(/<option value="random"/g)).toHaveLength(2)
+    // Above what they are an alternative to, and in the rule control below
+    // Auto — the two that roll, then the eight that decide.
+    expect(html.indexOf('value="auto"')).toBeLessThan(html.indexOf('value="random"'))
+    expect(html.indexOf('value="random"')).toBeLessThan(html.indexOf('value="triad"'))
+    expect(html.lastIndexOf('value="random"')).toBeLessThan(html.indexOf('value="even"'))
+  })
+
   it('marks a locked bar as pressed, and an unlocked one as not', () => {
     const html = render(slotsOf([1]))
     expect(html).toContain('sbar sbar--locked')

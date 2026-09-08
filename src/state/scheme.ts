@@ -7,7 +7,7 @@ import {
   generateScheme,
   MAX_SLOTS,
   MIN_SLOTS,
-  type ProfileId,
+  type ProfileSetting,
   type RuleId,
   type Slot,
 } from '../color/scheme'
@@ -39,7 +39,7 @@ export type SchemeState = {
    * right answer for colours that never came out of a rule at all.
    */
   rolled: HarmonyId | null
-  profile: ProfileId
+  profile: ProfileSetting
 }
 
 export type SchemeAction =
@@ -53,7 +53,7 @@ export type SchemeAction =
   | { type: 'remove'; id: string }
   | { type: 'reorder'; sourceId: string; targetId: string }
   | { type: 'setRule'; value: RuleId }
-  | { type: 'setProfile'; value: ProfileId }
+  | { type: 'setProfile'; value: ProfileSetting }
   | { type: 'setCount'; value: number }
   /** Replace the whole scheme, from a link, from storage, or from the palette
    *  document. Locks come along, since a seeded slot is one you chose. */
@@ -92,7 +92,7 @@ export const newSlot = (color: Oklch, locked = false): Slot => ({
 export function createScheme(
   slots: Slot[] = [],
   rule: RuleId = AUTO_RULE,
-  profile: ProfileId = 'even',
+  profile: ProfileSetting = 'even',
   gamut: Gamut = 'srgb',
   seed = Date.now(),
 ): SchemeState {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseToOklch, toHex } from '../color/oklch'
 import { createPalette } from '../color/presets'
-import { AUTO_RULE, MAX_SLOTS, MIN_SLOTS, type Slot } from '../color/scheme'
+import { AUTO_RULE, MAX_SLOTS, MIN_SLOTS, RANDOM, type Slot } from '../color/scheme'
 import { canRedo, canUndo, initHistory, withHistory } from './history'
 import {
   coalesceKey,
@@ -92,6 +92,16 @@ describe('generate', () => {
     )
     expect(state.rolled).not.toBeNull()
     expect(state.rule).toBe(AUTO_RULE)
+  })
+
+  it('claims no rule for a roll that had none', () => {
+    // The board reports what Auto landed on. A random roll has nothing to
+    // report, and reporting the last rule it happened to use before would be
+    // a claim about colours that were not chosen that way.
+    const before = run({ ...start(), rule: AUTO_RULE }, { type: 'generate', seed: 21 })
+    expect(before.rolled).not.toBeNull()
+    const after = run({ ...before, rule: RANDOM }, { type: 'generate', seed: 22 })
+    expect(after.rolled).toBeNull()
   })
 })
 
@@ -278,6 +288,15 @@ describe('the scheme in a link', () => {
       // further — which is the promise the whole hash format makes.
       expect(toHex(color)).toBe(toHex(slots[index].color))
     })
+  })
+
+  it('round-trips a scheme that answers to no rule and no profile', () => {
+    // Both controls can say "rolled", and a link made that way has to open
+    // that way: reading it back as Auto would claim a reason the colours
+    // never had, and reading it as Even would claim a spread.
+    const back = decodeScheme(encodeScheme(slots, RANDOM, RANDOM))!
+    expect(back.rule).toBe(RANDOM)
+    expect(back.profile).toBe(RANDOM)
   })
 
   it('writes no lock key at all when nothing is locked', () => {
