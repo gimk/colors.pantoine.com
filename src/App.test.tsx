@@ -1817,6 +1817,39 @@ describe('a scheme bar’s tools', () => {
     expect(rules).toContain('.sbar__tools:focus-within')
     expect(rules).not.toContain('.sbar:focus-within')
   })
+
+  /**
+   * Locking a colour used to hold the whole cluster open, and picking a shade
+   * locks the colour — so choosing one left four buttons standing in the
+   * middle of that bar for the rest of the session.
+   */
+  it('leaves only the lock up on a bar that is locked', () => {
+    // It is each tool that hides now, not the cluster they sit in.
+    expect(declarations('.sbar__tool')).toContain('opacity: 0')
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(rules).not.toContain('.sbar--locked .sbar__tools')
+
+    // The lock is the exception: it reports a state rather than offering an
+    // action, and it is the only sign a roll will leave this colour alone.
+    expect(declarations('.sbar__tool--locked')).toContain('opacity: 1')
+    // Named against the hover rules too, or hovering the bar would dim it back
+    // to the resting weight of the tools that just appeared beside it.
+    expect(rules).toContain('.sbar:hover .sbar__tool--locked')
+  })
+
+  /**
+   * The face covers the whole bar, and a click leaves focus on it. The next
+   * keypress promotes that to `:focus-visible` — so pressing Space to roll
+   * drew a ring round the colour you last copied, which reads as a selection
+   * this mode does not have.
+   */
+  it('rings the face in the bar’s own ink, not the frame’s', () => {
+    const ring = declarations('.sbar__face:focus-visible')
+    expect(ring).toContain('outline-color: currentColor')
+    // Inside the edge, since the bar runs to the window's.
+    expect(ring).toContain('outline-offset: -6px')
+    expect(ring).not.toContain('var(--ink)')
+  })
 })
 
 describe('the shades of one bar', () => {

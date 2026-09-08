@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, type MouseEvent } from 'react'
 import { nameForColor } from '../color/names'
 import {
   formatColor,
@@ -33,6 +33,23 @@ type Props = {
   onDragEnd: () => void
   onDragOver: () => void
   onDrop: () => void
+}
+
+/**
+ * Take focus off a control that was pressed with the pointer.
+ *
+ * Every control on this board is invisible until you go near it, and focus
+ * outlives the pointer — so a press left a mark on a bar the cursor had long
+ * since left. The tools stayed up on the bar whose lock you last clicked, and
+ * the face, which covers the whole bar, kept the focus a click gave it until
+ * the next keypress promoted it to `:focus-visible` and drew a ring round the
+ * colour you last copied. Pressing Space to roll did exactly that.
+ *
+ * `detail` is the click count, and it is 0 when the click came from the
+ * keyboard — where focus is the whole point and has to stay where it is.
+ */
+function dropPointerFocus(event: MouseEvent<HTMLElement>) {
+  if (event.detail > 0) event.currentTarget.blur()
 }
 
 /**
@@ -112,7 +129,10 @@ export function SchemeBar({
         type="button"
         className="sbar__face"
         style={{ color: ink }}
-        onClick={() => onCopy(key, value)}
+        onClick={(event) => {
+          onCopy(key, value)
+          dropPointerFocus(event)
+        }}
         title={`Copy ${value}`}
       >
         {!bare && (
@@ -141,7 +161,10 @@ export function SchemeBar({
                 : { color: ink, borderColor: ink }
             }
             aria-pressed={slot.locked}
-            onClick={onToggleLock}
+            onClick={(event) => {
+              onToggleLock()
+              dropPointerFocus(event)
+            }}
             title={
               slot.locked
                 ? 'Locked — held through a regenerate. Click to release it.'
@@ -231,7 +254,10 @@ export function SchemeBar({
             className="sbar__tool"
             style={{ color: ink, borderColor: ink }}
             aria-expanded={shades}
-            onClick={() => setShades((on) => !on)}
+            onClick={(event) => {
+              setShades((on) => !on)
+              dropPointerFocus(event)
+            }}
             title="Take a lighter or darker shade of this colour"
           >
             {/* The half-filled disc every tool uses for tint and shade, which
@@ -255,7 +281,10 @@ export function SchemeBar({
             className="sbar__tool"
             style={{ color: ink, borderColor: ink }}
             disabled={!removable}
-            onClick={onRemove}
+            onClick={(event) => {
+              onRemove()
+              dropPointerFocus(event)
+            }}
             title={removable ? 'Remove this colour' : 'A scheme needs at least two colours'}
           >
             <svg

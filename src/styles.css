@@ -2288,6 +2288,17 @@ button.newpal__cand:hover {
   color: inherit;
 }
 
+/* The app-wide focus ring is two pixels of the frame's own ink. On a
+   full-bleed colour that is a hard black box round the one thing worth
+   looking at — and on a dark bar it is invisible, which is the same mistake
+   the locked lock made. The bar's ink, drawn inside its edge, belongs to the
+   bar. It is only ever seen by a keyboard now: a press that came from the
+   pointer takes its focus back with it. */
+.sbar__face:focus-visible {
+  outline-color: currentColor;
+  outline-offset: -6px;
+}
+
 .sbar__read {
   display: flex;
   flex-direction: column;
@@ -2337,30 +2348,17 @@ button.newpal__cand:hover {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  opacity: 0;
-  /* Transparent is not gone: without this the hidden tools still take the
-     clicks meant for the colour under them. */
-  pointer-events: none;
-  transition: opacity 90ms linear;
-}
-
-/* `.sbar__tools:focus-within`, not `.sbar:focus-within`. The bar's face is
-   a button covering the whole bar, so clicking a colour to copy it focuses
-   that button — and focus outlives the pointer, which left the tools showing
-   on a bar the cursor had long since left. Scoped to the tools themselves,
-   focus only holds them open when focus is actually on one of them, which is
-   the case it was there for: they are still reachable by tab while hidden,
-   since neither zero opacity nor `pointer-events` takes a control out of the
-   focus order. */
-.sbar:hover .sbar__tools,
-.sbar__tools:focus-within,
-.sbar--locked .sbar__tools {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 /* Borrows the bar's ink for both its border and its glyph, so it reads on a
-   near-white slot and a near-black one alike without a second colour. */
+   near-white slot and a near-black one alike without a second colour.
+
+   Hidden one tool at a time rather than by fading the cluster they sit in.
+   The cluster used to carry the fade, with a rule holding it open on a locked
+   bar — so locking a colour, or picking a shade, which locks it, left a
+   permanent column of four buttons down the middle of that colour. Only the
+   lock has any business staying: it is the one that reports a state rather
+   than offering an action. */
 .sbar__tool {
   width: 24px;
   height: 24px;
@@ -2370,7 +2368,36 @@ button.newpal__cand:hover {
   justify-content: center;
   background: none;
   border: 1px solid currentColor;
+  opacity: 0;
+  /* Transparent is not gone: without this the hidden tools still take the
+     clicks meant for the colour under them. */
+  pointer-events: none;
+  transition: opacity 90ms linear;
+}
+
+/* `.sbar__tools:focus-within`, not `.sbar:focus-within`. The bar's face is a
+   button covering the whole bar, so clicking a colour to copy it focuses that
+   button — and focus outlives the pointer, which left the tools showing on a
+   bar the cursor had long since left. Scoped to the tools themselves, focus
+   only holds them open when focus is actually on one of them, which is the
+   case it was there for: they are still reachable by tab while hidden, since
+   neither zero opacity nor `pointer-events` takes a control out of the focus
+   order. */
+.sbar:hover .sbar__tool,
+.sbar__tools:focus-within .sbar__tool {
   opacity: 0.55;
+  pointer-events: auto;
+}
+
+/* The lock stays up while the colour is held, wherever the pointer is: it is
+   the only sign on the board that a roll will leave this one alone. Listed
+   against the hover rules too, so hovering the bar does not dim it back to
+   the resting weight of the tools that just appeared beside it. */
+.sbar__tool--locked,
+.sbar:hover .sbar__tool--locked,
+.sbar__tools:focus-within .sbar__tool--locked {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .sbar__tool:hover:not(:disabled) {
@@ -2378,14 +2405,14 @@ button.newpal__cand:hover {
   opacity: 1;
 }
 
-.sbar__tool:disabled {
+/* Dimmer than its neighbours, but only once they are there: unscoped, this
+   would leave the bin showing at a quarter on a bar nobody is pointing at,
+   since it is now each tool that hides rather than the cluster. */
+.sbar:hover .sbar__tool:disabled,
+.sbar__tools:focus-within .sbar__tool:disabled {
   opacity: 0.25;
   border-color: currentColor;
   color: inherit;
-}
-
-.sbar__tool--locked {
-  opacity: 1;
 }
 
 /* A seam between two colours that opens under the pointer.
@@ -2621,6 +2648,13 @@ button.newpal__cand:hover {
 .shades__step.is-here:hover::after,
 .shades__step.is-here:focus-visible::after {
   opacity: 0;
+}
+
+/* As on the bar's face, and for the same reason: a ring in the frame's ink
+   round one step of a strip of colours belongs to neither. */
+.shades__step:focus-visible {
+  outline-color: currentColor;
+  outline-offset: -3px;
 }
 
 /* The strip turns with the bars, which stack on a narrow window. Twenty-one
