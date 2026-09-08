@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { formatColor, mapToGamut, type Format, type Gamut, type Oklch } from '../color/oklch'
 import { createPalette, MAX_STEPS } from '../color/presets'
 import { generateRamp, type Swatch } from '../color/ramp'
@@ -13,9 +13,6 @@ import { inkOn, simulate, type Vision } from '../color/vision'
  * picking between them is a judgement, which is the point of showing them.
  */
 export const SHADE_STEPS = MAX_STEPS
-
-/** The bar's own colour, showing round the strip, says which bar this is. */
-const INSET = 8
 
 /**
  * What the display actually emits for one step of the ramp.
@@ -35,25 +32,17 @@ export function emitted(swatch: Swatch): Oklch {
   }
 }
 
-type Box = { top: number; left: number; width: number; height: number }
-
 type Props = {
   color: Oklch
   gamut: Gamut
   vision: Vision
   format: Format
-  /** Names the colour these are shades of, for the label a screen reader gets. */
-  name: string
   onPick: (color: Oklch) => void
-  /** The element the strip covers: the bar this colour is in. */
-  anchor: RefObject<HTMLElement | null>
-  trigger: (open: () => void, ref: RefObject<HTMLButtonElement | null>) => ReactNode
-  /** For testing, renders the strip without a click. */
-  defaultOpen?: boolean
+  onClose: () => void
 }
 
 /**
- * The shades of one colour, over the bar it belongs to.
+ * The shades of one colour, laid over the bar it belongs to.
  *
  * The ramp is the one the other half of the tool would build from this
  * colour — `createPalette` and `generateRamp`, default curves, the document's
@@ -67,22 +56,18 @@ type Props = {
  * lightness puts it. So the gesture is *move from here*, up into the tints or
  * down into the shades, and picking the step you are on is a way of changing
  * your mind rather than a mistake.
+ *
+ * A panel inside the bar, deliberately not a `<dialog>`. A modal one was the
+ * first attempt, for the Escape and the click-away it gives you free, and it
+ * was wrong: `showModal` makes the whole document inert, and this board is a
+ * wall of colour with nothing else on it, so an inert board under a backdrop
+ * that had to stay transparent — the other colours being exactly what the
+ * choice is made against — is indistinguishable from an application that has
+ * hung. Every bar stayed lit and stopped answering. The three dismissals are
+ * cheap to do by hand, and the board behind stays alive while you choose.
  */
-export function ShadePicker({
-  color,
-  gamut,
-  vision,
-  format,
-  name,
-  onPick,
-  anchor,
-  trigger,
-  defaultOpen = false,
-}: Props) {
-  const ref = useRef<HTMLDialogElement>(null)
-  const buttonRef = useRef<HTMLButtonElement>(null)
-  const [open, setOpen] = useState(defaultOpen)
-  const [box, setBox] = useState<Box | null>(null)
+export function ShadePicker({ color, gamut, vision, format, onPick, onClose }: Props) {
+  const ref = useRef<HTMLDivElement>(null)
 
   /**
    * The ramp this colour makes, derived from the colour rather than from its
@@ -94,92 +79,70 @@ export function ShadePicker({
     [color, gamut],
   )
 
-  const measure = () => {
-    const rect = anchor.current?.getBoundingClientRect()
-    if (!rect) return
-    // Never more than a sixth of the bar, so eight bars on a narrow window
-    // still leave a strip wide enough to read a value on.
-    const inset = Math.min(INSET, rect.width / 6)
-    setBox({
-      top: rect.top + inset,
-      left: rect.left + inset,
-      width: Math.max(rect.width - inset * 2, 1),
-      height: Math.max(rect.height - inset * 2, 1),
-    })
-  }
-
-  useLayoutEffect(() => {
-    if (!open) return
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [open])
-
-  const openStrip = () => {
-    measure()
-    setOpen(true)
-    ref.current?.showModal()
-  }
+  /**
+   * Escape, and a press that lands anywhere else.
+   *
+   * `pointerdown` rather than `click`, in capture, so a press meant to
+   * dismiss the strip does not also reach the bar underneath and copy a
+   * colour on its way past. The press that opened the strip cannot close it:
+   * this listener is registered as the strip mounts, which is after that
+   * press has already been dispatched.
+   */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    const onDown = (event: PointerEvent) => {
+      if (!ref.current?.contains(event.target as Node)) onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onDown, true)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onDown, true)
+    }
+  }, [onClose])
 
   return (
-    <>
-      {trigger(openStrip, buttonRef)}
+    <div
+      ref={ref}
+      className="shades"
+      role="group"
+      aria-label="Shades"
+      /* Moving off the bar puts it away: this is a glance and a click, and
+         leaving is the way you say you did not want one. */
+      onPointerLeave={onClose}
+      /* The bar is the drag handle for reordering, and these steps are inside
+         it. Without this, a press that slides a pixel down the strip starts
+         dragging the whole colour instead of choosing a shade. */
+      onDragStart={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+      }}
+    >
+      {ramp.map((swatch) => {
+        const shown = emitted(swatch)
+        const seen = vision === 'normal' ? shown : simulate(shown, vision)
+        const background =
+          vision === 'normal' ? swatch.displayColor : mapToGamut(seen, gamut).displayColor
+        const value = formatColor(shown, format, gamut)
 
-      {/* Modal, which buys three things at once: Escape closes it, a click
-          anywhere else closes it, and the board's own keyboard stands down —
-          `spaceRolls` skips a press while a dialog is open, so the strip
-          cannot be re-rolled out from under the pointer. */}
-      <dialog
-        ref={ref}
-        className="shades"
-        style={
-          box
-            ? {
-                position: 'fixed',
-                margin: 0,
-                top: `${box.top}px`,
-                left: `${box.left}px`,
-                width: `${box.width}px`,
-                height: `${box.height}px`,
-              }
-            : undefined
-        }
-        aria-label={`Shades of ${name}`}
-        onClose={() => setOpen(false)}
-        /* The strip fills the dialog, so anything landing on the dialog
-           itself came through the backdrop. */
-        onClick={(event) => {
-          if (event.target === ref.current) ref.current?.close()
-        }}
-      >
-        {open && (
-          <div className="shades__strip">
-            {ramp.map((swatch) => {
-              const shown = emitted(swatch)
-              const seen = vision === 'normal' ? shown : simulate(shown, vision)
-              const background =
-                vision === 'normal' ? swatch.displayColor : mapToGamut(seen, gamut).displayColor
-              const value = formatColor(shown, format, gamut)
-
-              return (
-                <button
-                  key={swatch.index}
-                  type="button"
-                  className={`shades__step${swatch.isBase ? ' is-here' : ''}`}
-                  style={{ backgroundColor: background, color: inkOn(seen) }}
-                  onClick={() => {
-                    onPick(shown)
-                    ref.current?.close()
-                  }}
-                  title={swatch.isBase ? `${value} — where this colour already is` : `Use ${value}`}
-                >
-                  <span className="shades__value">{value}</span>
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </dialog>
-    </>
+        return (
+          <button
+            key={swatch.index}
+            type="button"
+            className={`shades__step${swatch.isBase ? ' is-here' : ''}`}
+            style={{ backgroundColor: background, color: inkOn(seen) }}
+            onClick={() => {
+              onPick(shown)
+              onClose()
+            }}
+            title={swatch.isBase ? `${value} — where this colour already is` : `Use ${value}`}
+          >
+            <span className="shades__value">{value}</span>
+          </button>
+        )
+      })}
+    </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useCallback, useState } from 'react'
 import { nameForColor } from '../color/names'
 import {
   formatColor,
@@ -74,9 +74,9 @@ export function SchemeBar({
   const background = vision === 'normal' ? slot.displayColor : mapToGamut(seen, gamut).displayColor
   const ink = inkOn(seen)
 
-  // The strip the shade picker opens covers this bar, so it has to be able
-  // to measure it.
-  const barRef = useRef<HTMLElement>(null)
+  /** Whether this bar's shades are open over it. */
+  const [shades, setShades] = useState(false)
+  const closeShades = useCallback(() => setShades(false), [])
 
   const value = formatColor(slot.color, format, gamut)
   const name = nameForColor(slot.hex)
@@ -84,7 +84,6 @@ export function SchemeBar({
 
   return (
     <section
-      ref={barRef}
       className={`sbar${dragging ? ' sbar--dragging' : ''}${dropTarget ? ' sbar--drop' : ''}${
         slot.locked ? ' sbar--locked' : ''
       }`}
@@ -227,40 +226,29 @@ export function SchemeBar({
               set this colour and the quickest: the wedge is for a colour you
               have in mind, this is for the one you are on being nearly
               right. */}
-          <ShadePicker
-            color={slot.color}
-            gamut={gamut}
-            vision={vision}
-            format={format}
-            name={name}
-            anchor={barRef}
-            onPick={onColor}
-            trigger={(open, ref) => (
-              <button
-                ref={ref}
-                type="button"
-                className="sbar__tool"
-                style={{ color: ink, borderColor: ink }}
-                onClick={open}
-                title="Take a lighter or darker shade of this colour"
-              >
-                {/* The half-filled disc every tool uses for tint and shade,
-                    which reads at 12px where a stack of bars would not. */}
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" />
-                </svg>
-              </button>
-            )}
-          />
+          <button
+            type="button"
+            className="sbar__tool"
+            style={{ color: ink, borderColor: ink }}
+            aria-expanded={shades}
+            onClick={() => setShades((on) => !on)}
+            title="Take a lighter or darker shade of this colour"
+          >
+            {/* The half-filled disc every tool uses for tint and shade, which
+                reads at 12px where a stack of bars would not. */}
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
 
           <button
             type="button"
@@ -284,6 +272,21 @@ export function SchemeBar({
             </svg>
           </button>
         </span>
+      )}
+
+      {/* Inside the bar rather than over the window, so it is inset by the
+          bar's own colour and cannot be mistaken for a panel belonging to the
+          board. Picking locks the slot, since it goes through the same
+          `setColor` the picker does. */}
+      {!bare && shades && (
+        <ShadePicker
+          color={slot.color}
+          gamut={gamut}
+          vision={vision}
+          format={format}
+          onPick={onColor}
+          onClose={closeShades}
+        />
       )}
     </section>
   )

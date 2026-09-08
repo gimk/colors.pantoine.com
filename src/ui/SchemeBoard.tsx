@@ -23,12 +23,22 @@ export const SEAM_DWELL = 130
 /** Namespaced away from the slot keys, so neither flashes for the other. */
 const LINK_KEY = 'scheme-link'
 
+/**
+ * What counts as open over the board, and so as owning the keyboard.
+ *
+ * Exported because it has two halves that have to agree: this selector, and
+ * the class the shade strip renders. The strip is a panel rather than a
+ * dialog — see `ShadePicker` — so `dialog[open]` alone stopped seeing it.
+ */
+export const OVERLAY_SELECTOR = 'dialog[open], .shades'
+
 /** Where a keypress landed, as the only two things the answer turns on. */
 export type KeyContext = {
   /** Focus is somewhere a space is a character rather than a command. */
   inTextEntry: boolean
-  /** A dialog is open over the board. */
-  inDialog: boolean
+  /** Something is open over the board and owns the keyboard: a dialog, or a
+   *  bar's shades. */
+  inOverlay: boolean
 }
 
 /**
@@ -43,10 +53,10 @@ export type KeyContext = {
  *
  * The cost is that Space no longer presses a tabbed-to button. Enter does,
  * which is the keyboard path that matters, and the footer says what Space is
- * for. Only text entry and an open dialog get to keep it.
+ * for. Only text entry and something open over the board get to keep it.
  */
 export function spaceRolls(where: KeyContext): boolean {
-  return !where.inTextEntry && !where.inDialog
+  return !where.inTextEntry && !where.inOverlay
 }
 
 type Props = {
@@ -140,9 +150,12 @@ export function SchemeBoard({
         // one keeps focus after you pick from it, and Space reopening the menu
         // you just used is exactly the behaviour this is meant to be rid of.
         inTextEntry: Boolean(target?.closest?.('input, textarea, [contenteditable]')),
-        // A dialog over the board owns the keyboard entirely — rolling a new
-        // scheme behind an open export panel is nobody's intention.
-        inDialog: Boolean(document.querySelector('dialog[open]')),
+        // Anything open over the board owns the keyboard entirely — rolling a
+        // new scheme behind an open export panel is nobody's intention, and
+        // rolling one out from under a strip of shades even less so. The
+        // shades are a panel rather than a dialog, for the reason
+        // `ShadePicker` documents, so they have to be named here too.
+        inOverlay: Boolean(document.querySelector(OVERLAY_SELECTOR)),
       }
 
       if (event.code === 'Space') {
@@ -152,7 +165,7 @@ export function SchemeBoard({
         return
       }
 
-      if (where.inTextEntry || where.inDialog) return
+      if (where.inTextEntry || where.inOverlay) return
       const digit = Number(event.key)
       if (Number.isInteger(digit) && digit >= 1 && digit <= slots.length) {
         event.preventDefault()

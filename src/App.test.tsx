@@ -16,7 +16,7 @@ import { schemeReducer, type SchemeState } from './state/scheme'
 import { buildText, TEXT_FORMATS } from './export/formats'
 import { schemeRamp } from './export/scheme'
 import type { SchemeApi } from './state/useScheme'
-import { SchemeBoard, spaceRolls, type KeyContext } from './ui/SchemeBoard'
+import { OVERLAY_SELECTOR, SchemeBoard, spaceRolls, type KeyContext } from './ui/SchemeBoard'
 import { SchemeExportDialog } from './ui/SchemeExportDialog'
 import { ModeSwitch } from './ui/ModeSwitch'
 import { emitted, ShadePicker, SHADE_STEPS } from './ui/ShadePicker'
@@ -1537,7 +1537,7 @@ describe('scheme board', () => {
   describe('what Space belongs to', () => {
     const at = (over: Partial<KeyContext> = {}): KeyContext => ({
       inTextEntry: false,
-      inDialog: false,
+      inOverlay: false,
       ...over,
     })
 
@@ -1553,9 +1553,11 @@ describe('scheme board', () => {
       expect(spaceRolls(at({ inTextEntry: true }))).toBe(false)
     })
 
-    it('never rolls behind an open dialog', () => {
-      expect(spaceRolls(at({ inDialog: true }))).toBe(false)
-      expect(spaceRolls(at({ inDialog: true, inTextEntry: true }))).toBe(false)
+    it('never rolls behind anything open over the board', () => {
+      // An export dialog, or a bar's shades — which are a panel rather than a
+      // dialog, and would otherwise be re-rolled out from under the pointer.
+      expect(spaceRolls(at({ inOverlay: true }))).toBe(false)
+      expect(spaceRolls(at({ inOverlay: true, inTextEntry: true }))).toBe(false)
     })
   })
 })
@@ -1826,15 +1828,8 @@ describe('the shades of one bar', () => {
         gamut={gamut}
         vision={vision}
         format="hex"
-        name="test"
         onPick={() => {}}
-        anchor={{ current: null }}
-        trigger={(open) => (
-          <button type="button" onClick={open}>
-            shades
-          </button>
-        )}
-        defaultOpen
+        onClose={() => {}}
       />,
     )
 
@@ -1897,10 +1892,29 @@ describe('the shades of one bar', () => {
     expect(declarations('.shades__step')).not.toContain('background:')
   })
 
-  it('dims nothing behind it', () => {
-    // The rest of the window is the other colours in the scheme, which are
-    // what this choice is being made against.
-    expect(declarations('.shades::backdrop')).toContain('background: transparent')
+  /**
+   * It was a modal `<dialog>` first, which made the rest of the document
+   * inert while it was open. On a board that is nothing but colour, under a
+   * backdrop that had to stay transparent — the other colours being what the
+   * choice is made against — every bar stayed lit and stopped answering, and
+   * the app read as hung.
+   */
+  it('sits inside its bar and leaves the board behind it alive', () => {
+    const shades = declarations('.shades')
+    expect(shades).toContain('position: absolute')
+    expect(shades).toContain('inset: var(--space-4)')
+    expect(css).not.toContain('.shades::backdrop')
+    expect(strip()).not.toContain('<dialog')
+  })
+
+  it('is named by the guard that stands the board’s keyboard down', () => {
+    // Space rolls the whole scheme, so a press meant to choose a shade would
+    // have thrown all five colours away. The strip is a panel rather than a
+    // dialog, so the existing `dialog[open]` guard could not see it, and the
+    // two halves of that — the class it renders and the selector that looks
+    // for it — have to keep agreeing.
+    expect(strip()).toContain('class="shades"')
+    expect(OVERLAY_SELECTOR).toContain('.shades')
   })
 })
 

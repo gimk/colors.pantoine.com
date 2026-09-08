@@ -2500,32 +2500,20 @@ button.newpal__cand:hover {
 /* --- shades ------------------------------------------------------------
 
    One bar's colour, opened out into the ramp the other half of the tool would
-   build from it, laid over the bar it belongs to. Inset on every side so the
-   bar's own colour frames it: a full column of one hue looks like a board of
-   its own, and the frame is what says which colour is being changed. */
+   build from it, laid over the bar it belongs to.
+
+   Inside the bar rather than over the window, and inset on every side so the
+   bar's own colour frames it: a full column of one hue with nothing around it
+   looks like a board of its own, and the frame is what says whose shades
+   these are. */
 .shades {
-  /* The UA sheet pins a dialog to both block edges and centres it with auto
-     margins; the strip carries its own box, measured off the bar. */
-  inset: auto;
-  border: none;
-  padding: 0;
-  background: none;
-  overflow: hidden;
-  z-index: 100;
-}
-
-/* Nothing dimmed behind it. The strip covers the bar it belongs to, and the
-   rest of the window is the other colours in the scheme — which are exactly
-   what this choice is being made against, so dimming them would hide the
-   reason for it. */
-.shades::backdrop {
-  background: transparent;
-}
-
-.shades__strip {
+  position: absolute;
+  inset: var(--space-4);
+  /* Over the face, which covers the whole bar, and over the tools at 3. */
+  z-index: 4;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  overflow: hidden;
 }
 
 /* An equal share each, so the strip reads as a ramp from top to bottom
@@ -2534,7 +2522,9 @@ button.newpal__cand:hover {
    here it is the only thing marking the step under the pointer. */
 .shades__step {
   flex: 1;
+  /* Both, since the strip turns to a row on a narrow window. */
   min-height: 0;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2555,6 +2545,15 @@ button.newpal__cand:hover {
 .shades__step:focus-visible .shades__value,
 .shades__step.is-here .shades__value {
   opacity: 1;
+}
+
+/* The strip turns with the bars, which stack on a narrow window. Twenty-one
+   steps down the height of a stacked bar would be four pixels each; across
+   its width they are at least a thumb wide. */
+@media (max-width: 720px) {
+  .shades {
+    flex-direction: row;
+  }
 }
 
 /* --- empty document ---------------------------------------------------- */

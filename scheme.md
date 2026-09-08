@@ -396,10 +396,20 @@ you are on is in the strip, marked, wherever its own lightness puts it, so the
 gesture reads as *move from here* rather than *choose again*. A step whose
 chroma did not fit is picked as the colour that was drawn rather than the one
 the curves asked for: nobody should be able to choose a colour they were never
-shown, and the scheme's in-gamut promise survives. Modal, which is what makes
-Escape close it, a click anywhere else close it, and the board's own Space
-stand down — `spaceRolls` already skips a press while a dialog is open, so the
-strip cannot be re-rolled out from under the pointer.
+shown, and the scheme's in-gamut promise survives.
+
+It was a modal `<dialog>` first, for the Escape and the click-away that come
+free with one, and that was wrong in a way worth recording: `showModal` makes
+the whole document inert, and this board is a wall of colour with nothing else
+on it. The backdrop had to stay transparent — the other colours are exactly
+what the choice is being made against — so what you got was every bar lit,
+nothing dimmed, and none of it answering. It read as an application that had
+hung, and it was reported as one. It is a panel inside the bar now, dismissed
+by hand on Escape, on a press outside it, and on the pointer leaving; the
+board behind stays alive while you choose. `spaceRolls` had to learn about it,
+since the guard it used looked for `dialog[open]` and a panel is not one —
+`OVERLAY_SELECTOR` names both, so a press meant to choose a shade cannot roll
+five new colours instead.
 
 **The other half is called RAMPS, and SCHEME is what opens.** The switch said
 `TINTS & SHADES`, which is what the tool made when it was the whole tool; beside
@@ -442,12 +452,12 @@ quick-add's colour is now something they can name rather than bound.
 | `src/state/mode.ts` | the two halves, and which one opens |
 | `src/ui/SchemeBoard.tsx` | the board, the toolbar, the keyboard |
 | `src/ui/SchemeBar.tsx` | one colour, full height |
-| `src/ui/ShadePicker.tsx` | that colour's tints and shades, over its bar |
+| `src/ui/ShadePicker.tsx` | that colour's tints and shades, inside its bar |
 | `src/ui/SchemeExportDialog.tsx` | text, PNG and SVG |
 | `src/ui/ModeSwitch.tsx` | the masthead control |
 | `src/export/scheme.ts` | a slot dressed as a `Swatch` |
 
 Tests: 23 in `color/scheme.test.ts`, 41 in `state/scheme.test.ts` (reducer,
 undo, and the link round-trip), 5 in `state/random.test.ts`, and more in
-`App.test.tsx` for the board, the export, the shades and which half opens. 573
+`App.test.tsx` for the board, the export, the shades and which half opens. 574
 across the suite, all green.
