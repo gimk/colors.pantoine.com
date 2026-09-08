@@ -3,6 +3,7 @@ import type { HarmonyId } from '../color/harmony'
 import { mapToGamut, type Gamut, type Oklch } from '../color/oklch'
 import type { ProfileId, RuleId, Slot } from '../color/scheme'
 import { canRedo, canUndo, initHistory, withHistory } from './history'
+import { rollSeed } from './random'
 import {
   coalesceKey,
   createScheme,
@@ -129,7 +130,7 @@ export function useScheme(seed: Seed, gamut: Gamut): SchemeApi {
     // The seed is rolled here and travels in the action, so the reducer stays
     // pure and an undo replays to the colours it produced the first time.
     generate: useCallback(
-      () => send({ type: 'generate', seed: (Math.random() * 2 ** 32) >>> 0 }),
+      () => send({ type: 'generate', seed: rollSeed() }),
       [send],
     ),
     toggleLock: useCallback((id: string) => send({ type: 'toggleLock', id }), [send]),

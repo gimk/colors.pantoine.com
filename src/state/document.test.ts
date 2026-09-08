@@ -29,6 +29,15 @@ import {
 const run = (state: DocumentState, ...actions: DocumentAction[]) =>
   actions.reduce(documentReducer, state)
 
+/**
+ * A quick-add, with the seed the reducer no longer rolls for itself.
+ *
+ * A fixed default is what makes these tests deterministic; the two that are
+ * about variation pass a seed of their own, which is the only honest way to
+ * assert on a roll.
+ */
+const newPalette = (seed = 1): DocumentAction => ({ type: 'new', seed })
+
 const hueOf = (hex: string) => parseToOklch(hex)!.h
 
 describe('document', () => {
@@ -48,7 +57,7 @@ describe('document', () => {
   })
 
   it('appends a new palette below and moves the selection to it', () => {
-    const doc = run(createDocument(), { type: 'new' })
+    const doc = run(createDocument(), newPalette())
     expect(doc.palettes).toHaveLength(2)
     expect(selectedEntry(doc)!.id).toBe(doc.palettes[1].id)
     // Named after whatever colour it landed on, which the quick-add varies.
@@ -60,26 +69,46 @@ describe('document', () => {
     // The step is the golden angle, give or take the jitter either side of it
     // — plus a few degrees, since the base is stored as hex and a new one is
     // picked at a fresh lightness and chroma, which quantises differently.
+    // A seed per attempt rather than a fixed one: the claim is about every
+    // roll, so it has to be checked against twenty different rolls.
     for (let attempt = 0; attempt < 20; attempt++) {
-      const doc = run(createDocument(), { type: 'new' })
+      const doc = run(createDocument(), newPalette(attempt))
       const [first, second] = doc.palettes.map((entry) => hueOf(entry.state.config.base))
       const step = normalizeHue(second - first)
       expect(Math.abs(step - NEW_PALETTE_HUE_STEP)).toBeLessThan(HUE_JITTER / 2 + 4)
     }
   })
 
+  it('answers the same way every time it runs one quick-add', () => {
+    // The reducer is a pure function of state and action, which it was not
+    // while it rolled its own randomness. React invokes it more than once for
+    // the same action — twice on every dispatch under StrictMode — so a
+    // reducer that rolled inside handed back a different colour each run and
+    // the one you kept was not the one it first produced.
+    const before = createDocument()
+    const action = newPalette(4242)
+    const base = (state: DocumentState) => state.palettes[1].state.config.base
+    expect(base(run(before, action))).toBe(base(run(before, action)))
+
+    // And a different seed is a different colour, or the seed does nothing.
+    expect(base(run(before, newPalette(1)))).not.toBe(base(run(before, newPalette(2))))
+  })
+
   it('does not hand out the same colour twice in a run of quick-adds', () => {
     // The reason the step is jittered: a fixed one walks the wheel in a cycle
     // and starts handing back colours the document already has.
+    // Each add gets its own seed, which is what the app does: `newPalette`
+    // rolls one per click. Repeating a seed would hold the jitter still and
+    // leave a fixed step, which is the thing this is checking against.
     let doc = createDocument()
-    for (let i = 0; i < MAX_PALETTES - 1; i++) doc = run(doc, { type: 'new' })
+    for (let i = 0; i < MAX_PALETTES - 1; i++) doc = run(doc, newPalette(i))
     const bases = doc.palettes.map((entry) => entry.state.config.base)
     expect(new Set(bases).size).toBe(bases.length)
   })
 
   it('edits only the selected palette', () => {
     // The whole point of the stack: a drag on one ramp must not reach another.
-    const doc = run(createDocument(), { type: 'new' })
+    const doc = run(createDocument(), newPalette())
     const untouched = doc.palettes[0]
     const next = run(doc, {
       type: 'palette',
@@ -94,14 +123,14 @@ describe('document', () => {
   })
 
   it('moves the selection on click, and ignores an id it does not have', () => {
-    const doc = run(createDocument(), { type: 'new' })
+    const doc = run(createDocument(), newPalette())
     const first = doc.palettes[0].id
     expect(selectedEntry(run(doc, { type: 'select', id: first }))!.id).toBe(first)
     expect(run(doc, { type: 'select', id: 'nope' })).toBe(doc)
   })
 
   it('reorders, and stops at both ends of the stack', () => {
-    const doc = run(createDocument(), { type: 'new' }, { type: 'new' })
+    const doc = run(createDocument(), newPalette(), newPalette())
     const [a, b, c] = doc.palettes.map((entry) => entry.id)
 
     const moved = run(doc, { type: 'move', id: c, by: -1 })
@@ -114,7 +143,7 @@ describe('document', () => {
   })
 
   it('reorders palettes by dragging between source and target ids', () => {
-    const doc = run(createDocument(), { type: 'new' }, { type: 'new' })
+    const doc = run(createDocument(), newPalette(), newPalette())
     const [a, b, c] = doc.palettes.map((entry) => entry.id)
 
     const reordered = run(doc, { type: 'reorder', sourceId: c, targetId: a })
@@ -157,7 +186,7 @@ describe('document', () => {
 
   it('will not duplicate past the palette cap, or an id it does not have', () => {
     let doc = createDocument()
-    for (let i = 0; i < MAX_PALETTES - 1; i++) doc = run(doc, { type: 'new' })
+    for (let i = 0; i < MAX_PALETTES - 1; i++) doc = run(doc, newPalette())
     expect(doc.palettes).toHaveLength(MAX_PALETTES)
     expect(run(doc, { type: 'duplicate', id: doc.palettes[0].id })).toBe(doc)
 
@@ -172,7 +201,7 @@ describe('document', () => {
     expect(none.selectedId).toBe('')
     expect(selectedEntry(none)).toBeUndefined()
 
-    const doc = run(one, { type: 'new' }, { type: 'new' })
+    const doc = run(one, newPalette(), newPalette())
     const [a, b, c] = doc.palettes.map((entry) => entry.id)
     const gone = run(doc, { type: 'remove', id: b })
     expect(gone.palettes.map((entry) => entry.id)).toEqual([a, c])
@@ -180,7 +209,7 @@ describe('document', () => {
   })
 
   it('hands the selection to a neighbour when the selected palette goes', () => {
-    const doc = run(createDocument(), { type: 'new' }, { type: 'new' })
+    const doc = run(createDocument(), newPalette(), newPalette())
     const [, b, c] = doc.palettes.map((entry) => entry.id)
     expect(selectedEntry(doc)!.id).toBe(c)
     const gone = run(doc, { type: 'remove', id: c })
@@ -196,7 +225,7 @@ describe('document', () => {
   })
 
   it('updates steps globally across all palettes in the document', () => {
-    const doc = run(createDocument(), { type: 'new' }, { type: 'new' })
+    const doc = run(createDocument(), newPalette(), newPalette())
     expect(doc.palettes).toHaveLength(3)
     for (const p of doc.palettes) {
       expect(p.state.config.steps).toBe(11)
@@ -209,7 +238,7 @@ describe('document', () => {
   })
 
   it('inherits the global step count when creating a new palette', () => {
-    const doc = run(createDocument(), { type: 'setSteps', value: 15 }, { type: 'new' })
+    const doc = run(createDocument(), { type: 'setSteps', value: 15 }, newPalette())
     expect(doc.palettes).toHaveLength(2)
     expect(doc.palettes[0].state.config.steps).toBe(15)
     expect(doc.palettes[1].state.config.steps).toBe(15)
@@ -227,7 +256,7 @@ describe('document', () => {
   })
 
   it('allows editing steps per palette independently when stepsLocked is false', () => {
-    const doc = run(createDocument(), { type: 'new' })
+    const doc = run(createDocument(), newPalette())
     expect(doc.palettes).toHaveLength(2)
     expect(doc.stepsLocked).toBe(true)
 
@@ -254,7 +283,7 @@ describe('document', () => {
   it('synchronizes all palettes to active palette when locking steps back on', () => {
     const doc = run(
       createDocument(),
-      { type: 'new' },
+      newPalette(),
       { type: 'setStepsLocked', value: false },
     )
     const p0Id = doc.palettes[0].id
@@ -286,7 +315,7 @@ describe('document', () => {
     // palette comes back as an 11 and the work is gone.
     const unlocked = run(
       createDocument(),
-      { type: 'new' },
+      newPalette(),
       { type: 'setStepsLocked', value: false },
     )
     const doc = run(unlocked, {
@@ -314,7 +343,7 @@ describe('document', () => {
   })
 
   it('syncs lightness across all palettes and aligns their base steps', () => {
-    const doc = run(createDocument(), { type: 'new' })
+    const doc = run(createDocument(), newPalette())
 
     const customCurve = { start: 0.99, end: 0.12, h1: { x: 0.3, y: 0.8 }, h2: { x: 0.7, y: 0.3 } }
     const withCustom = run(doc, {
@@ -329,7 +358,7 @@ describe('document', () => {
   })
 
   it('syncs chroma curve across all palettes', () => {
-    const doc = run(createDocument(), { type: 'new' })
+    const doc = run(createDocument(), newPalette())
     const customChroma = flat(0.12)
     const withCustom = run(doc, {
       type: 'palette',
@@ -343,7 +372,7 @@ describe('document', () => {
   })
 
   it('syncs hue shift delta curve across palettes', () => {
-    const doc = run(createDocument(), { type: 'new' })
+    const doc = run(createDocument(), newPalette())
     const customHue = flat(10)
     const withCustom = run(doc, {
       type: 'palette',
@@ -357,7 +386,7 @@ describe('document', () => {
   })
 
   it('copies to the palettes named, and to no others', () => {
-    const doc = run(createDocument(), { type: 'new' }, { type: 'new' })
+    const doc = run(createDocument(), newPalette(), newPalette())
     const withCustom = run(doc, {
       type: 'palette',
       action: { type: 'setCurve', key: 'hue', curve: flat(14) },
@@ -375,7 +404,7 @@ describe('document', () => {
   })
 
   it('does nothing when the list of palettes to copy to is empty', () => {
-    const doc = run(createDocument(), { type: 'new' })
+    const doc = run(createDocument(), newPalette())
     const withCustom = run(doc, {
       type: 'palette',
       action: { type: 'setCurve', key: 'hue', curve: flat(14) },
@@ -384,7 +413,7 @@ describe('document', () => {
   })
 
   it('ignores a palette that has since been deleted', () => {
-    const doc = run(createDocument(), { type: 'new' })
+    const doc = run(createDocument(), newPalette())
     const withCustom = run(doc, {
       type: 'palette',
       action: { type: 'setCurve', key: 'hue', curve: flat(14) },
@@ -645,15 +674,15 @@ describe('the document gamut', () => {
   })
 
   it('survives every action that rebuilds the stack', () => {
-    const doc = run(createDocument([], -1, 'rec2020'), { type: 'new' }, { type: 'new' })
+    const doc = run(createDocument([], -1, 'rec2020'), newPalette(), newPalette())
     expect(doc.gamut).toBe('rec2020')
     expect(run(doc, { type: 'remove', id: doc.palettes[0].id }).gamut).toBe('rec2020')
     expect(run(doc, { type: 'setSteps', value: 9 }).gamut).toBe('rec2020')
   })
 
   it('builds a new palette for the gamut the document is in', () => {
-    const wide = run(createDocument(null, -1, 'rec2020'), { type: 'new' })
-    const narrow = run(createDocument(), { type: 'new' })
+    const wide = run(createDocument(null, -1, 'rec2020'), newPalette())
+    const narrow = run(createDocument(), newPalette())
     expect(wide.palettes[1].state.config.chroma).not.toEqual(
       narrow.palettes[1].state.config.chroma,
     )
@@ -695,7 +724,7 @@ describe('the document gamut', () => {
  */
 describe('syncing curves twice', () => {
   const twice = (action: DocumentAction) => {
-    const doc = run(createDocument(), { type: 'new' }, action)
+    const doc = run(createDocument(), newPalette(), action)
     return [doc, run(doc, action)] as const
   }
 
@@ -712,7 +741,7 @@ describe('syncing curves twice', () => {
   it('still applies the first time', () => {
     const doc = run(
       createDocument(),
-      { type: 'new' },
+      newPalette(),
       { type: 'palette', action: { type: 'setCurve', key: 'hue', curve: flat(12) } },
     )
     const synced = run(doc, { type: 'syncChannel', key: 'hue' })
@@ -1070,7 +1099,7 @@ describe('an empty document', () => {
 
   it('adds a palette back, by either route', () => {
     const none = createDocument([])
-    expect(run(none, { type: 'new' }).palettes).toHaveLength(1)
+    expect(run(none, newPalette()).palettes).toHaveLength(1)
 
     const pasted = run(none, { type: 'add', bases: [{ base: '#00ff66' }] })
     expect(pasted.palettes).toHaveLength(1)

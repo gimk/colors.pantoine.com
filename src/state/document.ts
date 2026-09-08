@@ -23,6 +23,7 @@ import {
   type PaletteAction,
   type PaletteState,
 } from './paletteReducer'
+import { mulberry32 } from './random'
 
 /**
  * A document is an ordered stack of palettes plus which one is being edited.
@@ -60,7 +61,8 @@ export type DocumentState = {
 export type DocumentAction =
   /** Forwarded to whichever palette is selected. */
   | { type: 'palette'; action: PaletteAction }
-  | { type: 'new' }
+  /** The seed is rolled by the caller: see `state/random.ts`. */
+  | { type: 'new'; seed: number }
   /** Append one palette per base colour, in the order given. */
   | { type: 'add'; bases: BaseSeed[] }
   | { type: 'select'; id: string }
@@ -197,13 +199,21 @@ const indexOfId = (state: DocumentState, id: string) =>
  * dark or very washed-out base gives you a row of equally unusable ramps. The
  * chroma is taken as a fraction of what this particular hue and lightness can
  * actually hold, so a new base is vivid without being clipped on arrival.
+ *
+ * The wandering is `rng`'s, and `rng` is the caller's, seeded from the action.
+ * A reducer that rolled its own would answer differently every time it ran,
+ * and React runs it more than once for the same action.
  */
-function steppedBase(from: PaletteConfig | undefined, gamut: Gamut = 'srgb'): string {
+function steppedBase(
+  from: PaletteConfig | undefined,
+  gamut: Gamut = 'srgb',
+  rng: () => number = Math.random,
+): string {
   if (!from) return FALLBACK_BASE
   const base = resolveBase(from)
-  const h = normalizeHue(base.h + NEW_PALETTE_HUE_STEP + (Math.random() - 0.5) * HUE_JITTER)
-  const l = clamp(0.48 + (Math.random() - 0.5) * LIGHTNESS_JITTER, 0.38, 0.82)
-  const c = clamp(maxChromaFor(l, h, gamut) * (0.65 + Math.random() * 0.28), 0.08, 0.32)
+  const h = normalizeHue(base.h + NEW_PALETTE_HUE_STEP + (rng() - 0.5) * HUE_JITTER)
+  const l = clamp(0.48 + (rng() - 0.5) * LIGHTNESS_JITTER, 0.38, 0.82)
+  const c = clamp(maxChromaFor(l, h, gamut) * (0.65 + rng() * 0.28), 0.08, 0.32)
   return toHex({ l, c, h })
 }
 
@@ -484,7 +494,7 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
       // from a hue that is not there.
       const currentConfig = selectedEntry(state)?.state.config
       const currentSteps = currentConfig?.steps ?? DEFAULT_STEPS
-      const base = steppedBase(currentConfig, state.gamut)
+      const base = steppedBase(currentConfig, state.gamut, mulberry32(action.seed))
       const taken = new Set(state.palettes.map((entry) => entry.name))
       const entry = makeEntry(
         base,

@@ -7,11 +7,11 @@ import {
   generateScheme,
   MAX_SLOTS,
   MIN_SLOTS,
-  mulberry32,
   type ProfileId,
   type RuleId,
   type Slot,
 } from '../color/scheme'
+import { mulberry32 } from './random'
 
 /**
  * A scheme is a short, ordered run of flat colours, some of them held.

@@ -16,6 +16,7 @@ import {
 import type { Gamut } from '../color/oklch'
 import { canRedo, canUndo, initHistory, withHistory } from './history'
 import { anyEdited } from './paletteReducer'
+import { rollSeed } from './random'
 
 /**
  * Ramps are cached against the config object that produced them and the active gamut.
@@ -152,7 +153,9 @@ export function useDocument(seed: Seed): DocumentApi {
     canRedo: canRedo(history),
     undo: useCallback(() => dispatch({ type: 'undo' }), []),
     redo: useCallback(() => dispatch({ type: 'redo' }), []),
-    newPalette: useCallback(() => send({ type: 'new' }), [send]),
+    // The seed is rolled here and travels in the action, so the reducer stays
+    // pure: the same quick-add always lands on the same colour.
+    newPalette: useCallback(() => send({ type: 'new', seed: rollSeed() }), [send]),
     addPalettes: useCallback((bases: BaseSeed[]) => send({ type: 'add', bases }), [send]),
     select: useCallback((id: string) => send({ type: 'select', id }), [send]),
     duplicate: useCallback((id: string) => send({ type: 'duplicate', id }), [send]),

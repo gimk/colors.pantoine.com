@@ -2,9 +2,9 @@
 
 A plan, not a spec. Written against the codebase as it stands at `d4398b3`.
 
-> **Status: built.** Steps 1–6 landed as written. What changed on the way, and
-> what is still open, is recorded at the foot of this file under *What actually
-> shipped*.
+> **Status: built.** Steps 1–6 landed as written, and step 7 all but the bar
+> resize, which was dropped. What changed on the way is recorded at the foot of
+> this file under *What actually shipped*.
 
 The app today is a tint-and-shade tool: you hand it a colour, it derives a ramp
 through three Bézier curves in OKLCH. The only help it offers in *choosing* that
@@ -317,6 +317,8 @@ cannot be guaranteed to land on the same colour. The seed-in-the-action pattern
 above fixes that class of bug for SCHEME; applying it to `new` as well is a
 small, separate cleanup.
 
+> **Done**, though not for the reason given here — see the foot of the file.
+
 ---
 
 ## What actually shipped
@@ -353,10 +355,15 @@ export as `Swatch`es numbered in scheme order (`--brand-1` … `--brand-5`), not
 by lightness token: five colours chosen to sit together are not five tints of
 anything.
 
-**Bar resize is not done.** Step 7 listed it and the bars are still equal
-shares of the row. `splitPair` in `useReview.ts` is the mechanism, and it wants
-a stored per-slot weight the way the review board has one. Worth doing; nothing
-else depends on it.
+**Bar resize is dropped.** Step 7 listed it, and the bars stay equal shares of
+the row. The mechanism was there for the taking — `splitPair` in `useReview.ts`
+is pure and generic, and the review board's ruler ticks are the pattern — but
+the review board resizes because it is comparing ramps of different lengths
+against each other, and a scheme is a handful of colours of equal standing. A
+weight per slot would be a composition tool bolted to a colour picker, and it
+would then have to answer whether widths travel in the link, which is the
+question that gives the whole thing away: they are not part of what a scheme
+*is*.
 
 **The contrast ladder was built and then removed.** `contrastLadder` marked any
 boundary below 1.25:1 as `flat`. It measured WCAG contrast, which is a
@@ -379,23 +386,38 @@ stack, since centring costs more than it is worth once they collide. The review
 board keeps its own bar and is untouched: it is a way of looking at a document
 rather than a third mode, so the switch has no business there.
 
-The `steppedBase()` cleanup at the foot of this file is also still open — it
-was flagged as separate work and stayed separate.
+**The `steppedBase()` cleanup is done**, and the reason for it turned out not
+to be quite the one written at the foot of this file. Undo was never actually
+at risk: `history.ts` keeps snapshots, so stepping back restores a state rather
+than replaying the action that made it. The live bug is React's own: a reducer
+is invoked more than once for the same action — twice on every dispatch under
+StrictMode, which exists precisely to surface this — and one that rolled inside
+answered differently each time, so the colour that survived was not the colour
+the first run produced.
+
+`{ type: 'new' }` therefore carries a seed, exactly as `generate` does, and
+`mulberry32` moved out of `color/scheme.ts` into `state/random.ts` beside
+`rollSeed`, which is now the one line in the app that calls `Math.random`. It
+belongs in `state/` rather than beside the generators because a seed is a
+property of the *action*: `color/` takes an `rng` and asks nothing about where
+it came from. The document tests take a seed with the action too, so the
+quick-add's colour is now something they can name rather than bound.
 
 ### Where it lives
 
 | | |
 | --- | --- |
-| `src/color/scheme.ts` | profiles, `hueSequence`, `generateScheme`, `mulberry32` |
+| `src/color/scheme.ts` | profiles, `hueSequence`, `generateScheme` |
 | `src/ui/Masthead.tsx` | the shared header, identical in both modes |
 | `src/state/scheme.ts` | `SchemeState`, the reducer, `coalesceKey` |
 | `src/state/useScheme.ts` | the hook, over the existing `withHistory` |
+| `src/state/random.ts` | `mulberry32`, and the one `Math.random` in the app |
 | `src/ui/SchemeBoard.tsx` | the board, the toolbar, the keyboard |
 | `src/ui/SchemeBar.tsx` | one colour, full height |
 | `src/ui/SchemeExportDialog.tsx` | text, PNG and SVG |
 | `src/ui/ModeSwitch.tsx` | the masthead control |
 | `src/export/scheme.ts` | a slot dressed as a `Swatch` |
 
-Tests: 29 in `color/scheme.test.ts`, 34 in `state/scheme.test.ts` (reducer,
-undo, and the link round-trip), 24 more in `App.test.tsx` for the board and the
-export. 520 across the suite, all green.
+Tests: 23 in `color/scheme.test.ts`, 41 in `state/scheme.test.ts` (reducer,
+undo, and the link round-trip), 5 in `state/random.test.ts`, and more in
+`App.test.tsx` for the board and the export. 559 across the suite, all green.

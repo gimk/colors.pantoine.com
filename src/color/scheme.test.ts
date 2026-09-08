@@ -8,12 +8,12 @@ import {
   hueSequence,
   MAX_SLOTS,
   MIN_SLOTS,
-  mulberry32,
   PROFILES,
   profileFor,
   type ProfileId,
   type Slot,
 } from './scheme'
+import { mulberry32 } from '../state/random'
 
 const slotsOf = (count: number, locked: number[] = []): Slot[] =>
   Array.from({ length: count }, (_unused, index) => ({
@@ -24,29 +24,6 @@ const slotsOf = (count: number, locked: number[] = []): Slot[] =>
 
 const gamuts = GAMUTS.map((option) => option.id)
 const profileIds = PROFILES.map((profile) => profile.id)
-
-describe('mulberry32', () => {
-  it('is reproducible from a seed', () => {
-    const a = mulberry32(1)
-    const b = mulberry32(1)
-    for (let n = 0; n < 20; n += 1) expect(a()).toBe(b())
-  })
-
-  it('stays inside [0, 1)', () => {
-    const rng = mulberry32(12345)
-    for (let n = 0; n < 500; n += 1) {
-      const value = rng()
-      expect(value).toBeGreaterThanOrEqual(0)
-      expect(value).toBeLessThan(1)
-    }
-  })
-
-  it('does not immediately repeat itself', () => {
-    const rng = mulberry32(7)
-    const rolls = Array.from({ length: 50 }, () => rng())
-    expect(new Set(rolls).size).toBe(rolls.length)
-  })
-})
 
 describe('hue sequence', () => {
   const noJitter = () => 0.5

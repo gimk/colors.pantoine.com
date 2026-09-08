@@ -11,6 +11,9 @@ import {
 } from './document'
 import { canRedo, canUndo, COALESCE_MS, initHistory, withHistory } from './history'
 
+/** A quick-add. Its seed is fixed: none of these tests turn on the colour. */
+const NEW: DocumentAction = { type: 'new', seed: 1 }
+
 const reducer = withHistory(documentReducer, {
   coalesce: coalesceKey,
   transient: isTransient,
@@ -144,8 +147,8 @@ describe('history', () => {
 
   it('steps back and forward through the stack', () => {
     const s = session()
-    s.edit({ type: 'new' })
-    s.edit({ type: 'new' })
+    s.edit(NEW)
+    s.edit(NEW)
     expect(s.present.palettes).toHaveLength(3)
     s.undo().undo()
     expect(s.present.palettes).toHaveLength(1)
@@ -158,7 +161,7 @@ describe('history', () => {
 
   it('brings back a deleted palette, exactly as it was', () => {
     const s = session()
-    s.edit({ type: 'new' })
+    s.edit(NEW)
     const doomed = s.present.palettes[1]
     s.edit({ type: 'remove', id: doomed.id })
     expect(s.present.palettes).toHaveLength(1)
@@ -170,11 +173,11 @@ describe('history', () => {
 
   it('abandons the redo branch once you edit again', () => {
     const s = session()
-    s.edit({ type: 'new' })
-    s.edit({ type: 'new' })
+    s.edit(NEW)
+    s.edit(NEW)
     s.undo()
     expect(s.redoDepth).toBe(1)
-    s.edit({ type: 'new' })
+    s.edit(NEW)
     expect(s.redoDepth).toBe(0)
     expect(s.present.palettes).toHaveLength(3)
   })
@@ -205,7 +208,7 @@ describe('history', () => {
   it('does not put selection in the undo stack', () => {
     // Undo steps back through edits, not through where you were looking.
     const s = session()
-    s.edit({ type: 'new' })
+    s.edit(NEW)
     const first = s.present.palettes[0].id
     s.edit({ type: 'select', id: first })
     expect(s.depth).toBe(1)
@@ -220,7 +223,7 @@ describe('history', () => {
     const capped = withHistory(documentReducer, { coalesce: coalesceKey, limit: 3 })
     let state = initHistory(createDocument())
     for (let i = 0; i < 10; i++) {
-      state = capped(state, { type: 'do', action: { type: 'new' }, at: i * 10_000 })
+      state = capped(state, { type: 'do', action: NEW, at: i * 10_000 })
     }
     expect(state.past).toHaveLength(3)
     expect(state.present.palettes).toHaveLength(11)
