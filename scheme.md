@@ -386,6 +386,21 @@ stack, since centring costs more than it is worth once they collide. The review
 board keeps its own bar and is untouched: it is a way of looking at a document
 rather than a third mode, so the switch has no business there.
 
+**A third way to set a colour: its own shades.** A tool on the bar opens the
+tints and shades of that colour over it, one click each. It is deliberately
+not a lightness ladder invented for the board — it is `createPalette` and
+`generateRamp` at the document's gamut, so the strip is the ramp the other
+half would build from this colour and the step you pick is one the tool
+already stands behind, chroma held to what the hue can carry there. The colour
+you are on is in the strip, marked, wherever its own lightness puts it, so the
+gesture reads as *move from here* rather than *choose again*. A step whose
+chroma did not fit is picked as the colour that was drawn rather than the one
+the curves asked for: nobody should be able to choose a colour they were never
+shown, and the scheme's in-gamut promise survives. Modal, which is what makes
+Escape close it, a click anywhere else close it, and the board's own Space
+stand down — `spaceRolls` already skips a press while a dialog is open, so the
+strip cannot be re-rolled out from under the pointer.
+
 **The other half is called RAMPS, and SCHEME is what opens.** The switch said
 `TINTS & SHADES`, which is what the tool made when it was the whole tool; beside
 a one-word label it was three words describing the technique rather than naming
@@ -427,11 +442,12 @@ quick-add's colour is now something they can name rather than bound.
 | `src/state/mode.ts` | the two halves, and which one opens |
 | `src/ui/SchemeBoard.tsx` | the board, the toolbar, the keyboard |
 | `src/ui/SchemeBar.tsx` | one colour, full height |
+| `src/ui/ShadePicker.tsx` | that colour's tints and shades, over its bar |
 | `src/ui/SchemeExportDialog.tsx` | text, PNG and SVG |
 | `src/ui/ModeSwitch.tsx` | the masthead control |
 | `src/export/scheme.ts` | a slot dressed as a `Swatch` |
 
 Tests: 23 in `color/scheme.test.ts`, 41 in `state/scheme.test.ts` (reducer,
 undo, and the link round-trip), 5 in `state/random.test.ts`, and more in
-`App.test.tsx` for the board, the export and which half opens. 567 across the
-suite, all green.
+`App.test.tsx` for the board, the export, the shades and which half opens. 573
+across the suite, all green.

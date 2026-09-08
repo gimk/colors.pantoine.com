@@ -2497,6 +2497,66 @@ button.newpal__cand:hover {
   }
 }
 
+/* --- shades ------------------------------------------------------------
+
+   One bar's colour, opened out into the ramp the other half of the tool would
+   build from it, laid over the bar it belongs to. Inset on every side so the
+   bar's own colour frames it: a full column of one hue looks like a board of
+   its own, and the frame is what says which colour is being changed. */
+.shades {
+  /* The UA sheet pins a dialog to both block edges and centres it with auto
+     margins; the strip carries its own box, measured off the bar. */
+  inset: auto;
+  border: none;
+  padding: 0;
+  background: none;
+  overflow: hidden;
+  z-index: 100;
+}
+
+/* Nothing dimmed behind it. The strip covers the bar it belongs to, and the
+   rest of the window is the other colours in the scheme — which are exactly
+   what this choice is being made against, so dimming them would hide the
+   reason for it. */
+.shades::backdrop {
+  background: transparent;
+}
+
+.shades__strip {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* An equal share each, so the strip reads as a ramp from top to bottom
+   rather than as a list. The fill is set per step as `background-color`, not
+   the shorthand, so the hover bar every button in the app draws survives —
+   here it is the only thing marking the step under the pointer. */
+.shades__step {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  font-size: var(--text-xs);
+}
+
+/* The value only where it is being looked at. Twenty-one of them at once is a
+   table, and the thing being chosen here is a colour. The step you are
+   already on keeps its own, since that is the mark saying where you are. */
+.shades__value {
+  opacity: 0;
+  transition: opacity 90ms linear;
+}
+
+.shades__step:hover .shades__value,
+.shades__step:focus-visible .shades__value,
+.shades__step.is-here .shades__value {
+  opacity: 1;
+}
+
 /* --- empty document ---------------------------------------------------- */
 
 /* Takes the room the stack would have had, so the pair sits in the middle of

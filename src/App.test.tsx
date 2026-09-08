@@ -2,7 +2,15 @@ import css from './styles.css?raw'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { App } from './App'
-import { formatColor, mapToGamut, parseToOklch, toHex, type Oklch } from './color/oklch'
+import {
+  formatColor,
+  isInGamut,
+  mapToGamut,
+  parseToOklch,
+  toHex,
+  type Gamut,
+  type Oklch,
+} from './color/oklch'
 import { MAX_SLOTS, type Slot } from './color/scheme'
 import { schemeReducer, type SchemeState } from './state/scheme'
 import { buildText, TEXT_FORMATS } from './export/formats'
@@ -11,6 +19,7 @@ import type { SchemeApi } from './state/useScheme'
 import { SchemeBoard, spaceRolls, type KeyContext } from './ui/SchemeBoard'
 import { SchemeExportDialog } from './ui/SchemeExportDialog'
 import { ModeSwitch } from './ui/ModeSwitch'
+import { emitted, ShadePicker, SHADE_STEPS } from './ui/ShadePicker'
 import { createPalette, DEFAULT_STEPS } from './color/presets'
 import { chromaCeilingProfile, generateRamp } from './color/ramp'
 import { MAX_PALETTES } from './state/document'
@@ -1804,6 +1813,94 @@ describe('a scheme bar’s tools', () => {
     const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
     expect(rules).toContain('.sbar__tools:focus-within')
     expect(rules).not.toContain('.sbar:focus-within')
+  })
+})
+
+describe('the shades of one bar', () => {
+  const color: Oklch = { l: 0.62, c: 0.14, h: 18 }
+
+  const strip = (gamut: Gamut = 'srgb', vision: Vision = 'normal') =>
+    renderToStaticMarkup(
+      <ShadePicker
+        color={color}
+        gamut={gamut}
+        vision={vision}
+        format="hex"
+        name="test"
+        onPick={() => {}}
+        anchor={{ current: null }}
+        trigger={(open) => (
+          <button type="button" onClick={open}>
+            shades
+          </button>
+        )}
+        defaultOpen
+      />,
+    )
+
+  it('offers the ramp the other half of the tool would build', () => {
+    // Not a lightness ladder of its own: the strip is the editor's own
+    // default ramp for this colour, so what you pick here is a step you could
+    // have got by sending the scheme across and reading it off there.
+    const html = strip()
+    const expected = generateRamp(
+      createPalette(formatColor(color, 'oklch'), SHADE_STEPS, 'srgb'),
+      'srgb',
+    )
+    expect(html.match(/class="shades__step/g)).toHaveLength(SHADE_STEPS)
+    for (const swatch of expected) {
+      expect(html).toContain(`background-color:${swatch.displayColor}`)
+    }
+  })
+
+  it('marks the step the colour is already on, exactly once', () => {
+    // The strip is a move from where you are, so where you are has to be in
+    // it — and picking it again is changing your mind, not a mistake.
+    const html = strip()
+    expect(html.match(/shades__step is-here/g)).toHaveLength(1)
+    expect(html).toContain('where this colour already is')
+  })
+
+  it('picks the colour the screen showed, not the one the curves asked for', () => {
+    // A step whose chroma did not fit was drawn with the chroma given back.
+    // Picking the request instead would put a colour in the scheme that was
+    // never on the strip, and break the promise that every slot is in gamut.
+    const wide = generateRamp(
+      createPalette('oklch(0.62 0.29 18)', SHADE_STEPS, 'srgb'),
+      'srgb',
+    )
+    const clipped = wide.filter((swatch) => swatch.clipped)
+    expect(clipped.length).toBeGreaterThan(0)
+    for (const swatch of clipped) {
+      expect(isInGamut(swatch.oklch, 'srgb')).toBe(false)
+      expect(isInGamut(emitted(swatch), 'srgb')).toBe(true)
+    }
+  })
+
+  it('paints the strip under the eye in force, and reads the value against it', () => {
+    // The same rule the bars follow: a simulation changes the ground and the
+    // ink, never the colour that is being chosen.
+    const html = strip('srgb', 'deuteranopia')
+    const seen = simulate(emitted(generateRamp(
+      createPalette(formatColor(color, 'oklch'), SHADE_STEPS, 'srgb'),
+      'srgb',
+    )[0]), 'deuteranopia')
+    expect(html).toContain(`background-color:${mapToGamut(seen, 'srgb').displayColor}`)
+  })
+
+  it('leaves the hover bar every other button draws', () => {
+    // The fill is set per step as `background-color`; the `background`
+    // shorthand would reset `background-image`, which is the bar, and on a
+    // strip of twenty-one colours it is the only mark on the one under the
+    // pointer.
+    expect(strip()).not.toMatch(/class="shades__step[^"]*" style="background:/)
+    expect(declarations('.shades__step')).not.toContain('background:')
+  })
+
+  it('dims nothing behind it', () => {
+    // The rest of the window is the other colours in the scheme, which are
+    // what this choice is being made against.
+    expect(declarations('.shades::backdrop')).toContain('background: transparent')
   })
 })
 

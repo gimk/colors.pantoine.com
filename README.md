@@ -28,6 +28,10 @@ rebranding.
   classic harmonies, or Auto, which rolls one and tells you which. The weight
   profile spreads lightness and chroma across the colours, so a scheme comes out
   with real tonal range instead of five colours at the same weight.
+- **Shades without leaving the board.** Hover a colour for a strip of its
+  tints and shades — the ramp the other half would build from it — and click
+  one to take it. The step you are on is marked, so it is a move from where
+  you are.
 - **Chroma is capped at the gamut, per colour.** Every generated colour is
   inside the target gamut by construction, so none of them arrives clipped.
 - **Both directions.** Send a scheme to the ramp document and get a palette per
