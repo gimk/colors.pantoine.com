@@ -392,8 +392,14 @@ not a lightness ladder invented for the board — it is `createPalette` and
 `generateRamp` at the document's gamut, so the strip is the ramp the other
 half would build from this colour and the step you pick is one the tool
 already stands behind, chroma held to what the hue can carry there. The colour
-you are on is in the strip, marked, wherever its own lightness puts it, so the
-gesture reads as *move from here* rather than *choose again*. A step whose
+you are on is in the strip, wherever its own lightness puts it, so the gesture
+reads as *move from here* rather than *choose again*. It is marked with a dot
+in that step's own ink rather than by printing its value: the value was the
+only text on the strip, which made it read as a label on the whole thing
+instead of a position in it, and it is the one value you already know. The
+step under the pointer gets the reading instead — value and name both, since
+two neighbouring shades differ by a step of lightness and the name is most of
+what tells them apart. A step whose
 chroma did not fit is picked as the colour that was drawn rather than the one
 the curves asked for: nobody should be able to choose a colour they were never
 shown, and the scheme's in-gamut promise survives.
@@ -459,5 +465,5 @@ quick-add's colour is now something they can name rather than bound.
 
 Tests: 23 in `color/scheme.test.ts`, 41 in `state/scheme.test.ts` (reducer,
 undo, and the link round-trip), 5 in `state/random.test.ts`, and more in
-`App.test.tsx` for the board, the export, the shades and which half opens. 574
+`App.test.tsx` for the board, the export, the shades and which half opens. 576
 across the suite, all green.

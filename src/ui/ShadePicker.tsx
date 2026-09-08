@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
+import { nameForColor } from '../color/names'
 import { formatColor, mapToGamut, type Format, type Gamut, type Oklch } from '../color/oklch'
 import { createPalette, MAX_STEPS } from '../color/presets'
 import { generateRamp, type Swatch } from '../color/ramp'
@@ -126,6 +127,11 @@ export function ShadePicker({ color, gamut, vision, format, onPick, onClose }: P
         const background =
           vision === 'normal' ? swatch.displayColor : mapToGamut(seen, gamut).displayColor
         const value = formatColor(shown, format, gamut)
+        // The 30k list is already loaded and cached — every bar is named off
+        // it — so naming the whole strip when it opens costs a fraction of a
+        // millisecond, and a name is most of what tells two neighbouring
+        // shades apart at a glance.
+        const name = nameForColor(swatch.hex)
 
         return (
           <button
@@ -133,13 +139,25 @@ export function ShadePicker({ color, gamut, vision, format, onPick, onClose }: P
             type="button"
             className={`shades__step${swatch.isBase ? ' is-here' : ''}`}
             style={{ backgroundColor: background, color: inkOn(seen) }}
+            aria-current={swatch.isBase || undefined}
             onClick={() => {
               onPick(shown)
               onClose()
             }}
-            title={swatch.isBase ? `${value} — where this colour already is` : `Use ${value}`}
+            title={
+              swatch.isBase
+                ? `${name} · ${value} — where this colour already is`
+                : `Use ${name} · ${value}`
+            }
           >
-            <span className="shades__value">{value}</span>
+            {/* Both readings on the step under the pointer: the value is what
+                a click takes, the name is what makes it memorable. Absolutely
+                positioned, so nothing moves when they appear and the mark on
+                the current step can sit in the same place. */}
+            <span className="shades__read">
+              <span className="shades__value">{value}</span>
+              <span className="shades__name">{name}</span>
+            </span>
           </button>
         )
       })}

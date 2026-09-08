@@ -11,6 +11,7 @@ import {
   type Gamut,
   type Oklch,
 } from './color/oklch'
+import { nameForColor } from './color/names'
 import { MAX_SLOTS, type Slot } from './color/scheme'
 import { schemeReducer, type SchemeState } from './state/scheme'
 import { buildText, TEXT_FORMATS } from './export/formats'
@@ -1854,6 +1855,38 @@ describe('the shades of one bar', () => {
     const html = strip()
     expect(html.match(/shades__step is-here/g)).toHaveLength(1)
     expect(html).toContain('where this colour already is')
+    expect(html.match(/aria-current="true"/g)).toHaveLength(1)
+  })
+
+  it('marks it rather than printing it', () => {
+    // The value on that one step was the only text on the strip, so it read
+    // as a label on the whole thing rather than as a position in it — and it
+    // is the one value you already know. A dot in the step's own ink instead,
+    // out of the way under the pointer where the reading takes its place.
+    const mark = declarations('.shades__step.is-here::after')
+    expect(mark).toContain('border-radius: 50%')
+    expect(mark).toContain('background-color: currentColor')
+    expect(declarations('.shades__step.is-here:focus-visible::after')).toContain('opacity: 0')
+
+    // No rule keeps a reading up on the current step.
+    const shown = css.replace(/\/\*[\s\S]*?\*\//g, '').match(/[^}]*\.shades__read \{/g) ?? []
+    expect(shown.join()).not.toContain('is-here')
+  })
+
+  it('names the shade under the pointer, as well as reading its value', () => {
+    // Two neighbouring steps differ by a step of lightness; the name is most
+    // of what tells them apart at a glance.
+    const html = strip()
+    const expected = generateRamp(
+      createPalette(formatColor(color, 'oklch'), SHADE_STEPS, 'srgb'),
+      'srgb',
+    )
+    expect(html).toContain(`<span class="shades__name">${nameForColor(expected[0].hex)}</span>`)
+    expect(html.match(/class="shades__name"/g)).toHaveLength(SHADE_STEPS)
+
+    // Both held back until the step is under the pointer or focused.
+    expect(declarations('.shades__read')).toContain('opacity: 0')
+    expect(declarations('.shades__step:focus-visible .shades__read')).toContain('opacity: 0.92')
   })
 
   it('picks the colour the screen showed, not the one the curves asked for', () => {
@@ -1902,7 +1935,9 @@ describe('the shades of one bar', () => {
   it('sits inside its bar and leaves the board behind it alive', () => {
     const shades = declarations('.shades')
     expect(shades).toContain('position: absolute')
-    expect(shades).toContain('inset: var(--space-4)')
+    // Edge to edge over the bar: a frame of the colour being replaced is a
+    // border to judge twenty-one new ones against.
+    expect(shades).toContain('inset: 0')
     expect(css).not.toContain('.shades::backdrop')
     expect(strip()).not.toContain('<dialog')
   })

@@ -2321,17 +2321,25 @@ button.newpal__cand:hover {
 
 /* Only under the pointer, and always for a locked bar — a lock you cannot see
    without hunting for it is one you will forget you set. */
+/* A column in the middle of the bar.
+
+   They were a row in the top corner, which is where chrome goes on a page
+   with a layout — and this mode has none. On a full-bleed colour the corner
+   is just the place furthest from where you are looking, and a row of four
+   put the last of them a third of the way across a narrow bar. The middle is
+   where the pointer already is, since the bar is one target. */
 .sbar__tools {
   position: absolute;
-  top: var(--space-5);
-  left: var(--space-6);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 3;
   display: flex;
+  flex-direction: column;
   gap: var(--space-2);
   opacity: 0;
   /* Transparent is not gone: without this the hidden tools still take the
-     clicks meant for the colour under them, and they sit right where the
-     insert strip for this bar's left edge wants to be. */
+     clicks meant for the colour under them. */
   pointer-events: none;
   transition: opacity 90ms linear;
 }
@@ -2495,6 +2503,12 @@ button.newpal__cand:hover {
   .scheme__seam::before {
     inset: -14px 0;
   }
+
+  /* The bars are wide and short now, so the tools turn with them: four of
+     them stacked would be most of a stacked bar's height. */
+  .sbar__tools {
+    flex-direction: row;
+  }
 }
 
 /* --- shades ------------------------------------------------------------
@@ -2502,13 +2516,13 @@ button.newpal__cand:hover {
    One bar's colour, opened out into the ramp the other half of the tool would
    build from it, laid over the bar it belongs to.
 
-   Inside the bar rather than over the window, and inset on every side so the
-   bar's own colour frames it: a full column of one hue with nothing around it
-   looks like a board of its own, and the frame is what says whose shades
-   these are. */
+   Edge to edge over the bar. The mode's whole brief is that the colour is not
+   competing with anything, and a strip that left a frame of the old colour
+   round the new ones would be asking you to judge twenty-one shades against a
+   border of the one you are replacing. */
 .shades {
   position: absolute;
-  inset: var(--space-4);
+  inset: 0;
   /* Over the face, which covers the whole bar, and over the tools at 3. */
   z-index: 4;
   display: flex;
@@ -2516,11 +2530,13 @@ button.newpal__cand:hover {
   overflow: hidden;
 }
 
-/* An equal share each, so the strip reads as a ramp from top to bottom
-   rather than as a list. The fill is set per step as `background-color`, not
-   the shorthand, so the hover bar every button in the app draws survives —
-   here it is the only thing marking the step under the pointer. */
+/* An equal share each, so the strip reads as a ramp from top to bottom rather
+   than as a list. The fill is set per step as `background-color`, not the
+   shorthand, so the hover bar every button in the app draws survives — with
+   the readings held back it is half of what marks the step under the
+   pointer. */
 .shades__step {
+  position: relative;
   flex: 1;
   /* Both, since the strip turns to a row on a narrow window. */
   min-height: 0;
@@ -2530,21 +2546,81 @@ button.newpal__cand:hover {
   justify-content: center;
   padding: 0;
   border: none;
-  font-size: var(--text-xs);
 }
 
-/* The value only where it is being looked at. Twenty-one of them at once is a
-   table, and the thing being chosen here is a colour. The step you are
-   already on keeps its own, since that is the mark saying where you are. */
-.shades__value {
+/* Only where it is being looked at. Twenty-one values and names at once is a
+   table, and the thing being chosen here is a colour.
+
+   Absolutely positioned rather than laid out: the steps are thin, a reading
+   that took part in the layout would set the step's minimum height, and
+   nothing may move when the pointer arrives. */
+.shades__read {
+  position: absolute;
+  /* Centred outright rather than left to the static position a flex
+     container gives an absolute child: the rule holds, but this is one line
+     and does not have to be looked up. */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  max-width: 100%;
+  padding: 0 var(--space-4);
   opacity: 0;
+  transition: opacity 90ms linear;
+  /* The step under it is the click target; the reading is only a reading. */
+  pointer-events: none;
+}
+
+.shades__step:hover .shades__read,
+.shades__step:focus-visible .shades__read {
+  opacity: 0.92;
+}
+
+.shades__value {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
+  white-space: nowrap;
+}
+
+/* Quieter than the value, as on the bars: the value is what a click takes,
+   the name is what makes it memorable. */
+.shades__name {
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-normal);
+  text-transform: none;
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Where the colour already is.
+
+   A mark rather than a reading. Printing the value on this one step made it
+   the only text on the strip, so it read as a label attached to the strip
+   rather than as a position in it — and it was the one value you already
+   know. A dot in the step's own ink says *here* and nothing else. It gets out
+   of the way under the pointer, where the reading takes its place. */
+.shades__step.is-here::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: currentColor;
+  opacity: 0.65;
   transition: opacity 90ms linear;
 }
 
-.shades__step:hover .shades__value,
-.shades__step:focus-visible .shades__value,
-.shades__step.is-here .shades__value {
-  opacity: 1;
+.shades__step.is-here:hover::after,
+.shades__step.is-here:focus-visible::after {
+  opacity: 0;
 }
 
 /* The strip turns with the bars, which stack on a narrow window. Twenty-one
