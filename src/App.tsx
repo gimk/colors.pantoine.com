@@ -11,21 +11,23 @@ import type { Vision } from './color/vision'
 import { DEFAULT_STEPS, MAX_STEPS, MIN_STEPS } from './color/presets'
 import { resolveBase } from './color/ramp'
 import { MAX_SLOTS, type Slot } from './color/scheme'
+import type { Mode } from './state/mode'
 import { newSlot } from './state/scheme'
 import {
   BLANK_SCHEME,
   restoreDocument,
+  restoreMode,
   restoreScheme,
   saveDocument,
+  saveMode,
   saveScheme,
 } from './state/storage'
-import { decodeMode, type DecodedScheme } from './state/url'
+import type { DecodedScheme } from './state/url'
 import { useDocument, type PaletteView } from './state/useDocument'
 import { useReview } from './state/useReview'
 import { useScheme } from './state/useScheme'
 import { ExportDialog } from './ui/ExportDialog'
 import { Masthead } from './ui/Masthead'
-import type { Mode } from './ui/ModeSwitch'
 import { NewPaletteDialog } from './ui/NewPaletteDialog'
 import { NumberField } from './ui/NumberField'
 import { PaletteRow } from './ui/PaletteRow'
@@ -37,13 +39,17 @@ import { useCopy } from './ui/useCopy'
 /** Read once, at mount. Guarded so the tree also renders without a DOM. */
 function readSession() {
   if (typeof window === 'undefined') {
+    // The editor rather than `DEFAULT_MODE`. Without a window there is no link
+    // to read and nothing saved to honour, so nothing is being defaulted to —
+    // and a DOM-less render is a smoke test, which wants the tree that has
+    // something to smoke: a stack of ramps, three curve graphs and a toolbox.
     return { seeds: null, selected: 0, scheme: BLANK_SCHEME, mode: 'ramps' as Mode }
   }
   const { hash } = window.location
   return {
     ...restoreDocument(hash),
     scheme: restoreScheme(hash) ?? BLANK_SCHEME,
-    mode: decodeMode(hash),
+    mode: restoreMode(hash),
   }
 }
 
@@ -176,6 +182,13 @@ export function App() {
   useEffect(() => {
     saveScheme(schemeState.slots, schemeState.rule, schemeState.profile)
   }, [schemeState])
+
+  // And the mode itself, so the tool opens where you left it. Written on every
+  // change rather than on the way out: there is no reliable way out of a tab,
+  // and a switch is one state change, so this costs a string per click.
+  useEffect(() => {
+    saveMode(mode)
+  }, [mode])
 
   const { selected } = doc
 

@@ -342,10 +342,14 @@ describe('the scheme in a link', () => {
     expect(decodeScheme(`sc=${many}`)!.colors).toHaveLength(MAX_SLOTS)
   })
 
-  it('says which mode a link was made in', () => {
-    expect(decodeMode('')).toBe('ramps')
-    expect(decodeMode(encodeDocument([{ config: createPalette('#000'), name: 'x' }]))).toBe('ramps')
+  it('says which mode a link was made in, or nothing at all', () => {
     expect(decodeMode(`m=scheme~${encodeScheme(slots, 'triad', 'even')}`)).toBe('scheme')
+
+    // Nothing said is its own answer, not the editor. Only the scheme board
+    // writes the key, and the mode is remembered between sessions now, so a
+    // link that says nothing must leave the choice to what was remembered.
+    expect(decodeMode('')).toBeNull()
+    expect(decodeMode(encodeDocument([{ config: createPalette('#000'), name: 'x' }]))).toBeNull()
   })
 })
 

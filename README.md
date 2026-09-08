@@ -33,7 +33,7 @@ rebranding.
 - **Both directions.** Send a scheme to the ramp document and get a palette per
   colour; or seed the scheme from the bases already in the document.
 
-### Tints & shades
+### Ramps
 
 - **Three curves per palette** — lightness, chroma and hue, each a cubic Bézier
   you drag. This is the saturation correction and the hue shift the other tools
@@ -49,7 +49,9 @@ rebranding.
   the colours that can't be shown.
 - **Export** — hex, OKLCH, CSS variables, Tailwind, SCSS, JSON, PNG, SVG.
 - **No backend.** The whole document lives in the URL hash, so a link is the
-  palette. It also autosaves locally.
+  palette. It also autosaves locally, along with the scheme and which of the
+  two halves you were last in — the tool opens where you left it, and on the
+  scheme generator the first time.
 
 ## Tech
 

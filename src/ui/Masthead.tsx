@@ -1,6 +1,7 @@
 import type { Gamut } from '../color/oklch'
+import type { Mode } from '../state/mode'
 import { HelpDialog } from './HelpDialog'
-import { ModeSwitch, type Mode } from './ModeSwitch'
+import { ModeSwitch } from './ModeSwitch'
 
 type Props = {
   mode: Mode

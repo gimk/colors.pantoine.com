@@ -10,10 +10,10 @@ import {
   type RuleId,
 } from '../color/scheme'
 import { VISIONS, type Vision } from '../color/vision'
+import type { Mode } from '../state/mode'
 import { schemeUrl } from '../state/url'
 import type { SchemeApi } from '../state/useScheme'
 import { Masthead } from './Masthead'
-import type { Mode } from './ModeSwitch'
 import { SchemeBar } from './SchemeBar'
 import { SchemeExportDialog } from './SchemeExportDialog'
 

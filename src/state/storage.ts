@@ -1,8 +1,10 @@
 import type { Gamut } from '../color/oklch'
 import { AUTO_RULE, type ProfileId, type RuleId, type Slot } from '../color/scheme'
+import { DEFAULT_MODE, isMode, type Mode } from './mode'
 import {
   decodeDocument,
   decodeGamut,
+  decodeMode,
   decodeScheme,
   decodeStepsLocked,
   encodeDocument,
@@ -170,6 +172,56 @@ export function restoreScheme(hash: string): DecodedScheme | null {
     return decodeScheme(parsed.hash)
   } catch {
     return null
+  }
+}
+
+/* --- which half you were in ---------------------------------------------
+ *
+ * A view preference rather than part of either mode's work — where you were,
+ * not what you made — so it follows the review board's layout into a key of
+ * its own and never joins a document link. It is written by hand rather than
+ * as a hash, since one word is not a document.
+ */
+
+const MODE_KEY = 'colors.pantoine.com/mode/v1'
+
+type StoredMode = { v: 1; mode: Mode }
+
+export function saveMode(mode: Mode): void {
+  try {
+    const value: StoredMode = { v: 1, mode }
+    window.localStorage.setItem(MODE_KEY, JSON.stringify(value))
+  } catch {
+    // Blocked, full, or a private window. The tool opens on the default,
+    // which is one click from either half.
+  }
+}
+
+/**
+ * Which half to open in: the one the link was made in, else the one you left.
+ *
+ * A link that names a mode wins, because it was made in that half deliberately
+ * and the person you sent it to should land where you were. A link that names
+ * none but carries palettes is a document — every editor link is, since only
+ * the scheme board writes `m=` — and opens on the document rather than
+ * dropping someone into a scheme they were not sent.
+ *
+ * Everything else is your own last session, and a first visit is `DEFAULT_MODE`.
+ */
+export function restoreMode(hash: string): Mode {
+  if (typeof window === 'undefined') return DEFAULT_MODE
+
+  const shared = decodeMode(hash)
+  if (shared) return shared
+  if (decodeDocument(hash).length) return 'ramps'
+
+  try {
+    const raw = window.localStorage.getItem(MODE_KEY)
+    if (!raw) return DEFAULT_MODE
+    const parsed = JSON.parse(raw) as Partial<StoredMode>
+    return parsed?.v === 1 && isMode(parsed.mode) ? parsed.mode : DEFAULT_MODE
+  } catch {
+    return DEFAULT_MODE
   }
 }
 

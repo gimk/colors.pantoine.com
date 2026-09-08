@@ -15,7 +15,7 @@ import {
   type DocumentAction,
   type DocumentState,
 } from './document'
-import { restoreDocument, saveDocument } from './storage'
+import { restoreDocument, restoreMode, saveDocument, saveMode } from './storage'
 import {
   decodeDocument,
   decodeGamut,
@@ -1132,5 +1132,53 @@ describe('an empty document', () => {
     expect(none.palettes).toEqual([])
     // The reducer produced a new state, which is what history records against.
     expect(none).not.toBe(one)
+  })
+})
+
+describe('which half the tool opens in', () => {
+  it('opens on the scheme board when nothing says otherwise', () => {
+    // The colours come before the ramps: choosing a set that goes together is
+    // where a palette starts, and opening one of them out is the step after.
+    stubStorage()
+    expect(restoreMode('')).toBe('scheme')
+  })
+
+  it('opens where the last session ended', () => {
+    stubStorage()
+    saveMode('ramps')
+    expect(restoreMode('')).toBe('ramps')
+    saveMode('scheme')
+    expect(restoreMode('')).toBe('scheme')
+  })
+
+  it('honours the mode a link was made in, over the one you left', () => {
+    stubStorage()
+    saveMode('ramps')
+    expect(restoreMode(`#m=scheme~sc=${'ff0000'}`)).toBe('scheme')
+  })
+
+  it('opens a link that carries palettes on the palettes', () => {
+    // No editor link names a mode — only the scheme board writes the key — so
+    // a link with a document in it has to be read as one, or following
+    // somebody's palettes would land on a scheme they never sent.
+    stubStorage()
+    saveMode('scheme')
+    const hash = `#${encodeDocument([{ config: createPalette('#7c3aed'), name: 'brand' }])}`
+    expect(restoreMode(hash)).toBe('ramps')
+  })
+
+  it('opens on the default when storage is unreadable', () => {
+    stubStorage(true)
+    expect(restoreMode('')).toBe('scheme')
+    // And saving into a blocked store is a no-op rather than a crash.
+    expect(() => saveMode('ramps')).not.toThrow()
+  })
+
+  it('ignores a stored value it does not recognise', () => {
+    const store = stubStorage()
+    store.set('colors.pantoine.com/mode/v1', JSON.stringify({ v: 1, mode: 'curves' }))
+    expect(restoreMode('')).toBe('scheme')
+    store.set('colors.pantoine.com/mode/v1', 'not json')
+    expect(restoreMode('')).toBe('scheme')
   })
 })

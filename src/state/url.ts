@@ -11,6 +11,7 @@ import {
   type RuleId,
   type Slot,
 } from '../color/scheme'
+import { isMode, type Mode } from './mode'
 
 /**
  * The whole palette lives in the URL hash.
@@ -292,14 +293,21 @@ export function decodeScheme(hash: string): DecodedScheme | null {
   return null
 }
 
-/** The mode a link was made in, defaulting to the editor. */
-export function decodeMode(hash: string): 'ramps' | 'scheme' {
+/**
+ * The mode a link was made in, or `null` if it does not say.
+ *
+ * Nothing said and "the editor" are different answers now that the mode is
+ * remembered between sessions: a link that names no mode must not out-vote
+ * what you were last in, and only `restoreMode` knows what that was.
+ */
+export function decodeMode(hash: string): Mode | null {
   const raw = hash.replace(/^#/, '')
-  if (!raw) return 'ramps'
+  if (!raw) return null
   for (const segment of raw.split(SEPARATOR)) {
-    if (new URLSearchParams(segment).get(MODE_KEY) === 'scheme') return 'scheme'
+    const value = new URLSearchParams(segment).get(MODE_KEY)
+    if (isMode(value)) return value
   }
-  return 'ramps'
+  return null
 }
 
 /**

@@ -1342,7 +1342,7 @@ describe('scheme board', () => {
 
   it('offers both modes, and marks the one it is in', () => {
     const html = render(slotsOf())
-    expect(html).toContain('Tints &amp; Shades')
+    expect(html).toContain('>Ramps<')
     // Sliced between the switch and what follows it in the masthead. Not
     // matched to its own closing tag: the beta mark is a nested span, so the
     // first `</span>` is no longer the switch's.
@@ -1602,6 +1602,10 @@ describe('the empty editor', () => {
       'colors.pantoine.com/v1',
       JSON.stringify({ v: 1, hash: encodeDocument([]), selected: -1 }),
     )
+    // Which half, as well as what is in it: the tool opens on the scheme
+    // board unless something says otherwise, and this is a test about the
+    // editor with nothing in it.
+    store.set('colors.pantoine.com/mode/v1', JSON.stringify({ v: 1, mode: 'ramps' }))
     ;(globalThis as { window?: unknown }).window = {
       location: { hash: '', pathname: '/', search: '' },
       localStorage: {
@@ -1648,6 +1652,39 @@ describe('the empty editor', () => {
     expect(blank).toContain('flex: 1')
     expect(blank).toContain('justify-content: center')
     expect(blank).toContain('align-items: center')
+  })
+})
+
+describe('which half the tool opens on', () => {
+  /** `App` against a stubbed browser holding exactly what is passed in. */
+  const openWith = (stored: Record<string, string> = {}) => {
+    const store = new Map(Object.entries(stored))
+    ;(globalThis as { window?: unknown }).window = {
+      location: { hash: '', pathname: '/', search: '' },
+      localStorage: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => store.set(key, value),
+      },
+    }
+    try {
+      return renderToStaticMarkup(<App />)
+    } finally {
+      delete (globalThis as { window?: unknown }).window
+    }
+  }
+
+  it('opens on the scheme board when nothing has been saved', () => {
+    const html = openWith()
+    expect(html).toContain('class="scheme"')
+    expect(html).not.toContain('class="toolbox"')
+  })
+
+  it('opens on the editor for somebody who left it there', () => {
+    const html = openWith({
+      'colors.pantoine.com/mode/v1': JSON.stringify({ v: 1, mode: 'ramps' }),
+    })
+    expect(html).toContain('class="toolbox"')
+    expect(html).not.toContain('class="scheme"')
   })
 })
 
@@ -1777,7 +1814,7 @@ describe('the mode switch', () => {
     expect(html).toContain('class="modes__beta"')
     expect(html).toContain('>beta<')
     // Inside the Scheme button, not floating beside the pair.
-    const scheme = html.slice(0, html.indexOf('Tints'))
+    const scheme = html.slice(0, html.indexOf('Ramps'))
     expect(scheme).toContain('modes__beta')
   })
 

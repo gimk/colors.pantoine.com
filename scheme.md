@@ -386,6 +386,18 @@ stack, since centring costs more than it is worth once they collide. The review
 board keeps its own bar and is untouched: it is a way of looking at a document
 rather than a third mode, so the switch has no business there.
 
+**The other half is called RAMPS, and SCHEME is what opens.** The switch said
+`TINTS & SHADES`, which is what the tool made when it was the whole tool; beside
+a one-word label it was three words describing the technique rather than naming
+the output, and `RAMPS` is what everything in the codebase already calls the
+thing. The default went with it: choosing colours that go together comes before
+opening any one of them out, so that is the honest first screen. The mode is
+remembered in a key of its own — a view preference, like the review board's
+layout, never part of a document link — so anyone who works in ramps says so
+once. A link that names a mode still wins, and a link carrying palettes but no
+mode is read as a document, since only the scheme board writes `m=`. The
+page title lost the suffix it never should have kept once there were two modes.
+
 **The `steppedBase()` cleanup is done**, and the reason for it turned out not
 to be quite the one written at the foot of this file. Undo was never actually
 at risk: `history.ts` keeps snapshots, so stepping back restores a state rather
@@ -412,6 +424,7 @@ quick-add's colour is now something they can name rather than bound.
 | `src/state/scheme.ts` | `SchemeState`, the reducer, `coalesceKey` |
 | `src/state/useScheme.ts` | the hook, over the existing `withHistory` |
 | `src/state/random.ts` | `mulberry32`, and the one `Math.random` in the app |
+| `src/state/mode.ts` | the two halves, and which one opens |
 | `src/ui/SchemeBoard.tsx` | the board, the toolbar, the keyboard |
 | `src/ui/SchemeBar.tsx` | one colour, full height |
 | `src/ui/SchemeExportDialog.tsx` | text, PNG and SVG |
@@ -420,4 +433,5 @@ quick-add's colour is now something they can name rather than bound.
 
 Tests: 23 in `color/scheme.test.ts`, 41 in `state/scheme.test.ts` (reducer,
 undo, and the link round-trip), 5 in `state/random.test.ts`, and more in
-`App.test.tsx` for the board and the export. 559 across the suite, all green.
+`App.test.tsx` for the board, the export and which half opens. 567 across the
+suite, all green.
