@@ -1383,8 +1383,16 @@ describe('scheme board', () => {
     expect(bar).toContain('grid-template-columns: 1fr auto 1fr')
   })
 
-  it('says which rule Auto rolled', () => {
-    expect(render(slotsOf())).toContain('Triad')
+  /**
+   * The bar used to caption which rule Auto had landed on, beside the Rule
+   * control. A caption that is there on one roll and gone on the next takes
+   * the width of a word out of the bar as it goes, and everything to the
+   * right of it steps sideways — on a mode whose whole gesture is pressing
+   * Generate over and over, the bar was never still.
+   */
+  it('keeps the rolled rule out of the bar, which has to hold still', () => {
+    expect(render(slotsOf())).not.toContain('scheme__rolled')
+    expect(css).not.toContain('.scheme__rolled')
   })
 
   it('offers a roll in both controls, above the named choices', () => {

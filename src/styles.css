@@ -2274,16 +2274,6 @@ button.newpal__cand:hover {
   padding: var(--space-4) var(--space-7);
 }
 
-/* Which rule Auto landed on. Quiet, because it is a caption rather than a
-   control — but present, because it is the mode's answer to "why these". */
-.scheme__rolled {
-  font-size: var(--text-2xs);
-  letter-spacing: var(--tracking-pill);
-  text-transform: uppercase;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
 .scheme__bars {
   position: relative;
   display: flex;

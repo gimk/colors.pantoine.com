@@ -180,11 +180,6 @@ export function SchemeBoard({
     return () => window.removeEventListener('keydown', onKey)
   }, [generate, toggleLock, slots])
 
-  const rolledLabel =
-    scheme.rule === AUTO_RULE && scheme.rolled
-      ? HARMONIES.find((harmony) => harmony.id === scheme.rolled)?.label
-      : null
-
   /**
    * The seam that lives on the boundary before slot `at`.
    *
@@ -278,14 +273,6 @@ export function SchemeBoard({
             ))}
           </select>
         </label>
-
-        {/* What Auto actually rolled. The mode's claim is that these colours
-            go together for a reason, and this is where it says the reason. */}
-        {rolledLabel && (
-          <span className="scheme__rolled" title="The rule this scheme was rolled with">
-            {rolledLabel}
-          </span>
-        )}
 
         <label className="field">
           <span>Weight</span>
