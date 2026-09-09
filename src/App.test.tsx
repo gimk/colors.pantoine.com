@@ -1339,6 +1339,7 @@ describe('scheme board', () => {
         vision={vision}
         onVision={() => {}}
         onSendToRamps={() => {}}
+        onSendColorToRamps={() => {}}
         onSeedFromRamps={() => {}}
         copiedKey={null}
         onCopy={() => {}}
@@ -1783,11 +1784,23 @@ describe('a scheme bar’s tools', () => {
         vision="normal"
         onVision={() => {}}
         onSendToRamps={() => {}}
+        onSendColorToRamps={() => {}}
         onSeedFromRamps={() => {}}
         copiedKey={null}
         onCopy={() => {}}
       />,
     )
+
+  /**
+   * The toolbar's `To ramps` takes the whole scheme over, which is four
+   * palettes to delete when what you wanted was a ramp of one color. Every
+   * bar carries its own way over, and it leaves the scheme where it is.
+   */
+  it('gives every bar its own way over to the ramps', () => {
+    const html = render(slotsOf())
+    const overs = html.match(/Open this color into a ramp of its own/g) ?? []
+    expect(overs).toHaveLength(colors.length)
+  })
 
   /**
    * `is-on` carries a document-wide fill in the frame's own black. The tools

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { HARMONIES } from '../color/harmony'
-import { FORMATS, type Format, type Gamut } from '../color/oklch'
+import { FORMATS, type Format, type Gamut, type Oklch } from '../color/oklch'
 import {
   AUTO_RULE,
   MAX_SLOTS,
@@ -72,6 +72,8 @@ type Props = {
   onVision: (vision: Vision) => void
   /** Turn the scheme into palettes in the ramp document, and go there. */
   onSendToRamps: () => void
+  /** The same, for one color: the bar's own way over, leaving the rest here. */
+  onSendColorToRamps: (color: Oklch) => void
   /** Take the document's base colours as the scheme, locked. */
   onSeedFromRamps: () => void
   copiedKey: string | null
@@ -100,6 +102,7 @@ export function SchemeBoard({
   vision,
   onVision,
   onSendToRamps,
+  onSendColorToRamps,
   onSeedFromRamps,
   copiedKey,
   onCopy,
@@ -449,6 +452,7 @@ export function SchemeBoard({
             onToggleLock={() => scheme.toggleLock(slot.id)}
             onRemove={() => scheme.remove(slot.id)}
             onColor={(color) => scheme.setColor(slot.id, color)}
+            onToRamps={() => onSendColorToRamps(slot.color)}
             dragging={dragging === slot.id}
             dropTarget={dropTarget === slot.id && dragging !== slot.id}
             onDragStart={() => setDragging(slot.id)}

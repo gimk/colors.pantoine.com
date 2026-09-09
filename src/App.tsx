@@ -268,6 +268,14 @@ export function App() {
           setMode('ramps')
           triggerScroll()
         }}
+        /* One bar's own way over. Same handoff, one color: the scheme is
+           left standing, so the board is still there to come back to with
+           the other four colors as they were. */
+        onSendColorToRamps={(color) => {
+          doc.addPalettes([{ base: formatColor(color, 'oklch') }])
+          setMode('ramps')
+          triggerScroll()
+        }}
         /* The other direction, and locked on arrival: a colour you already
            chose and built a ramp from is not one a roll should overwrite. */
         onSeedFromRamps={() =>

@@ -27,6 +27,8 @@ type Props = {
   onToggleLock: () => void
   onRemove: () => void
   onColor: (color: Oklch) => void
+  /** Open this one color into a ramp of its own, and go there. */
+  onToRamps: () => void
   dragging: boolean
   dropTarget: boolean
   onDragStart: () => void
@@ -73,6 +75,7 @@ export function SchemeBar({
   onToggleLock,
   onRemove,
   onColor,
+  onToRamps,
   dragging,
   dropTarget,
   onDragStart,
@@ -273,6 +276,38 @@ export function SchemeBar({
             >
               <circle cx="12" cy="12" r="9" />
               <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
+
+          {/* This color alone, where the toolbar's `To ramps` takes the
+              whole scheme. Opening one color out is the commoner errand by
+              far — one of the five is the one you want a ramp of — and doing
+              it from the toolbar meant four palettes to delete afterwards.
+              The scheme stays as it is: this adds to the document, it does
+              not empty the board. */}
+          <button
+            type="button"
+            className="sbar__tool"
+            style={{ color: ink, borderColor: ink }}
+            onClick={onToRamps}
+            title="Open this color into a ramp of its own, and go there"
+          >
+            {/* The ramp strip the other half of the tool is made of: one bar
+                cut into steps. Three cells rather than the document's nine —
+                at 12px anything finer closes up into a filled rectangle. */}
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="2" y="6" width="20" height="12" />
+              <path d="M9 6v12" />
+              <path d="M16 6v12" />
             </svg>
           </button>
 

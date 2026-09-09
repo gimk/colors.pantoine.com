@@ -2576,7 +2576,7 @@ button.newpal__cand:hover {
     inset: -14px 0;
   }
 
-  /* The bars are wide and short now, so the tools turn with them: four of
+  /* The bars are wide and short now, so the tools turn with them: five of
      them stacked would be most of a stacked bar's height. */
   .sbar__tools {
     flex-direction: row;
