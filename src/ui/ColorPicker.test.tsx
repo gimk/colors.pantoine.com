@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { parseToOklch, type Gamut, type Oklch } from '../color/oklch'
 import { axisMaxChroma, cuspFor } from '../color/slice'
 import { ColorPicker } from './ColorPicker'
-import { ColorPickerDialog } from './ColorPickerDialog'
+import { ColorPickerDialog, placePanel } from './ColorPickerDialog'
 
 const violet: Oklch = parseToOklch('#7c3aed')!
 
@@ -70,6 +70,33 @@ describe('the OKLCH picker', () => {
     expect(openDialog).toContain('Display P3')
     expect(openDialog).toContain('Rec. 2020')
     expect(openDialog).toContain('OKLab')
+  })
+
+  /**
+   * The head used to carry the name, both settings and Done on one line. That
+   * is the dock panel's shape, and the dialog is 420px: Done went off the
+   * right edge of it. The name and the way out stay up top, and the settings
+   * take a row of their own underneath.
+   */
+  it('keeps the settings off the line the name and Done share', () => {
+    const openDialog = renderToStaticMarkup(
+      <ColorPickerDialog
+        color={violet}
+        gamut="srgb"
+        onChange={() => {}}
+        onGamut={() => {}}
+        panelTitle="Vivid Violet"
+        defaultOpen
+      />,
+    )
+    const head = openDialog.slice(openDialog.indexOf('<header'), openDialog.indexOf('</header>'))
+    expect(head).toContain('Vivid Violet')
+    expect(head).toContain('Done')
+    expect(head).not.toContain('<select')
+
+    // And the name is what gives when the line is short: a color name is the
+    // one part of that row whose length is not ours to choose.
+    expect(declarations('.cdialog__head .panel__title')).toContain('text-overflow: ellipsis')
   })
 
   it('renders in OKHSV and OKHSL models across all gamuts without crashing', () => {
@@ -367,5 +394,60 @@ describe('classic color models (HSV and HSL)', () => {
     const hslMarker = hslHtml.match(/class="cpick__marker" cx="([\d.]+)" cy="([\d.]+)"/)!
     expect(Number(hslMarker[1])).toBeGreaterThan(250) // near right edge
     expect(Number(hslMarker[2])).toBeCloseTo(103.7, 0)
+  })
+})
+
+/**
+ * A short window is where the panel used to be lost.
+ *
+ * It was placed by whichever side of the opener had the more room and then
+ * pinned by its foot, so a panel taller than that room hung off the top of
+ * the screen — and nothing about a `fixed` box off the top of the screen can
+ * be scrolled back into reach. The middle of the window needs no room either
+ * side of the opener, so it is always somewhere the panel can be.
+ */
+describe('placing the picker in the window', () => {
+  const panel = { width: 420, height: 520 }
+  const tall = { width: 1440, height: 900 }
+  /** A laptop with the browser chrome and a dock taking their share. */
+  const short = { width: 1440, height: 560 }
+
+  /** The button on the toolbox, near the foot of the window. */
+  const opener = (left = 300) => ({ left })
+
+  it('centers the panel in the window, whatever opened it', () => {
+    expect(placePanel(opener(), panel, tall).top).toBe((900 - 520) / 2)
+  })
+
+  it('centers it on the same height for an opener at the top or the foot', () => {
+    // The opener no longer has a say in this axis: two bars at opposite ends
+    // of the board put the wedge in the same place, which is the point.
+    expect(placePanel(opener(20), panel, tall).top).toBe(
+      placePanel(opener(1200), panel, tall).top,
+    )
+  })
+
+  it('keeps the whole panel on screen in a short window', () => {
+    const { top } = placePanel(opener(), panel, short)
+    expect(top).toBeGreaterThanOrEqual(16)
+    expect(top + panel.height).toBeLessThanOrEqual(short.height - 16)
+  })
+
+  /** The case the CSS cap exists for: it is what keeps this satisfiable. */
+  it('never lands the head off the top, even for a panel taller than the window', () => {
+    const { top } = placePanel(opener(), { width: 420, height: 2000 }, short)
+    expect(top).toBe(16)
+  })
+
+  it('follows the opener across the window, and stops clear of the right edge', () => {
+    expect(placePanel(opener(120), panel, tall).left).toBe(120)
+    expect(placePanel(opener(700), panel, { width: 800, height: 900 }).left).toBe(800 - 420 - 16)
+  })
+
+  /* The clamp can only ever land a box that fits, so the panel is capped
+     against the window and the overflow becomes a scroll. */
+  it('caps the panel against the window and scrolls the wedge instead', () => {
+    expect(declarations('.cdialog')).toContain('max-height')
+    expect(declarations('.cdialog__panel .cpick')).toContain('overflow-y: auto')
   })
 })

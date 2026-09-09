@@ -9,6 +9,43 @@ import {
 import { formatColor, GAMUTS, gamutLabel, mapToGamut, type Gamut, type Oklch } from '../color/oklch'
 import { ColorPicker, type ColorPickerModel } from './ColorPicker'
 
+/** How near the panel is ever allowed to come to an edge of the window. */
+const EDGE = 16
+
+/**
+ * Where the panel goes: beside whatever opened it, and centered in the window.
+ *
+ * One axis each. Horizontally it follows the opener, because that is what
+ * says which swatch is being edited — clamped off both edges, so a bar on the
+ * right of the board does not push it out of the window. Vertically it takes
+ * the middle and stays there, which is the one height that needs no room
+ * either side of the opener to be reachable.
+ *
+ * It used to pick a side by which had the more room and then anchor to it.
+ * That is fine on a tall window and wrong on a short one: a panel taller than
+ * the space above it was pinned by its foot and hung off the top of the
+ * screen — and a `fixed` panel off the top cannot be scrolled back, so the
+ * wedge, the fields and the hex were all simply gone.
+ *
+ * Centering leans on the panel capping its own height in CSS: a box no taller
+ * than the window is one that has a middle to sit in. Taller than that and
+ * the clamp puts its head at the top margin, where the scroll can reach the
+ * rest.
+ *
+ * Pure, and exported, because the case worth checking is the short window —
+ * which is a size, and a render without a DOM has none.
+ */
+export function placePanel(
+  anchor: { left: number },
+  panel: { width: number; height: number },
+  viewport: { width: number; height: number },
+): { top: number; left: number } {
+  return {
+    left: Math.max(EDGE, Math.min(anchor.left, viewport.width - panel.width - EDGE)),
+    top: Math.max(EDGE, Math.round((viewport.height - panel.height) / 2)),
+  }
+}
+
 type Props = {
   /** The colour to open on — already resolved, so an unparseable field still picks. */
   color: Oklch
@@ -31,7 +68,16 @@ type Props = {
    * against whatever opened it.
    */
   trigger?: (open: () => void, ref: RefObject<HTMLButtonElement | null>) => ReactNode
-  /** Names what is being picked. The toolbox picks a base; the board a slot. */
+  /**
+   * Names the panel. The toolbox is picking a base, so it says so.
+   *
+   * Deliberately not the color's name, which is what the board passed at
+   * first: the color is the thing being changed in here, so its name changed
+   * on every pixel of a drag across the wedge — a header that rewrites itself
+   * while you work reads as the panel glitching, not as the color being
+   * described. The bar behind the panel names the color, and goes on naming
+   * it as it changes, which is where that belongs.
+   */
   panelTitle?: string
   /** For testing, renders the modal body immediately without a click. */
   defaultOpen?: boolean
@@ -60,29 +106,38 @@ export function ColorPickerDialog({
   const swatch = mapToGamut(color, gamut).displayColor
   const [open, setOpen] = useState(defaultOpen)
   const [model, setModel] = useState<ColorPickerModel>('oklch')
-  const [coords, setCoords] = useState<{ top?: number; bottom?: number; left: number }>({
-    left: 16,
-    bottom: 80,
-  })
+  const [coords, setCoords] = useState<{ top: number; left: number }>({ top: EDGE, left: EDGE })
 
+  /**
+   * Measure what `placePanel` decides from, and hand it the answer.
+   *
+   * The panel's height is measured rather than assumed: it depends on the
+   * model in force, and on how much of the window the cap has left it.
+   */
   const updatePosition = () => {
     if (!buttonRef.current || typeof window === 'undefined') return
-    const rect = buttonRef.current.getBoundingClientRect()
-    const pickerWidth = Math.min(420, window.innerWidth - 32)
-    const left = Math.max(16, Math.min(rect.left, window.innerWidth - pickerWidth - 16))
-
-    const spaceAbove = rect.top
-    const spaceBelow = window.innerHeight - rect.bottom
-
-    if (spaceAbove >= 400 || spaceAbove >= spaceBelow) {
-      const bottom = Math.max(8, window.innerHeight - rect.top + 8)
-      setCoords({ bottom, left, top: undefined })
-    } else {
-      const top = Math.max(8, rect.bottom + 8)
-      setCoords({ top, left, bottom: undefined })
-    }
+    const anchor = buttonRef.current.getBoundingClientRect()
+    // Zero until the panel has rendered once — `openPanel` positions the
+    // dialog before its contents exist, and the layout effect below measures
+    // it again as soon as they do.
+    const box = ref.current?.getBoundingClientRect()
+    setCoords(
+      placePanel(
+        anchor,
+        {
+          width: box?.width || Math.min(420, window.innerWidth - EDGE * 2),
+          height: box?.height ?? 0,
+        },
+        { width: window.innerWidth, height: window.innerHeight },
+      ),
+    )
   }
 
+  // Re-measured on a change of model as well as on opening: the three models
+  // do not draw to the same height, and the middle of the window is a height
+  // that depends on the panel's own — so a panel that changed shape where it
+  // stood would be left sitting off center, and in a short window would hang
+  // its hex off the bottom of the screen.
   useLayoutEffect(() => {
     if (open) {
       updatePosition()
@@ -93,7 +148,7 @@ export function ColorPickerDialog({
         window.removeEventListener('scroll', updatePosition, true)
       }
     }
-  }, [open])
+  }, [open, model])
 
   useEffect(() => {
     if (defaultOpen && ref.current && !ref.current.open) {
@@ -131,8 +186,7 @@ export function ColorPickerDialog({
           position: 'fixed',
           margin: 0,
           left: `${coords.left}px`,
-          top: coords.top != null ? `${coords.top}px` : 'auto',
-          bottom: coords.bottom != null ? `${coords.bottom}px` : 'auto',
+          top: `${coords.top}px`,
         }}
         aria-labelledby="cpick-title"
         /* Fires for Escape and for the close button alike, so neither route
@@ -146,10 +200,22 @@ export function ColorPickerDialog({
       >
         {open && (
           <div className="cdialog__panel">
-            <header className="panel__head">
+            {/* Two rows rather than one. The head carried the name, both
+                settings and the way out on a single line — which fits a dock
+                panel the width of the window and not a dialog of 420px, where
+                Done was pushed off the right edge. What the panel is and how
+                to leave it stay on top; the two settings take a row of their
+                own, and wrap in it if they have to. */}
+            <header className="panel__head cdialog__head">
               <span className="panel__title" id="cpick-title">
                 {panelTitle}
               </span>
+              <button type="button" onClick={() => ref.current?.close()}>
+                Done
+              </button>
+            </header>
+
+            <div className="panel__row">
               <label className="field">
                 <span>Model</span>
                 <select
@@ -176,11 +242,7 @@ export function ColorPickerDialog({
                   ))}
                 </select>
               </label>
-              <span className="spacer" />
-              <button type="button" onClick={() => ref.current?.close()}>
-                Done
-              </button>
-            </header>
+            </div>
 
             <ColorPicker
               color={color}

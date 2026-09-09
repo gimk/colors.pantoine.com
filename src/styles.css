@@ -688,10 +688,55 @@ button.swatch:hover:not(:disabled) {
   width: min(420px, calc(100vw - 32px));
   box-shadow: 0 8px 32px rgb(0 0 0 / 0.2), 0 0 0 1px var(--rule);
   z-index: 100;
+  /* Never taller than the window it floats in. The panel is placed by its
+     head and clamped into view, and a box taller than the window is the one
+     shape no placement can rescue: whatever the clamp does, the foot of it —
+     the hex, the fields — falls off the bottom of a laptop screen in a short
+     window. Capped here, the overflow becomes a scroll instead, which is
+     reachable. `dvh` so a phone's address bar sliding away does not leave the
+     panel measured against a window that is no longer there. */
+  max-height: calc(100dvh - 32px);
+  /* The panel inherits that cap, and inherits it whole — borders included,
+     since everything here is border-box — so it can end a hairline past the
+     dialog's own bottom edge. Clipped rather than fixed by a second, subtly
+     different number in the panel's rule. */
+  overflow: hidden;
+}
+
+/* A column, so the cap above lands on the wedge rather than on the whole
+   panel: the two rows of chrome hold their height and the picker takes what
+   is left, which keeps the name of the panel and the way out of it on screen
+   at every window size. */
+.cdialog__panel {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+  min-height: 0;
+}
+
+/* The part that gives. `min-height: 0` because a flex item will not shrink
+   below its content without it, which is exactly what has to happen here. */
+.cdialog__panel .cpick {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
 }
 
 .cdialog::backdrop {
   background: transparent;
+}
+
+/* The name of what is being picked, and the way out. Nothing else: the two
+   settings sit on the `panel__row` below, because a 420px dialog has no line
+   long enough to hold all four. The name is what gives, since it is the one
+   part of the row whose length is not ours to choose — the board names the
+   panel after the color, and color names run long. */
+.cdialog__head .panel__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Every child here is a fixed height, and has to stay that way. The dialog

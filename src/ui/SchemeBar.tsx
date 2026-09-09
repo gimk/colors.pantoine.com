@@ -213,7 +213,7 @@ export function SchemeBar({
             color={slot.color}
             gamut={gamut}
             onGamut={onGamut}
-            panelTitle={name}
+            panelTitle="Color picker"
             onChange={(value) => {
               const next = parseToOklch(value)
               if (next) onColor(next)
