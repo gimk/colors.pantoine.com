@@ -48,15 +48,19 @@ export function CurvePanel({
   const frozenStart = lockedIndex === 0
   const frozenEnd = lockedIndex === last
 
+  const channelName = channel.label.toLowerCase()
+
   return (
-    <section className="panel">
+    <section className="panel panel--curve">
+      {/* The axis under the name rather than beside it: at this width the two
+          on one line left the name no room, and the axis is a note about the
+          plot below, not a second title. */}
       <header className="panel__head">
         <span className="panel__title">{channel.label}</span>
         <span className="panel__axis">{channel.axis}</span>
-        <span className="spacer" />
-        {/* Up here rather than beside Start and End, where it was competing
-            for a row that now has two ways to send this curve elsewhere.
-            Undoing your own edits belongs with the channel's name anyway. */}
+        {/* Undoing your own edits belongs with the channel's name — and up
+            here it is out of the way of the two buttons that send this curve
+            somewhere else, which are a different kind of act entirely. */}
         <button
           type="button"
           className="panel__reset"
@@ -67,71 +71,9 @@ export function CurvePanel({
         </button>
       </header>
 
-      <div className="panel__row">
-        <NumberField
-          label="Start"
-          value={curve.start}
-          min={channel.min}
-          max={channel.max}
-          step={channel.nudge}
-          decimals={channel.decimals}
-          disabled={frozenStart}
-          title={frozenStart ? 'Locked to the base colour' : undefined}
-          onCommit={(value) => onEndpoint('start', value)}
-        />
-        <NumberField
-          label="End"
-          value={curve.end}
-          min={channel.min}
-          max={channel.max}
-          step={channel.nudge}
-          decimals={channel.decimals}
-          disabled={frozenEnd}
-          title={frozenEnd ? 'Locked to the base colour' : undefined}
-          onCommit={(value) => onEndpoint('end', value)}
-        />
-        <div className="panel__actions">
-          {onSyncTo && (
-            <ApplyToDialog
-              /* Keyed on the stack, so a palette added or removed while the
-                 panel is mounted cannot leave a pick pointing at nothing. */
-              key={syncTargets?.map((palette) => palette.id).join(',')}
-              channel={channel.label.toLowerCase()}
-              targets={syncTargets ?? []}
-              onApply={onSyncTo}
-            />
-          )}
-          {onSync && (
-            <button
-              type="button"
-              onClick={onSync}
-              disabled={!canSync}
-              title={
-                !canSync
-                  ? 'Requires at least two palettes in the document'
-                  : `Apply this ${channel.label.toLowerCase()} curve to all palettes in the document`
-              }
-            >
-              Apply all
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="panel__row panel__row--shapes">
-        <span className="legend">Shape</span>
-        {SHAPES.map((shape) => (
-          <button
-            key={shape.id}
-            type="button"
-            title={shape.hint}
-            onClick={() => onChange(shape.apply(curve, channel))}
-          >
-            {shape.label}
-          </button>
-        ))}
-      </div>
-
+      {/* The plot leads. It is what the panel is for, and reading down a
+          column of three the eye should meet each curve directly under the
+          name of the channel it belongs to, not after two rows of controls. */}
       <CurveEditor
         curve={curve}
         channel={channel}
@@ -141,6 +83,84 @@ export function CurvePanel({
         graphH={graphH}
         onChange={onChange}
       />
+
+      <div className="panel__controls">
+        <div className="panel__pair">
+          <NumberField
+            label="Start"
+            stacked
+            value={curve.start}
+            min={channel.min}
+            max={channel.max}
+            step={channel.nudge}
+            decimals={channel.decimals}
+            disabled={frozenStart}
+            title={frozenStart ? 'Locked to the base colour' : undefined}
+            onCommit={(value) => onEndpoint('start', value)}
+          />
+          <NumberField
+            label="End"
+            stacked
+            value={curve.end}
+            min={channel.min}
+            max={channel.max}
+            step={channel.nudge}
+            decimals={channel.decimals}
+            disabled={frozenEnd}
+            title={frozenEnd ? 'Locked to the base colour' : undefined}
+            onCommit={(value) => onEndpoint('end', value)}
+          />
+        </div>
+
+        {/* Four equal shares of the row, sharing their borders — so the set
+            reads as one control with four settings, and fits any width the
+            panel is dragged to. It was a legend and four buttons on a line
+            sized to their own words, which wrapped raggedly the moment the
+            column got narrow. The legend goes: four shape names in a joined
+            strip do not need to be told they are shapes. */}
+        <div className="seg" role="group" aria-label="Shape">
+          {SHAPES.map((shape) => (
+            <button
+              key={shape.id}
+              type="button"
+              className="seg__btn"
+              title={shape.hint}
+              onClick={() => onChange(shape.apply(curve, channel))}
+            >
+              {shape.label}
+            </button>
+          ))}
+        </div>
+
+        {(onSyncTo || onSync) && (
+          <div className="panel__pair">
+            {onSyncTo && (
+              <ApplyToDialog
+                /* Keyed on the stack, so a palette added or removed while the
+                   panel is mounted cannot leave a pick pointing at nothing. */
+                key={syncTargets?.map((palette) => palette.id).join(',')}
+                channel={channelName}
+                targets={syncTargets ?? []}
+                onApply={onSyncTo}
+              />
+            )}
+            {onSync && (
+              <button
+                type="button"
+                onClick={onSync}
+                disabled={!canSync}
+                title={
+                  !canSync
+                    ? 'Requires at least two palettes in the document'
+                    : `Apply this ${channelName} curve to all palettes in the document`
+                }
+              >
+                Apply all
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </section>
   )
 }

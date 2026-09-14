@@ -208,26 +208,28 @@ export function App() {
     const timer = setTimeout(() => {
       rafId = requestAnimationFrame(() => {
         const rowEl = document.querySelector<HTMLElement>('.prow--selected')
-        const toolboxEl = document.querySelector<HTMLElement>('.toolbox')
-        if (!rowEl || !toolboxEl) return
+        const stackEl = document.querySelector<HTMLElement>('.stack')
+        if (!rowEl || !stackEl) return
 
+        // Against the stack's own box, not the window's. The stack is a column
+        // with its own scrollbar now, so the window does not scroll at all and
+        // the bar above is no longer something a row can slide under — the
+        // column simply ends below it.
         const rowRect = rowEl.getBoundingClientRect()
-        const toolboxRect = toolboxEl.getBoundingClientRect()
+        const viewRect = stackEl.getBoundingClientRect()
 
-        // 14px gap above toolbox (accommodates 2px outline + 5px offset + 7px breathing room)
-        const GAP_ABOVE_TOOLBOX = 14
-        const targetBottom = toolboxRect.top - GAP_ABOVE_TOOLBOX
-        const delta = rowRect.bottom - targetBottom
+        // Room for the selected row's own outline at whichever edge it meets.
+        const GAP = 14
+        const below = rowRect.bottom - (viewRect.bottom - GAP)
+        const above = rowRect.top - (viewRect.top + GAP)
 
-        // Ensure the top of the palette doesn't scroll behind sticky .controls
-        const controlsEl = document.querySelector<HTMLElement>('.controls')
-        const minTop = controlsEl ? controlsEl.getBoundingClientRect().bottom + 12 : 12
-
-        const scrollAmount = Math.min(delta, rowRect.top - minTop)
+        // A row taller than the column can only have one of its ends; its top
+        // is the one worth keeping, so pulling it down never overshoots that.
+        const scrollAmount = below > 0 ? Math.min(below, above) : Math.min(above, 0)
 
         if (Math.abs(scrollAmount) > 2) {
-          if (typeof window.scrollBy === 'function') {
-            window.scrollBy({ top: scrollAmount, behavior: 'smooth' })
+          if (typeof stackEl.scrollBy === 'function') {
+            stackEl.scrollBy({ top: scrollAmount, behavior: 'smooth' })
           }
         }
       })
@@ -514,6 +516,12 @@ export function App() {
           because there is nothing else on the page to compete with — and the
           same two controls the bar leads with, which is why the bar drops them
           while this is up rather than offering each of them twice. */}
+      {/* The stack and the toolbox are columns of one row, not a page with a
+          panel laid over it: the panel is a real column, so it takes the full
+          height going without asking what the masthead and the bar above it
+          came to, and the stack scrolls inside its own column rather than
+          taking the window's scrollbar with it. */}
+      <div className="workspace">
       {!selected ? (
         <div className="blank">
           <p className="blank__note">No palettes.</p>
@@ -568,13 +576,12 @@ export function App() {
       </div>
       )}
 
-      {/* Docked, not trailing the selection down the stack. Last in the tree
-          so `position: sticky; bottom` pins it to the foot of the window while
-          the palettes scroll behind, and it names the palette it is editing
-          since it is no longer beside it. Gone entirely on an empty document,
-          where it would be a panel of controls for a palette that is not
-          there. */}
+      {/* Docked, not trailing the selection down the stack. The second column
+          of the workspace, and it names the palette it is editing since it is
+          no longer beside it. Gone entirely on an empty document, where it
+          would be a panel of controls for a palette that is not there. */}
       {selected && <Toolbox doc={doc} selected={selected} />}
+      </div>
     </div>
   )
 }

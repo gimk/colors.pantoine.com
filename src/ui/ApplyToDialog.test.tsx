@@ -80,9 +80,19 @@ describe('the apply-to dialog', () => {
   })
 
   it('keeps its rows clear of the chrome sizing they sit inside', () => {
-    // The dialog opens from `.panel__actions`, whose 24px buttons would
+    // The dialog opens from `.panel__pair`, whose full-width buttons would
     // otherwise apply to every row in the list.
     expect(declarations('.plist .plist__row')).toContain('height: auto')
+  })
+
+  /**
+   * The sheet is a DOM descendant of the pair its trigger sits in, however far
+   * the top layer moves it — so the pair's own sizing has to be written as
+   * direct children or it reaches in and stretches the sheet's controls too.
+   */
+  it('is not reached by the sizing of the pair it opens from', () => {
+    expect(css).toContain('.panel__pair > button')
+    expect(css).not.toMatch(/^\.panel__pair (button|input)/m)
   })
 
   it('washes the picked row rather than filling it, so the ramp survives', () => {

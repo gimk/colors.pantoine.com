@@ -421,44 +421,70 @@ describe('the sticky frame', () => {
     expect(rule).toContain('background: var(--paper)')
   })
 
-  it('docks the toolbox to the foot of the window, opaquely', () => {
+  /**
+   * A column of the workspace, not something laid over it. It was a band
+   * across the foot, then a panel floating clear of the corner; both had to be
+   * told how much of the window to leave alone. A column takes the height that
+   * is there and the ramps simply end where it begins.
+   */
+  it('makes the toolbox a column of the workspace, opaquely', () => {
     const rule = declarations('.toolbox')
-    expect(rule).toContain('position: sticky')
-    expect(rule).toContain('bottom: 0')
+    expect(rule).toContain('width: var(--toolbox-w')
+    expect(rule).toContain('border-left: 2px solid var(--rule)')
+    // Or the ramps would read straight through it.
     expect(rule).toContain('background: var(--paper)')
+    // Nothing floating, nothing reserved: no overlay to keep clear of.
+    expect(rule).not.toContain('position: fixed')
+    expect(css).not.toContain('.app:has(.toolbox) .stack')
+
+    const row = declarations('.workspace')
+    expect(row).toContain('display: flex')
+    expect(row).toContain('min-height: 0')
   })
 
   /**
-   * `position: sticky` pins against the containing block, so the dock has to
-   * come after the palettes it floats over — and the horizontal toolbox no
-   * longer trails the selection down the stack.
+   * The window exactly, not at least the window — a column can only take the
+   * full height going if the shell it sits in has one to give. So the page
+   * stops scrolling and the stack scrolls inside its own column.
    */
+  it('holds the shell to the window and scrolls the stack inside it', () => {
+    const shell = declarations('.app')
+    expect(shell).toContain('height: 100vh')
+    expect(shell).toContain('overflow: hidden')
+    expect(declarations('.stack')).toContain('overflow-y: auto')
+  })
+
   it('puts the dock after the stack, not inside it', () => {
     expect(html.indexOf('class="stack"')).toBeLessThan(html.indexOf('class="toolbox"'))
     expect(html).not.toContain('stack__item')
   })
 
-  /** A fixed-height dock on a short window would leave nothing for the ramps. */
-  it('caps the height of the dock rather than fixing it', () => {
-    const rule = declarations('.toolbox')
-    expect(rule).toContain('max-height')
-    expect(rule).toContain('overflow-y: auto')
+  /**
+   * The source panel is as tall as its fields; the curve panels grow into what
+   * is left and never shrink below what they hold. The basis is the panel's
+   * own content, so a short window scrolls the column rather than squeezing a
+   * panel past its rows — which, the panel being a hidden overflow, clipped the
+   * apply buttons off the foot of every one of them.
+   */
+  it('grows the curve panels into the column without shrinking their rows', () => {
+    expect(declarations('.panel--source')).toContain('flex: none')
+    expect(declarations('.panel--curve')).toContain('flex: 1 0 auto')
+    // Only the graph gives and takes; the rows around it are the content the
+    // panel is sized around.
+    expect(declarations('.panel__head,\n.panel__controls')).toContain('flex: none')
+    expect(declarations('.graph')).toContain('flex: 1')
+    // The grip is the panel's own edge and must not scroll with what it sizes,
+    // so the scroll is on the panels beside it, not on the body around both.
+    expect(declarations('.toolbox__panels')).toContain('overflow-y: auto')
   })
 
   it('takes the full width of the window', () => {
     expect(declarations('.app')).toContain('max-width: none')
   })
 
-  /**
-   * `position: sticky` only has somewhere to stick while its container runs
-   * past the foot of the window. With a short stack the shell ended above the
-   * fold and the dock came to rest mid-screen over a band of bare body.
-   */
-  it('fills the window, so the dock is flush with its foot at any length', () => {
-    const shell = declarations('.app')
-    expect(shell).toContain('min-height: 100vh')
-    expect(shell).toContain('flex-direction: column')
-    // The stack takes the slack, not the dock.
+  it('stacks the chrome above the workspace, which takes the slack', () => {
+    expect(declarations('.app')).toContain('flex-direction: column')
+    expect(declarations('.workspace')).toContain('flex: 1')
     expect(declarations('.stack')).toContain('flex: 1')
   })
 })
@@ -498,6 +524,8 @@ describe('the curve graphs', () => {
     expect(declarations('.panel')).toContain('flex-direction: column')
   })
 
+  /* The editor's own fallback, until the ResizeObserver reports. The toolbox
+     no longer names a height: the plots take what the column has left. */
   it('asks for 228 before it has been measured', () => {
     const boxes = html.match(/class="graph" viewBox="0 0 (\d+) (\d+)"/g) ?? []
     expect(boxes).toHaveLength(3)
@@ -803,9 +831,8 @@ describe('selection marker', () => {
     expect(declarations('.prow__head')).not.toContain('border')
   })
 
-  it('keeps the palette stack positioned above the sticky toolbox dock', () => {
-    expect(declarations('.toolbox')).toContain('position: sticky')
-    expect(declarations('.toolbox')).toContain('bottom: 0')
+  it('keeps the palette stack in its own column beside the toolbox', () => {
+    expect(declarations('.workspace')).toContain('display: flex')
     expect(declarations('.stack')).toContain('display: flex')
     expect(declarations('.stack')).toContain('flex-direction: column')
   })
@@ -843,18 +870,81 @@ describe('UI standardization and menu separation', () => {
     expect(controls).toContain('class="divider"')
   })
 
-  it('groups toolbox attributes and actions into a full-width primary cluster', () => {
-    const toolbox = html.slice(html.indexOf('class="toolbox"'))
-    expect(toolbox).toContain('class="toolbox__primary"')
-    expect(toolbox).toContain('toolbox__btn-rederive')
-    expect(declarations('.toolbox__primary')).toContain('width: 100%')
+  /**
+   * The settings are a titled panel like every channel below them, not a grid
+   * of six equal tags with no name on the group — which read as a preamble to
+   * the curves rather than as the thing the curves are derived from. The name
+   * is the column's heading above it all.
+   */
+  /**
+   * A title to be read across the room, at its own step of the scale — and
+   * shown the way it was typed. Uppercasing somebody's own name for a palette
+   * and tracking it out to the chrome's spacing made a long one unreadable.
+   */
+  it('sets the palette name at title size, in the case it was typed', () => {
+    const name = declarations('.toolbox__head .toolbox__input-name')
+    expect(name).toContain('font-size: var(--text-lg)')
+    expect(name).toContain('font-weight: var(--weight-bold)')
+    expect(name).toContain('text-transform: none')
+    expect(declarations(':root')).toContain('--text-lg')
   })
 
-  it('provides a vertical resizer handle on the toolbox to scale curves and export', () => {
+  /**
+   * The colour every ramp in the palette is derived from: the whole row to
+   * read it back at a glance, and a swatch big enough to be the thing you
+   * reach for. It sat at the width of its own hex with a 32px chip beside it.
+   */
+  it('gives the base colour the full row and a swatch to match', () => {
+    const wrap = declarations('.field__swatch-wrap')
+    expect(wrap).toContain('width: 100%')
+    expect(wrap).toContain('height: 38px')
+    expect(declarations('.field__swatch-wrap .toolbox__input-color')).toContain('flex: 1')
+    expect(declarations('.field__swatch-wrap .picker')).toContain('width: 38px')
+  })
+
+  it('titles the palette, then names the group the curves come from', () => {
+    const toolbox = html.slice(html.indexOf('class="toolbox"'))
+    expect(toolbox).toContain('class="toolbox__eyebrow"')
+    expect(toolbox).toContain('toolbox__input-name')
+    expect(toolbox).toContain('panel panel--source')
+    expect(toolbox).toContain('>Source<')
+    expect(toolbox).toContain('toolbox__btn-rederive')
+    // The flat cluster it replaced.
+    expect(toolbox).not.toContain('toolbox__primary')
+  })
+
+  /**
+   * Nothing in the panel is sized to the words inside it any more. The shapes
+   * were a legend and four buttons on a line that wrapped raggedly the moment
+   * the column narrowed; Start, End and the two apply buttons shared one row
+   * and broke wherever they ran out. Equal shares divide whatever width the
+   * edge drag leaves.
+   */
+  it('scales the curve controls to the panel rather than to their labels', () => {
+    const toolbox = html.slice(html.indexOf('class="toolbox"'))
+    expect(toolbox).toContain('class="seg" role="group" aria-label="Shape"')
+    expect(toolbox).toContain('class="seg__btn"')
+    expect(declarations('.seg')).toContain('grid-template-columns: repeat(4, minmax(0, 1fr))')
+    expect(declarations('.panel__pair')).toContain('grid-template-columns: 1fr 1fr')
+    // The row that used to hold all four, and the legend that labelled them.
+    expect(toolbox).not.toContain('panel__row')
+    expect(toolbox).not.toContain('panel__actions')
+  })
+
+  /* The plot leads the panel: reading down a column of three, each curve sits
+     directly under the name of the channel it belongs to. */
+  it('puts each graph directly under its channel name', () => {
+    const panel = html.slice(html.indexOf('panel--curve'))
+    expect(panel.indexOf('class="graph"')).toBeLessThan(panel.indexOf('class="seg"'))
+  })
+
+  /* On the panel's left edge now, sizing its width. */
+  it('provides a resizer handle on the toolbox edge to scale curves', () => {
     const toolbox = html.slice(html.indexOf('class="toolbox"'))
     expect(toolbox).toContain('class="toolbox__resizer"')
     expect(toolbox).toContain('class="toolbox__resizer-grip"')
-    expect(declarations('.toolbox__resizer')).toContain('cursor: ns-resize')
+    expect(toolbox).toContain('aria-orientation="vertical"')
+    expect(declarations('.toolbox__resizer')).toContain('cursor: ew-resize')
   })
 
   it('renders per-palette steps input in toolbox when steps are unlocked', () => {

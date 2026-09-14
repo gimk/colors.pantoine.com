@@ -9,28 +9,24 @@ import { CurvePanel } from './CurvePanel'
 import { NameField } from './NameField'
 import { NumberField } from './NumberField'
 
-const STORAGE_KEY = 'colors.pantoine.com/toolbox-graph-h'
-const DEFAULT_GRAPH_H = 228
-/**
- * How much taller a panel is than the graph the drag is sizing.
- *
- * An estimate, and it no longer has to be exact: the graph is a flex item
- * that takes whatever the two rows of controls leave, so an error here moves
- * the whole dock by a few pixels rather than leaving a band of dead paper
- * under the plot — which is what it did when those rows stopped wrapping.
- */
-const PANEL_CHROME_H = 108
+/* Its own key, not the one the bottom dock wrote. That one held the height of
+   a graph in a row of three; this one holds the width of a column of three,
+   and a number saved under the old shape means nothing under this one. */
+const STORAGE_KEY = 'colors.pantoine.com/toolbox-w'
+const DEFAULT_W = 380
+const MIN_W = 300
+const MAX_W = 560
 
-function initialGraphH(): number {
-  if (typeof window === 'undefined') return DEFAULT_GRAPH_H
+function initialWidth(): number {
+  if (typeof window === 'undefined') return DEFAULT_W
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const val = parseInt(raw, 10)
-      if (!isNaN(val) && val >= 140 && val <= 800) return val
+      if (!isNaN(val) && val >= MIN_W && val <= MAX_W) return val
     }
   } catch {}
-  return DEFAULT_GRAPH_H
+  return DEFAULT_W
 }
 
 type Props = {
@@ -50,27 +46,28 @@ type Props = {
  */
 export function Toolbox({ doc, selected }: Props) {
   const parsedBase = parseToOklch(selected.config.base)
-  const [graphH, setGraphH] = useState(initialGraphH)
+  const [width, setWidth] = useState(initialWidth)
   const [isResizing, setIsResizing] = useState(false)
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(STORAGE_KEY, String(graphH))
+      window.localStorage.setItem(STORAGE_KEY, String(width))
     } catch {}
-  }, [graphH])
+  }, [width])
+
 
   const handleResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault()
-    const startY = e.clientY
-    const startH = graphH
+    const startX = e.clientX
+    const startW = width
     setIsResizing(true)
 
     const onPointerMove = (moveEvent: PointerEvent) => {
-      const deltaY = moveEvent.clientY - startY
-      const minH = 160
-      const maxH = Math.max(300, window.innerHeight - 200)
-      const nextH = Math.round(Math.max(minH, Math.min(maxH, startH - deltaY)))
-      setGraphH(nextH)
+      // The grip is on the panel's left edge and the panel is pinned right,
+      // so dragging towards the stack is what makes it wider.
+      const deltaX = startX - moveEvent.clientX
+      const nextW = Math.round(Math.max(MIN_W, Math.min(MAX_W, startW + deltaX)))
+      setWidth(nextW)
     }
 
     const onPointerUp = () => {
@@ -84,8 +81,6 @@ export function Toolbox({ doc, selected }: Props) {
     window.addEventListener('pointerup', onPointerUp)
     window.addEventListener('pointercancel', onPointerUp)
   }
-
-  const panelH = graphH + PANEL_CHROME_H
 
   // Sixty-five bisections per redraw is not free, and the profile only moves
   // when the lightness curve, the hue curve, the base hue or the gamut do —
@@ -110,120 +105,127 @@ export function Toolbox({ doc, selected }: Props) {
   return (
     <section
       className="toolbox"
-      style={{ '--panel-h': `${panelH}px` } as React.CSSProperties}
+      style={{ '--toolbox-w': `${width}px` } as React.CSSProperties}
     >
       <div
         className={`toolbox__resizer${isResizing ? ' is-dragging' : ''}`}
         onPointerDown={handleResizeStart}
         role="separator"
-        aria-orientation="horizontal"
-        aria-label="Resize the curve panels"
-        title="Drag to resize the curve panels"
+        aria-orientation="vertical"
+        aria-label="Resize the toolbox"
+        title="Drag to widen the toolbox"
       >
         <span className="toolbox__resizer-grip" />
       </div>
-      <div className="toolbox__controls">
-        <div className="toolbox__primary">
-          <div className="toolbox__param">
-            {/* Keyed so switching palettes brings a fresh field rather than
-                carrying a half-typed name across to the next one. */}
-            <NameField
-              key={selected.id}
-              name={selected.name}
-              onRename={(name) => doc.rename(selected.id, name)}
-            />
-          </div>
+      {/* The grip is the panel's own edge and must not scroll with what it
+          sizes, so everything else goes in one scrolling body beside it. */}
+      <div className="toolbox__body">
+        {/* The name is the panel's title, not a labelled field among five
+            others. Everything below answers to one palette, so saying which
+            one is the first thing the column does — and it reads as a heading
+            until you put a caret in it. */}
+        <header className="toolbox__head">
+          <span className="toolbox__eyebrow">Palette</span>
+          {/* Keyed so switching palettes brings a fresh field rather than
+              carrying a half-typed name across to the next one. */}
+          <NameField
+            key={selected.id}
+            name={selected.name}
+            onRename={(name) => doc.rename(selected.id, name)}
+          />
+        </header>
 
-          <div className="toolbox__param">
-            <BaseColorInput
-              value={selected.config.base}
-              color={parsedBase ?? parseToOklch(FALLBACK_BASE)!}
-              gamut={doc.gamut}
-              valid={parsedBase !== null}
-              onChange={doc.setBase}
-              onGamut={doc.setGamut}
-            />
-          </div>
+        {/* One column of titled panels — Source, then a channel each. The
+            settings up here used to be a grid of six equal tags with no name
+            on the group, which read as a preamble to the curves rather than as
+            what it is: the thing the curves are derived *from*. */}
+        <div className="toolbox__panels">
+          <section className="panel panel--source">
+            <header className="panel__head">
+              <span className="panel__title">Source</span>
+            </header>
 
-          {!doc.stepsLocked && (
-            <div className="toolbox__param">
-              <NumberField
-                label="Steps"
-                title="Number of steps for this palette"
-                value={selected.config.steps}
-                min={MIN_STEPS}
-                max={MAX_STEPS}
-                step={1}
-                decimals={0}
-                stacked
-                inputClassName="toolbox__input-steps"
-                onCommit={(value) => doc.setPaletteSteps(selected.id, value)}
+            <div className="panel__body">
+              <BaseColorInput
+                value={selected.config.base}
+                color={parsedBase ?? parseToOklch(FALLBACK_BASE)!}
+                gamut={doc.gamut}
+                valid={parsedBase !== null}
+                onChange={doc.setBase}
+                onGamut={doc.setGamut}
               />
+
+              {/* Steps and position are both counts along the same ramp, so
+                  they share a row; the hex above needs the whole width to be
+                  read back. */}
+              <div className="panel__pair">
+                {!doc.stepsLocked && (
+                  <NumberField
+                    label="Steps"
+                    title="Number of steps for this palette"
+                    value={selected.config.steps}
+                    min={MIN_STEPS}
+                    max={MAX_STEPS}
+                    step={1}
+                    decimals={0}
+                    stacked
+                    inputClassName="toolbox__input-steps"
+                    onCommit={(value) => doc.setPaletteSteps(selected.id, value)}
+                  />
+                )}
+
+                <label className="field field--stacked">
+                  <span className="field__tag">Base position</span>
+                  <select
+                    className="toolbox__select-step"
+                    value={selected.config.baseIndex}
+                    onChange={(event) => doc.setBaseIndex(Number(event.target.value))}
+                    title="Which step carries your base colour. Moving it redistributes lightness across the ramp."
+                  >
+                    {/* Counted from one, not the token name. The labels are
+                        derived from lightness, so they renumber as the ramp is
+                        dragged — a position tells you where on the ramp the
+                        base sits, which is what this control is choosing. The
+                        value stays the config's own zero-based index. */}
+                    {selected.ramp.map((swatch) => (
+                      <option key={swatch.index} value={swatch.index}>
+                        {swatch.index + 1}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {/* The two verbs of the group, on one line and equally weighted:
+                  they were tagged "Constraint" and "Reset", which named them
+                  twice and made two buttons look like two more settings. */}
+              <div className="panel__pair">
+                <button
+                  type="button"
+                  className={`toolbox__btn-lock ${selected.config.baseLocked ? 'is-on' : ''}`}
+                  aria-pressed={selected.config.baseLocked}
+                  onClick={() => doc.setBaseLocked(!selected.config.baseLocked)}
+                  title={
+                    selected.config.baseLocked
+                      ? 'Curve edits are being corrected so they cannot move the base colour'
+                      : 'Pin the base colour so curve edits cannot change it'
+                  }
+                >
+                  {selected.config.baseLocked ? 'Base locked' : 'Lock base'}
+                </button>
+                <button
+                  type="button"
+                  className="toolbox__btn-rederive"
+                  disabled={!selected.edited}
+                  onClick={doc.rederive}
+                  title="Throw away every curve edit and rebuild this ramp from the base colour"
+                >
+                  Re-derive
+                </button>
+              </div>
             </div>
-          )}
+          </section>
 
-          <div className="toolbox__param">
-            <label className="field field--stacked">
-              <span className="field__tag">Base position</span>
-              <select
-                className="toolbox__select-step"
-                value={selected.config.baseIndex}
-                onChange={(event) => doc.setBaseIndex(Number(event.target.value))}
-                title="Which step carries your base colour. Moving it redistributes lightness across the ramp."
-              >
-                {/* Counted from one, not the token name. The labels are
-                    derived from lightness, so they renumber as the ramp is
-                    dragged — a position tells you where on the ramp the base
-                    sits, which is what this control is choosing. The value
-                    stays the config's own zero-based index. */}
-                {selected.ramp.map((swatch) => (
-                  <option key={swatch.index} value={swatch.index}>
-                    {swatch.index + 1}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <span className="spacer" />
-
-          <div className="toolbox__param">
-            <div className="field field--stacked">
-              <span className="field__tag">Constraint</span>
-              <button
-                type="button"
-                className={`toolbox__btn-lock ${selected.config.baseLocked ? 'is-on' : ''}`}
-                aria-pressed={selected.config.baseLocked}
-                onClick={() => doc.setBaseLocked(!selected.config.baseLocked)}
-                title={
-                  selected.config.baseLocked
-                    ? 'Curve edits are being corrected so they cannot move the base colour'
-                    : 'Pin the base colour so curve edits cannot change it'
-                }
-              >
-                {selected.config.baseLocked ? 'Base locked' : 'Lock base'}
-              </button>
-            </div>
-          </div>
-
-          <div className="toolbox__param">
-            <div className="field field--stacked">
-              <span className="field__tag">Reset</span>
-              <button
-                type="button"
-                className="toolbox__btn-rederive"
-                disabled={!selected.edited}
-                onClick={doc.rederive}
-                title="Throw away every curve edit and rebuild this ramp from the base colour"
-              >
-                Re-derive
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="curves">
         {CHANNEL_ORDER.map((key: CurveKey) => (
           <CurvePanel
             key={key}
@@ -238,12 +240,12 @@ export function Toolbox({ doc, selected }: Props) {
             syncTargets={syncTargets}
             onSyncTo={(ids) => doc.syncChannel(key, ids)}
             ceiling={key === 'chroma' ? ceiling : undefined}
-            graphH={graphH}
             onChange={(curve: Curve, moved?: CurveControl) => doc.setCurve(key, curve, moved)}
             onEndpoint={(end, value) => doc.setEndpoint(key, end, value)}
             onReset={() => doc.resetCurve(key)}
           />
         ))}
+      </div>
       </div>
     </section>
   )

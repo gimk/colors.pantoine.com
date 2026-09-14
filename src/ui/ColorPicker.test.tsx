@@ -324,9 +324,12 @@ describe('the picker frame', () => {
   })
 
   it('escapes the dock rather than being clipped inside it', () => {
-    // The dock is a max-height scroll container, so the panel is a modal
-    // dialog: an absolutely positioned popover would be cut off at its edge.
-    expect(declarations('.toolbox')).toContain('overflow-y: auto')
+    // The dock's body is a max-height scroll container, so the panel is a
+    // modal dialog: `showModal` puts it in the top layer, where no ancestor's
+    // overflow reaches it. An absolutely positioned popover would be cut off
+    // at that edge — and the edge is tighter now that the dock is a column.
+    expect(declarations('.toolbox__panels')).toContain('overflow-y: auto')
+    expect(declarations('.toolbox__body')).toContain('overflow: hidden')
     expect(declarations('.cdialog')).toContain('padding: 0')
     expect(css).toContain('.cdialog::backdrop')
   })
