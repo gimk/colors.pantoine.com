@@ -573,45 +573,34 @@ button.swatch:hover:not(:disabled) {
 
 /* Only the graph gives and takes. The header and the rows below are the
    content the panel is sized around, so neither may be shrunk to fit. */
-.panel__head,
-.panel__controls {
+.toolbox__panels > .panel > .panel__head,
+.toolbox__panels > .panel > .panel__controls {
   flex: none;
 }
 
-/* Name and axis stack in the first column, the reset sits in the second and
-   spans both rows. Side by side they left the name nothing at this width, and
-   the axis is a note about the plot below rather than a second title. */
+/* A title at one end and whatever closes or resets it at the other. The curve
+   sections restack this into a grid, but only for themselves: every dialog in
+   the app wears this header too, and a `1fr` track under a Close button
+   stretches it the width of the sheet. */
 .panel__head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
-  gap: 0 var(--space-4);
+  justify-content: space-between;
+  gap: var(--space-5);
   border-bottom: 1px solid var(--rule);
   padding: var(--space-3) var(--space-4);
-  background: rgba(0, 0, 0, 0.04);
-}
-
-:root[data-canvas='dark'] .panel__head {
-  background: rgba(255, 255, 255, 0.05);
 }
 
 .panel__title {
-  grid-column: 1;
   font-weight: var(--weight-semibold);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wider);
 }
 
 .panel__axis {
-  grid-column: 1;
   color: var(--muted);
   font-size: var(--text-2xs);
   letter-spacing: var(--tracking-tight);
-}
-
-.panel--curve .panel__reset {
-  grid-column: 2;
-  grid-row: 1 / span 2;
 }
 
 /* A line of controls sized to their own words. The curve panels have no use
@@ -1634,10 +1623,29 @@ select:disabled {
   border-top: 1px solid var(--rule);
 }
 
+/* Name and axis stack in the first column, the reset sits in the second and
+   spans both rows. Side by side they left the name nothing at this width, and
+   the axis is a note about the plot below rather than a second title. Here
+   and not on `.panel__head`, which every dialog wears: auto-placement drops a
+   lone Close button into the `1fr` track, where it stretches the whole sheet. */
 .toolbox__panels > .panel > .panel__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 var(--space-4);
   padding: 0 0 var(--space-5);
   border-bottom: 0;
   background: none;
+}
+
+.toolbox__panels > .panel > .panel__head > .panel__title,
+.toolbox__panels > .panel > .panel__head > .panel__axis {
+  grid-column: 1;
+}
+
+.toolbox__panels > .panel--curve > .panel__head > .panel__reset {
+  grid-column: 2;
+  grid-row: 1 / span 2;
 }
 
 /* A step clear of the body text under it — at 12px semibold the channel names

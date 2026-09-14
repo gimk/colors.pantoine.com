@@ -471,7 +471,11 @@ describe('the sticky frame', () => {
     expect(declarations('.panel--curve')).toContain('flex: 1 0 auto')
     // Only the graph gives and takes; the rows around it are the content the
     // panel is sized around.
-    expect(declarations('.panel__head,\n.panel__controls')).toContain('flex: none')
+    expect(
+      declarations(
+        '.toolbox__panels > .panel > .panel__head,\n.toolbox__panels > .panel > .panel__controls',
+      ),
+    ).toContain('flex: none')
     expect(declarations('.graph')).toContain('flex: 1')
     // The grip is the panel's own edge and must not scroll with what it sizes,
     // so the scroll is on the panels beside it, not on the body around both.
@@ -962,10 +966,23 @@ describe('UI standardization and menu separation', () => {
       .map((block) => block.slice(0, block.indexOf('{')).trim())
       .filter((sel) => /(^|,)\s*\.toolbox\s+\.panel/.test(sel))
     expect(reaching).toEqual([])
-    // The dialogs keep the padded, ruled header the sections gave up.
+
+    // The dialogs keep the padded, ruled header the sections gave up. And it
+    // stays a flex row: the sections restack it into two tracks, but a lone
+    // Close button auto-placed into a `1fr` track stretches the whole sheet,
+    // so that grid belongs to the sections and not to `.panel__head` itself.
     const head = declarations('.panel__head')
     expect(head).toContain('padding: var(--space-3) var(--space-4)')
     expect(head).toContain('border-bottom: 1px solid var(--rule)')
+    expect(head).toContain('display: flex')
+    expect(head).toContain('justify-content: space-between')
+    expect(head).not.toContain('grid')
+    expect(head).not.toContain('background')
+
+    // Nor may the placement the sections need leak onto the shared classes.
+    expect(declarations('.panel__title')).not.toContain('grid-column')
+    expect(declarations('.panel__axis')).not.toContain('grid-column')
+    expect(declarations('.toolbox__panels > .panel > .panel__head')).toContain('display: grid')
   })
 
   it('titles the palette, then names the group the curves come from', () => {
