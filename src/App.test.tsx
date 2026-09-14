@@ -909,8 +909,8 @@ describe('UI standardization and menu separation', () => {
    */
   it('keeps the panel to four steps of type, not one', () => {
     expect(declarations('.toolbox__head .toolbox__input-name')).toContain('var(--text-lg)')
-    expect(declarations('.toolbox .panel__title')).toContain('font-size: var(--text-md)')
-    expect(declarations('.toolbox .panel__title')).toContain('var(--weight-bold)')
+    expect(declarations('.toolbox__panels > .panel > .panel__head > .panel__title')).toContain('font-size: var(--text-md)')
+    expect(declarations('.toolbox__panels > .panel > .panel__head > .panel__title')).toContain('var(--weight-bold)')
     expect(declarations('.toolbox__eyebrow')).toContain('font-size: var(--text-xs)')
     // The labels stay the smallest thing in the column, under all of it.
     expect(css).toMatch(/\.field__tag \{[^}]*font-size: 9px/)
@@ -923,14 +923,14 @@ describe('UI standardization and menu separation', () => {
    * section and the next, running the column's full width, means it.
    */
   it('divides the column into sections rather than boxing each one', () => {
-    const panel = declarations('.toolbox .panel')
+    const panel = declarations('.toolbox__panels > .panel')
     expect(panel).toContain('border: 0')
     // The section carries the padding, so the rule can reach both edges.
     expect(panel).toContain('padding')
     expect(declarations('.toolbox__panels')).not.toContain('padding')
-    expect(declarations('.toolbox .panel + .panel')).toContain('border-top: 1px solid var(--rule)')
+    expect(declarations('.toolbox__panels > .panel + .panel')).toContain('border-top: 1px solid var(--rule)')
     // And nothing is painted in to mark one.
-    expect(declarations('.toolbox .panel__head')).toContain('background: none')
+    expect(declarations('.toolbox__panels > .panel > .panel__head')).toContain('background: none')
   })
 
   /**
@@ -940,12 +940,32 @@ describe('UI standardization and menu separation', () => {
   it('sorts the buttons by what they do, not into one chrome', () => {
     // Discards sit back until wanted.
     expect(declarations('.toolbox__btn-rederive')).toContain('color: var(--muted)')
-    expect(declarations('.toolbox .panel__reset')).toContain('color: var(--muted)')
+    expect(declarations('.toolbox__panels > .panel > .panel__head > .panel__reset')).toContain('color: var(--muted)')
     // Commitments are the tallest thing under a head.
-    expect(declarations('.toolbox .panel__pair > button')).toContain('height: 30px')
+    expect(declarations('.toolbox__panels .panel__pair > button')).toContain('height: 30px')
     // A shape is tried and retried, so its strip is the lightest and shortest.
-    expect(declarations('.toolbox .seg__btn')).toContain('height: 24px')
-    expect(declarations('.toolbox .seg__btn')).toContain('color: var(--muted)')
+    expect(declarations('.toolbox__panels .seg__btn')).toContain('height: 24px')
+    expect(declarations('.toolbox__panels .seg__btn')).toContain('color: var(--muted)')
+  })
+
+  /**
+   * Apply to and the colour picker open from inside these sections, so
+   * everything in those sheets is a DOM descendant of the toolbox however far
+   * the top layer moves it — and both dress their headers in `.panel__head`.
+   * A rule written `.toolbox .panel__head` reaches straight into them and
+   * takes the padding off, which is what happened. Direct children the whole
+   * way down is the only spelling a sheet cannot match.
+   */
+  it('does not let the column restyle the sheets that open from it', () => {
+    const reaching = css
+      .split('}')
+      .map((block) => block.slice(0, block.indexOf('{')).trim())
+      .filter((sel) => /(^|,)\s*\.toolbox\s+\.panel/.test(sel))
+    expect(reaching).toEqual([])
+    // The dialogs keep the padded, ruled header the sections gave up.
+    const head = declarations('.panel__head')
+    expect(head).toContain('padding: var(--space-3) var(--space-4)')
+    expect(head).toContain('border-bottom: 1px solid var(--rule)')
   })
 
   it('titles the palette, then names the group the curves come from', () => {
