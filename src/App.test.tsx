@@ -379,7 +379,7 @@ describe('the help dialog', () => {
     expect(declarations('.footnote')).toBe('')
     for (const line of [
       'perceptually even',
-      'Click a swatch to copy it',
+      'Click any swatch to copy it',
       'notched corner',
       'saved in this browser',
     ]) {
@@ -392,7 +392,7 @@ describe('the help dialog', () => {
     expect(dialog.slice(0, dialog.indexOf('>'))).not.toContain('open')
     for (const line of [
       'perceptually even',
-      'Click a swatch to copy it',
+      'Click any swatch to copy it',
       'notched corner',
       'saved in this browser',
     ]) {
@@ -402,6 +402,50 @@ describe('the help dialog', () => {
 
   it('names the gamut the clipping notch is relative to', () => {
     expect(dialog).toContain('sRGB')
+  })
+
+  /**
+   * Somebody opens this with one question already in mind — what the notch
+   * means, where their palettes went. Headings are what let them find the
+   * answer without reading the other six paragraphs.
+   */
+  it('groups the copy under headings rather than running it as one block', () => {
+    expect(dialog).toContain('class="help__heading"')
+    for (const heading of ['Two modes', 'The ramp', 'Editing a ramp', 'Keeping and sharing']) {
+      expect(dialog).toContain(heading)
+    }
+    // Ink over muted over a smaller footnote: three steps, not one.
+    expect(declarations('.help__heading')).toContain('color: var(--ink)')
+    expect(declarations('.help__body p')).toContain('color: var(--muted)')
+    expect(declarations('.help__credit')).toContain('font-size: var(--text-xs)')
+  })
+
+  /**
+   * The hash is stripped from the address bar on load, and has been since
+   * sharing moved into Export — so the bar carries nothing, and a link carries
+   * the palettes you picked rather than the whole set.
+   */
+  it('does not still promise that the address bar holds the document', () => {
+    expect(dialog).not.toContain('address bar')
+    expect(dialog).toContain('reopens the palettes you pick')
+  })
+
+  /** The tools are a column down the right; nothing travels to a palette. */
+  it('describes the tools where they actually are', () => {
+    expect(dialog).not.toContain('bring the toolbox')
+    expect(dialog).toContain('panel down the right')
+  })
+
+  /**
+   * The masthead carries this dialog in both halves of the tool, so it opens on
+   * the scheme board too — where there is no panel down the right and no curve
+   * to drag. It has to say which half it is describing.
+   */
+  it('orients a reader who opened it from the other mode', () => {
+    expect(dialog).toContain('Two modes')
+    expect(dialog).toContain('In Ramps')
+    // The board this can also be opened from.
+    expect(dialog).toContain('Scheme is where a palette starts')
   })
 })
 

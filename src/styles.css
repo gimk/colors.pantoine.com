@@ -248,13 +248,47 @@ select {
 }
 
 .help__body {
-  padding: var(--space-6);
+  padding: var(--space-7);
+  max-height: min(70vh, 640px);
+  overflow-y: auto;
 }
 
 .help__body p {
   margin: 0 0 var(--space-4);
   color: var(--muted);
   line-height: 1.55;
+}
+
+/* Three steps: a heading in ink, the prose in muted under it, and the credit
+   smaller than either. It was seven paragraphs at one weight, which is a wall
+   to anyone who opened this with a single question in mind. */
+.help__section {
+  margin-bottom: var(--space-8);
+}
+
+.help__section:last-of-type {
+  margin-bottom: var(--space-7);
+}
+
+.help__heading {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--ink);
+}
+
+.help__section p:last-child {
+  margin-bottom: 0;
+}
+
+/* A footnote, not a step of the argument: it sits below a rule and smaller. */
+.help__credit {
+  margin: 0;
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--grid);
+  font-size: var(--text-xs);
 }
 
 .masthead__credit {
