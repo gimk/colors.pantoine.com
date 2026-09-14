@@ -1595,16 +1595,130 @@ select:disabled {
   background: var(--paper);
 }
 
-/* One scrolling column of titled panels: Source, then a channel each. */
+/* One scrolling column of sections: Source, then a channel each. No padding
+   and no gap of its own — each section carries its own, so the rule between
+   two of them can run the whole width of the column. */
 .toolbox__panels {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-  padding: var(--space-5);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* --- the right panel's own hierarchy ---------------------------------- */
+
+/* Sections, not cards. Boxed, each one drew a border around controls that are
+   themselves all borders — in a column this narrow that is a frame inside a
+   frame inside a frame, and the eye has to work out which of them means
+   anything. Flat, there is one rule between one section and the next, running
+   the full width so it reads as a division of the column rather than as the
+   edge of a thing sitting in it.
+
+   Scoped to the toolbox: `.panel` is a card in the dialogs, where a box with
+   its own edges is exactly right. */
+.toolbox .panel {
+  border: 0;
+  overflow: visible;
+  padding: var(--space-6) var(--space-5) var(--space-7);
+}
+
+/* Between sections only. The first sits under the palette's name, which closes
+   with a rule of its own already. */
+.toolbox .panel + .panel {
+  border-top: 1px solid var(--rule);
+}
+
+.toolbox .panel__head {
+  padding: 0 0 var(--space-5);
+  border-bottom: 0;
+  background: none;
+}
+
+/* A step clear of the body text under it — at 12px semibold the channel names
+   were the size of the values they head, which is why nothing in the column
+   read as a title. This, the name above and the values below are the three
+   sizes the panel needs; everything else is a label and stays at 9px. */
+.toolbox .panel__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-wider);
+}
+
+/* The section's own padding is the only padding now, and space separates the
+   plot from the rows under it — the rule that used to was one more edge in a
+   column that had too many. */
+.toolbox .panel__body,
+.toolbox .panel__controls {
+  padding: 0;
+  border-top: 0;
+}
+
+.toolbox .panel__controls {
+  padding-top: var(--space-5);
+}
+
+/* The plot is the section. Everything around it is a label or a control that
+   adjusts it, so when the column has to choose, the curve gets the pixels —
+   at 120 it was the smallest thing a section could be rather than the size a
+   curve wants to be read and dragged at. The column scrolls sooner for it,
+   which is the right way round. */
+.toolbox .graph {
+  min-height: 180px;
+}
+
+/* --- three kinds of button -------------------------------------------- */
+
+/* Quiet, on paper: Re-derive throws every curve edit away. It is always there
+   and rarely wanted, so it sits back in muted until the pointer is on it — a
+   discard that looked exactly like Apply all was the panel's worst
+   flattening, one being a throwing-away and the other a commitment. */
+.toolbox__btn-rederive {
+  color: var(--muted);
+  border-color: var(--muted);
+}
+
+.toolbox__btn-rederive:hover:not(:disabled),
+.toolbox__btn-rederive:focus-visible {
+  color: var(--ink);
+  border-color: var(--rule);
+}
+
+/* Reset is the same kind of act on one channel, so it is quiet in the same
+   way — and the smallest control in the panel, sitting in the head rather
+   than among the rows that do things. */
+.toolbox .panel__reset {
+  height: 22px;
+  color: var(--muted);
+  border-color: var(--muted);
+}
+
+.toolbox .panel__reset:hover,
+.toolbox .panel__reset:focus-visible {
+  color: var(--ink);
+  border-color: var(--rule);
+}
+
+/* Ordinary: the ones that commit — send this curve to other palettes, pin the
+   base, rebuild the ramp. Full ink, and the tallest controls under a bar. */
+.toolbox .panel__pair > button {
+  height: 30px;
+  font-size: var(--text-sm);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+/* Quick pick: a shape is tried and retried, so the strip is the lightest and
+   shortest thing in the panel rather than another row of full-height chrome. */
+.toolbox .seg__btn {
+  height: 24px;
+  color: var(--muted);
+}
+
+.toolbox .seg__btn:hover,
+.toolbox .seg__btn:focus-visible {
+  color: var(--ink);
 }
 
 .toolbox__param {

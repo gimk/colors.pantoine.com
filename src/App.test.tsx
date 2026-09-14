@@ -902,6 +902,52 @@ describe('UI standardization and menu separation', () => {
     expect(declarations('.field__swatch-wrap .picker')).toContain('width: 38px')
   })
 
+  /**
+   * Four sizes, each doing one job: the palette's name, a section title, the
+   * values, and the labels naming them. The titles used to sit at the size of
+   * the values they headed, so the column read as one flat field of text.
+   */
+  it('keeps the panel to four steps of type, not one', () => {
+    expect(declarations('.toolbox__head .toolbox__input-name')).toContain('var(--text-lg)')
+    expect(declarations('.toolbox .panel__title')).toContain('font-size: var(--text-md)')
+    expect(declarations('.toolbox .panel__title')).toContain('var(--weight-bold)')
+    expect(declarations('.toolbox__eyebrow')).toContain('font-size: var(--text-xs)')
+    // The labels stay the smallest thing in the column, under all of it.
+    expect(css).toMatch(/\.field__tag \{[^}]*font-size: 9px/)
+  })
+
+  /**
+   * Sections, not cards. A box around controls that are themselves all borders
+   * is a frame inside a frame inside a frame, and in a column this narrow the
+   * eye has to work out which of them means anything. One rule between one
+   * section and the next, running the column's full width, means it.
+   */
+  it('divides the column into sections rather than boxing each one', () => {
+    const panel = declarations('.toolbox .panel')
+    expect(panel).toContain('border: 0')
+    // The section carries the padding, so the rule can reach both edges.
+    expect(panel).toContain('padding')
+    expect(declarations('.toolbox__panels')).not.toContain('padding')
+    expect(declarations('.toolbox .panel + .panel')).toContain('border-top: 1px solid var(--rule)')
+    // And nothing is painted in to mark one.
+    expect(declarations('.toolbox .panel__head')).toContain('background: none')
+  })
+
+  /**
+   * Three weights of button, because they are three kinds of act: discarding
+   * work, committing it, and trying a shape on. They were one.
+   */
+  it('sorts the buttons by what they do, not into one chrome', () => {
+    // Discards sit back until wanted.
+    expect(declarations('.toolbox__btn-rederive')).toContain('color: var(--muted)')
+    expect(declarations('.toolbox .panel__reset')).toContain('color: var(--muted)')
+    // Commitments are the tallest thing under a head.
+    expect(declarations('.toolbox .panel__pair > button')).toContain('height: 30px')
+    // A shape is tried and retried, so its strip is the lightest and shortest.
+    expect(declarations('.toolbox .seg__btn')).toContain('height: 24px')
+    expect(declarations('.toolbox .seg__btn')).toContain('color: var(--muted)')
+  })
+
   it('titles the palette, then names the group the curves come from', () => {
     const toolbox = html.slice(html.indexOf('class="toolbox"'))
     expect(toolbox).toContain('class="toolbox__eyebrow"')
