@@ -10,7 +10,7 @@
   --grid: #e4e4e4;
 
   /* Typography scale */
-  --mono: 'Kode Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  --mono: 'Kode Mono Variable', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   --text-2xs: 9px;
   --text-xs: 10px;
   --text-sm: 11px;
