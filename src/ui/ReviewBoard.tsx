@@ -11,6 +11,7 @@ import { shownColor } from '../color/ramp'
 import type { DocumentApi } from '../state/useDocument'
 import { MAX_GAP, type ReviewApi } from '../state/useReview'
 import { RampStrip } from './RampStrip'
+import { usePhone } from './useMediaQuery'
 
 type Props = {
   doc: DocumentApi
@@ -100,6 +101,9 @@ export function ReviewBoard({
   const [dragging, setDragging] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const [copiedBoard, setCopiedBoard] = useState(false)
+  const phone = usePhone()
+  /** Whether a phone's bar is showing the controls it keeps folded away. */
+  const [more, setMore] = useState(false)
 
   const { layout, steps } = review
   const rows = layout.axis === 'rows'
@@ -240,10 +244,24 @@ export function ReviewBoard({
 
   return (
     <div className={`review review--${layout.axis}`}>
-      <header className="review__bar">
+      {/* Folded on a phone the way the other two bars are: Back and a
+          toggle, with everything else behind it. */}
+      <header
+        className={`review__bar${phone ? ` review__bar--phone${more ? ' is-open' : ''}` : ''}`}
+      >
+        {phone && (
+          <button
+            type="button"
+            className={`review__more${more ? ' is-on' : ''}`}
+            aria-expanded={more}
+            onClick={() => setMore((on) => !on)}
+          >
+            {more ? 'Less' : 'More'}
+          </button>
+        )}
         <button
           type="button"
-          className="is-primary"
+          className="is-primary review__lead"
           onClick={onExit}
           title="Back to the editor (Escape)"
         >

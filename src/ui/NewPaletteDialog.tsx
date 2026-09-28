@@ -166,6 +166,8 @@ export function NewPaletteDialog({
                     value={pasted}
                     spellCheck={false}
                     autoComplete="off"
+                    autoCapitalize="off"
+                    autoCorrect="off"
                     rows={4}
                     placeholder={'#ff5722\nrgb(30 136 229)\noklch(0.7 0.15 150)'}
                     onChange={(event) => setPasted(event.target.value)}

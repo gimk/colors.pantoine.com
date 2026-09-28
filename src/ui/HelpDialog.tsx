@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { gamutLabel, type Gamut } from '../color/oklch'
+import { usePhone } from './useMediaQuery'
 
 type Props = {
   gamut: Gamut
@@ -16,6 +17,9 @@ type Props = {
  */
 export function HelpDialog({ gamut }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
+  /** A phone's layout is a different set of directions — tabs rather than a
+   *  panel down the right, taps rather than clicks and arrow keys. */
+  const phone = usePhone()
 
   return (
     <>
@@ -64,7 +68,10 @@ export function HelpDialog({ gamut }: Props) {
               <p>
                 Scheme is where a palette starts: you choose the colours that go
                 together. Ramps opens each of them out into a full set of tints and
-                shades. The switch is in the middle of the bar at the top.
+                shades.{' '}
+                {phone
+                  ? 'The switch is at the top, beside the question mark.'
+                  : 'The switch is in the middle of the bar at the top.'}
               </p>
             </section>
 
@@ -74,9 +81,25 @@ export function HelpDialog({ gamut }: Props) {
                 Every step is computed in OKLCH, so the ramp is perceptually even and
                 lightness, chroma and hue are yours to shape.
               </p>
-              <p>Click any swatch to copy it.</p>
+              <p>{phone ? 'Tap any swatch to copy it.' : 'Click any swatch to copy it.'}</p>
             </section>
 
+            {phone ? (
+              <section className="help__section">
+                <h3 className="help__heading">Editing a ramp</h3>
+                <p>
+                  In Ramps, tap Edit on a palette to open its tools — its base color
+                  and steps at the top, then a section for each channel, with the ramp
+                  kept in view under its name. The Palettes tab at the foot takes you
+                  back to the stack, and the arrows on a palette move it up or down.
+                </p>
+                <p>
+                  On a curve, drag the round handles. Start and End set the two ends
+                  outright, the four shapes rewrite the whole curve, and Reset rebuilds
+                  the channel from your base color.
+                </p>
+              </section>
+            ) : (
             <section className="help__section">
               <h3 className="help__heading">Editing a ramp</h3>
               <p>
@@ -92,6 +115,7 @@ export function HelpDialog({ gamut }: Props) {
                 the channel from your base colour.
               </p>
             </section>
+            )}
 
             <section className="help__section">
               <h3 className="help__heading">More than {gamutLabel(gamut)} can show</h3>

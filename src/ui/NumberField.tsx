@@ -111,7 +111,10 @@ export function NumberField({
       <input
         type="text"
         className={`number${inputClassName ? ` ${inputClassName}` : ''}`}
-        inputMode="decimal"
+        /* The decimal keypad, except where the value can go below zero: an
+           iPhone's has no minus key, so a hue shift of -20 could not be
+           typed at all. Those get the ordinary keyboard instead. */
+        inputMode={min < 0 ? 'text' : 'decimal'}
         autoComplete="off"
         spellCheck={false}
         disabled={disabled}

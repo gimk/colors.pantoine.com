@@ -250,6 +250,7 @@ select {
 .help__body {
   padding: var(--space-7);
   max-height: min(70vh, 640px);
+  max-height: min(70dvh, 640px);
   overflow-y: auto;
 }
 
@@ -1067,6 +1068,9 @@ body.is-dragging-hue * {
    pushing the dialog off the top and bottom of the screen. */
 .exportd__body {
   max-height: calc(100vh - 200px);
+  /* The height actually showing: on a phone `vh` is the tallest the window
+     gets, so the foot of the list sat behind the browser's own bars. */
+  max-height: calc(100dvh - 200px);
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -3421,5 +3425,188 @@ button.newpal__cand:hover {
     .scheme__insert {
       left: 32px;
     }
+  }
+}
+
+/* --- touch sizing -------------------------------------------------------
+
+   The desktop scale is a 26px control under a pointer that lands on a pixel.
+   A fingertip covers forty, so on a coarse pointer the controls grow to
+   meet it — heights, not layouts, so every row keeps its arrangement. */
+@media (pointer: coarse) {
+  /* Under 16px iOS zooms the page in on every field it focuses, and the
+     page cannot scroll back out of it. The palette's name is already larger
+     and keeps its size. */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not(.toolbox__input-name),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  .modes button {
+    min-height: 32px;
+  }
+
+  .help__open {
+    width: 32px;
+    height: 32px;
+  }
+
+  .controls__btn-lock {
+    width: 36px;
+    height: 36px;
+  }
+
+  .prow__head button,
+  .field input.number.prow__input-steps,
+  .prow__input-steps {
+    height: 40px;
+  }
+
+  .prow__btn-icon {
+    width: 40px;
+  }
+
+  .toolbox__input-color,
+  .toolbox__input-steps,
+  .toolbox__select-step,
+  .toolbox__btn-lock,
+  .toolbox__btn-rederive,
+  .toolbox__panels .panel__pair > button,
+  .field__swatch-wrap,
+  .field__swatch-wrap .toolbox__input-color {
+    height: 40px;
+  }
+
+  .field__swatch-wrap .picker {
+    width: 40px;
+    height: 40px;
+  }
+
+  .toolbox__panels .seg__btn {
+    height: 36px;
+  }
+
+  .toolbox__panels > .panel > .panel__head > .panel__reset {
+    height: 32px;
+  }
+
+  /* Close, Cancel and Back in every sheet's header. */
+  .panel__head button {
+    min-height: 36px;
+  }
+
+  .exportd__minor {
+    padding: var(--space-4) var(--space-5);
+  }
+
+  .newpal__rules button {
+    height: 36px;
+  }
+
+  .plist .plist__row {
+    padding-block: var(--space-5);
+  }
+}
+
+/* A tap leaves the element under it hovered until the next tap lands
+   somewhere else, so every hover state below stayed on after the finger had
+   gone — a bar under a button nobody is pressing, an outline round a swatch
+   that reads as a selection. Each is put back to its resting look. */
+@media (hover: none) {
+  button:hover:not(:disabled):not(:focus-visible) {
+    background-size: 0% 2px;
+  }
+
+  .picker:hover,
+  button.newpal__cand:hover {
+    outline: none;
+  }
+
+  .controls__btn-lock.is-unlocked:hover {
+    color: var(--muted);
+    border-style: dashed;
+  }
+
+  .toolbox__btn-rederive:hover:not(:disabled),
+  .toolbox__panels > .panel > .panel__head > .panel__reset:hover,
+  .exportd__minor:hover:not(:disabled) {
+    color: var(--muted);
+    border-color: var(--muted);
+  }
+
+  .toolbox__panels .seg__btn:hover {
+    color: var(--muted);
+  }
+
+  .exportd__formats .exportd__format:hover .exportd__ext {
+    color: var(--muted);
+  }
+
+  .plist button.plist__row:hover:not(:disabled):not(.is-picked) {
+    background: var(--paper);
+  }
+}
+
+/* A step up the type scale on a phone. The 9 and 10px sizes are legible on
+   a monitor at arm's length and not on a screen in the hand. */
+@media (max-width: 720px) {
+  :root {
+    --text-2xs: 10px;
+    --text-xs: 11px;
+    --text-sm: 12px;
+  }
+
+  .field__tag,
+  .prow__badge {
+    font-size: var(--text-2xs);
+  }
+}
+
+/* Clear of the notch and the home indicator once the page is allowed under
+   them (`viewport-fit=cover`). Zero on anything without either, which is
+   every desktop. */
+.app,
+.scheme,
+.review {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.panes {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* The review board's bar, folded on a phone: Back and More on the first row,
+   the rest under it once More is open. Its title goes — the Back button
+   already says where this is. */
+@media (max-width: 720px) {
+  .review__bar--phone .review__lead {
+    order: -3;
+  }
+
+  .review__bar--phone .review__more {
+    order: -2;
+    margin-left: auto;
+  }
+
+  .review__bar--phone::before {
+    content: '';
+    order: -1;
+    flex-basis: 100%;
+    height: 0;
+    margin-top: calc(var(--space-4) * -1);
+  }
+
+  .review__bar--phone button {
+    min-height: 36px;
+  }
+
+  .review__bar--phone:not(.is-open)::before,
+  .review__bar--phone:not(.is-open) > :not(.review__lead):not(.review__more),
+  .review__bar--phone > h1,
+  .review__bar--phone > .spacer,
+  .review__bar--phone > .divider {
+    display: none;
   }
 }

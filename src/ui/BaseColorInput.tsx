@@ -26,6 +26,11 @@ export function BaseColorInput({ value, color, gamut, valid, onChange, onGamut }
           value={value}
           spellCheck={false}
           autoComplete="off"
+          /* A color is not a word: a phone keyboard would capitalize it,
+             or correct `oklch` into something it has heard of. */
+          autoCapitalize="off"
+          autoCorrect="off"
+          enterKeyHint="done"
           placeholder="#7c3aed"
           aria-invalid={!valid}
           onChange={(event) => onChange(event.target.value)}

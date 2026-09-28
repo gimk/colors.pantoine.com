@@ -36,7 +36,15 @@ export function ApplyToDialog({ channel, targets, onApply, defaultOpen = false }
   const buttonRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(defaultOpen)
   const [picked, setPicked] = useState<string[]>([])
-  const [coords, setCoords] = useState<{ top?: number; bottom?: number; left: number }>({
+  const [coords, setCoords] = useState<{
+    top?: number
+    bottom?: number
+    left: number
+    /** The room on the side it opened to. Past that it scrolls rather than
+     *  running off the window with its header — which on a short phone
+     *  screen, or one on its side, was the Cancel button. */
+    maxHeight?: number
+  }>({
     left: 16,
     bottom: 80,
   })
@@ -50,9 +58,11 @@ export function ApplyToDialog({ channel, targets, onApply, defaultOpen = false }
     // Above by preference: the panels this opens from are at the foot of the
     // window, so below is usually a sliver and above is the whole page.
     if (rect.top >= window.innerHeight - rect.bottom) {
-      setCoords({ bottom: Math.max(8, window.innerHeight - rect.top + 8), left, top: undefined })
+      const bottom = Math.max(8, window.innerHeight - rect.top + 8)
+      setCoords({ bottom, left, top: undefined, maxHeight: window.innerHeight - bottom - 8 })
     } else {
-      setCoords({ top: Math.max(8, rect.bottom + 8), left, bottom: undefined })
+      const top = Math.max(8, rect.bottom + 8)
+      setCoords({ top, left, bottom: undefined, maxHeight: window.innerHeight - top - 8 })
     }
   }
 
@@ -118,6 +128,8 @@ export function ApplyToDialog({ channel, targets, onApply, defaultOpen = false }
           left: `${coords.left}px`,
           top: coords.top != null ? `${coords.top}px` : 'auto',
           bottom: coords.bottom != null ? `${coords.bottom}px` : 'auto',
+          // A modal dialog already scrolls what it cannot show.
+          maxHeight: coords.maxHeight != null ? `${coords.maxHeight}px` : undefined,
         }}
         aria-labelledby="applyto-title"
         onClose={() => setOpen(false)}

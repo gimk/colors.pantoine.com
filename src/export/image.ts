@@ -114,19 +114,68 @@ export function toPngBlob(ramp: Swatch[], options: ImageOptions): Promise<Blob |
   })
 }
 
-/** Straight to the clipboard, ready to paste onto a Figma canvas. */
-export async function copyPng(ramp: Swatch[], options: ImageOptions): Promise<boolean> {
-  const blob = await toPngBlob(ramp, options)
-  if (!blob || typeof ClipboardItem === 'undefined') return false
+/**
+ * A PNG to the clipboard, handed over while it is still being drawn.
+ *
+ * Safari only lets a page write to the clipboard inside the gesture that
+ * asked for it, and awaiting the canvas first spent that gesture — every
+ * Copy PNG on an iPhone was refused. So the write is made at once, with a
+ * promise of the image in it, which the spec allows and Safari requires.
+ * A browser that only takes a finished blob refuses the promise, and gets
+ * the finished blob instead: the way this always worked there.
+ */
+export async function writePng(image: Promise<Blob | null>): Promise<boolean> {
+  if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) return false
+  const png = image.then((blob) => {
+    if (!blob) throw new Error('The image could not be rendered')
+    return blob
+  })
   try {
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
     return true
   } catch {
-    return false
+    try {
+      const blob = await png
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+      return true
+    } catch {
+      return false
+    }
   }
 }
 
+/** Straight to the clipboard, ready to paste onto a Figma canvas. */
+export function copyPng(ramp: Swatch[], options: ImageOptions): Promise<boolean> {
+  return writePng(toPngBlob(ramp, options))
+}
+
+/**
+ * A file to keep, offered the way the device keeps files.
+ *
+ * On a touch device that is the share sheet — Save Image, AirDrop, Files —
+ * because a download link on a phone either does nothing or opens the file
+ * in a tab with no way back, and in an installed app has nowhere to go at
+ * all. Asked about hover rather than about `share` alone: desktop browsers
+ * have a share sheet too, and a download is what a desk expects.
+ */
 export function download(blob: Blob, filename: string): void {
+  const file = typeof File === 'undefined' ? null : new File([blob], filename, { type: blob.type })
+  const touch =
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(hover: none)').matches
+  if (touch && file && navigator.canShare?.({ files: [file] })) {
+    // A share refused for want of a gesture falls back to the link, which is
+    // no worse than before; one cancelled by the person is left cancelled.
+    navigator.share({ files: [file] }).catch((error: unknown) => {
+      if ((error as { name?: string } | null)?.name !== 'AbortError') saveViaLink(blob, filename)
+    })
+    return
+  }
+  saveViaLink(blob, filename)
+}
+
+function saveViaLink(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -211,18 +260,11 @@ export function rampsPngBlob(
   })
 }
 
-export async function copyRampsPng(
+export function copyRampsPng(
   palettes: NamedRamp[],
   options: ImageOptions,
 ): Promise<boolean> {
-  const blob = await rampsPngBlob(palettes, options)
-  if (!blob || typeof ClipboardItem === 'undefined') return false
-  try {
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-    return true
-  } catch {
-    return false
-  }
+  return writePng(rampsPngBlob(palettes, options))
 }
 
 export async function downloadRampsPng(
@@ -605,16 +647,9 @@ export function boardPngBlob(
 }
 
 /** The board as arranged, straight to the clipboard. */
-export async function copyBoardPng(
+export function copyBoardPng(
   palettes: BoardPalette[],
   options: BoardOptions,
 ): Promise<boolean> {
-  const blob = await boardPngBlob(palettes, options)
-  if (!blob || typeof ClipboardItem === 'undefined') return false
-  try {
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-    return true
-  } catch {
-    return false
-  }
+  return writePng(boardPngBlob(palettes, options))
 }

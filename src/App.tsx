@@ -148,6 +148,14 @@ export function App() {
 
   useEffect(() => {
     document.documentElement.dataset.canvas = dark ? 'dark' : 'light'
+    // A phone's status bar follows the canvas: a white strip over a black
+    // canvas read as a second frame. Touch devices only — a desktop browser
+    // that tints its tab strip from this would change color on a desk too.
+    if (window.matchMedia?.('(hover: none)').matches) {
+      document
+        .querySelector('meta[name="theme-color"]')
+        ?.setAttribute('content', dark ? '#000000' : '#ffffff')
+    }
   }, [dark])
 
   // Ctrl/Cmd+Z and Ctrl+Shift+Z (or Ctrl+Y), on whichever history is in view.
