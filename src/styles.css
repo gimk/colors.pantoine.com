@@ -3405,9 +3405,27 @@ button.newpal__cand:hover {
   }
 
   /* Still the copy acknowledgement, in the room a step has: a tick rather
-     than a word. */
+     than a word, and over the chip rather than in the label cell. In the
+     cell it was a second line the value had never taken up here, so the
+     copied step grew taller than its neighbors and broke the grid under
+     the ramp. Laid over the color it moves nothing — the same boxed mark
+     the strip uses when its labels are away. */
+  .prow .swatch {
+    position: relative;
+  }
+
   .prow .swatch__copied {
+    position: absolute;
+    top: 36px;
+    left: 0;
+    right: 0;
+    transform: translateY(-50%);
+    padding: var(--space-1) 0;
+    background: var(--ink);
+    color: var(--paper);
+    text-align: center;
     font-size: 0;
+    line-height: 1;
   }
 
   .prow .swatch__copied::before {
