@@ -80,6 +80,14 @@ export function PaletteRow({
    */
   const copies = selected
 
+  /**
+   * A phone's row that is not the one being edited: its name and its ramp,
+   * nothing else. With every row carrying seven buttons the stack was a wall
+   * of chrome; the controls belong to the palette in hand, and a tap on any
+   * other row is how you pick it up.
+   */
+  const quiet = onEdit !== undefined && !selected
+
   const pick = (event: MouseEvent<HTMLElement>) => {
     if ((event.target as HTMLElement).closest('button, input, select, a, .prow__handle')) return
     if (!selected) {
@@ -131,7 +139,7 @@ export function PaletteRow({
       aria-current={selected ? 'true' : undefined}
     >
       <header className="prow__head">
-        {onStep ? (
+        {quiet ? null : onStep ? (
           <span className="prow__moves">
             <button
               type="button"
@@ -173,6 +181,8 @@ export function PaletteRow({
         <span className="prow__name">{palette.name}</span>
         {selected && <span className="badge prow__badge">Editing</span>}
         <span className="prow__note">{palette.config.base}</span>
+        {!quiet && (
+        <>
         <span className="spacer" />
         <NumberField
           label="Steps"
@@ -270,6 +280,8 @@ export function PaletteRow({
         >
           Delete
         </button>
+        </>
+        )}
       </header>
 
       <RampStrip
