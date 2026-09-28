@@ -3254,7 +3254,7 @@ button.newpal__cand:hover {
   }
 
   /* The scheme's bar folds the same way, done here rather than in the tree:
-     the first three and the toggle are lifted to the front of the row, a
+     undo, redo and the toggle are lifted to the front of the row, a
      zero-height item breaks the line after them, and while it is shut
      everything else is put away. */
   .scheme__bar--phone {

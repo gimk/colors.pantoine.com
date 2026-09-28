@@ -245,7 +245,7 @@ export function SchemeBoard({
           with what you are making, so neither does the bar that holds them. */}
       <Masthead mode={mode} onMode={onMode} gamut={gamut} />
 
-      {/* On a phone the bar folds to its first three and a toggle, and the
+      {/* On a phone the bar folds to undo, redo and a toggle, and the
           stylesheet puts the toggle at the end of that first row. The DOM
           order is the desktop bar's, untouched. */}
       <header
@@ -261,6 +261,8 @@ export function SchemeBoard({
             {more ? 'Less' : 'More'}
           </button>
         )}
+        {/* On a phone Generate lives along the foot instead. */}
+        {!phone && (
         <button
           type="button"
           className="is-primary scheme__lead"
@@ -269,6 +271,7 @@ export function SchemeBoard({
         >
           Generate
         </button>
+        )}
 
         <label className="field">
           <span>Rule</span>
@@ -494,6 +497,23 @@ export function SchemeBoard({
             Generate rolls a new scheme · tap a bar to copy it · + adds a color between two
           </span>
         </footer>
+      )}
+
+      {/* A phone's Generate, the width of the screen and under the thumb, in
+          the place the editor keeps its tabs. It is the one thing the board
+          is for, pressed over and over, so it leaves the top bar for here —
+          and stays in bare mode, where rolling is all there is left to do. */}
+      {phone && (
+        <nav className="panes" aria-label="Generate">
+          <button
+            type="button"
+            className="is-primary"
+            onClick={generate}
+            title="Roll a new scheme, holding every locked color"
+          >
+            Generate
+          </button>
+        </nav>
       )}
     </div>
   )
