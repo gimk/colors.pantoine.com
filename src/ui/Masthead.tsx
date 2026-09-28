@@ -2,6 +2,7 @@ import type { Gamut } from '../color/oklch'
 import type { Mode } from '../state/mode'
 import { HelpDialog } from './HelpDialog'
 import { ModeSwitch } from './ModeSwitch'
+import { usePhone } from './useMediaQuery'
 
 type Props = {
   mode: Mode
@@ -21,8 +22,27 @@ type Props = {
  * centred on the *window* and not on whatever is left after the title and the
  * credit have taken their room. It is the one control here that says where you
  * are, so it should not drift as the two sides change width.
+ *
+ * A phone gets one row: the title, then the switch with the help beside it.
+ * The credit and the badge had a row to themselves there, which is a row of
+ * screen the colours could have; the credit is in the help instead.
  */
 export function Masthead({ mode, onMode, gamut }: Props) {
+  const phone = usePhone()
+
+  if (phone) {
+    return (
+      <header className="masthead">
+        <h1>COLORS // PANTOINE</h1>
+
+        <span className="masthead__switch">
+          <ModeSwitch mode={mode} onMode={onMode} />
+          <HelpDialog gamut={gamut} />
+        </span>
+      </header>
+    )
+  }
+
   return (
     <header className="masthead">
       <h1>COLORS // PANTOINE</h1>

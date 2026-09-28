@@ -112,7 +112,13 @@ export function ShadePicker({ color, gamut, vision, format, onPick, onClose }: P
       aria-label="Shades"
       /* Moving off the bar puts it away: this is a glance and a click, and
          leaving is the way you say you did not want one. */
-      onPointerLeave={onClose}
+      /* A mouse's only, though. A finger "leaves" the moment it lifts — before
+         the tap it just made has landed as a click — so a touch would close
+         the strip under the step it was choosing. A tap outside still closes
+         it, as it does for everyone. */
+      onPointerLeave={(event) => {
+        if (event.pointerType === 'mouse') onClose()
+      }}
       /* The bar is the drag handle for reordering, and these steps are inside
          it. Without this, a press that slides a pixel down the strip starts
          dragging the whole colour instead of choosing a shade. */

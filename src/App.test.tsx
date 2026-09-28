@@ -1571,9 +1571,7 @@ describe('scheme board', () => {
   it('offers both modes, and marks the one it is in', () => {
     const html = render(slotsOf())
     expect(html).toContain('>Ramps<')
-    // Sliced between the switch and what follows it in the masthead. Not
-    // matched to its own closing tag: the beta mark is a nested span, so the
-    // first `</span>` is no longer the switch's.
+    // Sliced between the switch and what follows it in the masthead.
     const start = html.indexOf('class="modes"')
     const modes = html.slice(start, html.indexOf('class="masthead__end"'))
     expect(start).toBeGreaterThan(-1)
@@ -2239,21 +2237,12 @@ describe('the shades of one bar', () => {
 describe('the mode switch', () => {
   const html = renderToStaticMarkup(<ModeSwitch mode="ramps" onMode={() => {}} />)
 
-  it('marks the scheme half as beta, inside the label', () => {
-    expect(html).toContain('class="modes__beta"')
-    expect(html).toContain('>beta<')
-    // Inside the Scheme button, not floating beside the pair.
-    const scheme = html.slice(0, html.indexOf('Ramps'))
-    expect(scheme).toContain('modes__beta')
+  it('names the scheme half plainly, with no beta mark', () => {
+    expect(html).not.toContain('modes__beta')
+    expect(html).toContain('>Scheme</button>')
   })
 
   it('leaves the switch two buttons wide', () => {
     expect(html.match(/<button/g)).toHaveLength(2)
-  })
-
-  it('lets the mark take the colour of whichever half it is on', () => {
-    // The scheme half is filled when it is the mode in force, so a fixed
-    // colour here would be unreadable on one of the two states.
-    expect(declarations('.modes__beta')).not.toContain('color:')
   })
 })

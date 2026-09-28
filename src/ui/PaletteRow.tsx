@@ -22,6 +22,13 @@ type Props = {
   onDuplicate?: () => void
   onRemove: () => void
   onMove?: (by: -1 | 1) => void
+  /** A step up or down the stack. Given, it replaces the drag handle: a
+   *  native drag is a mouse's gesture and does nothing under a finger. */
+  onStep?: (by: -1 | 1) => void
+  /** Given, every row offers Edit — the selected one too — and it takes you
+   *  to the tools rather than only picking the palette. A phone's, where the
+   *  tools are a screen of their own. */
+  onEdit?: () => void
   onReorder?: (sourceId: string, targetId: string) => void
   onCopy: (key: string, text: string) => void
 }
@@ -31,6 +38,7 @@ export function PaletteRow({
   count,
   selected,
   format,
+  index = 0,
   gamut = 'srgb',
   copiedKey,
   stepsLocked = true,
@@ -38,6 +46,8 @@ export function PaletteRow({
   onSelect,
   onDuplicate,
   onRemove,
+  onStep,
+  onEdit,
   onReorder,
   onCopy,
 }: Props) {
@@ -121,16 +131,45 @@ export function PaletteRow({
       aria-current={selected ? 'true' : undefined}
     >
       <header className="prow__head">
-        <span
-          className="prow__handle"
-          draggable
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          title="Drag to reorder palette"
-          aria-label="Drag to reorder"
-        >
-          ::
-        </span>
+        {onStep ? (
+          <span className="prow__moves">
+            <button
+              type="button"
+              className="prow__btn-icon"
+              disabled={index === 0}
+              onClick={(event) => {
+                event.stopPropagation()
+                onStep(-1)
+              }}
+              aria-label="Move palette up"
+            >
+              &uarr;
+            </button>
+            <button
+              type="button"
+              className="prow__btn-icon"
+              disabled={index === count - 1}
+              onClick={(event) => {
+                event.stopPropagation()
+                onStep(1)
+              }}
+              aria-label="Move palette down"
+            >
+              &darr;
+            </button>
+          </span>
+        ) : (
+          <span
+            className="prow__handle"
+            draggable
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            title="Drag to reorder palette"
+            aria-label="Drag to reorder"
+          >
+            ::
+          </span>
+        )}
         <span className="prow__name">{palette.name}</span>
         {selected && <span className="badge prow__badge">Editing</span>}
         <span className="prow__note">{palette.config.base}</span>
@@ -159,10 +198,22 @@ export function PaletteRow({
             {duplicates === 1 ? '1 identical step' : `${duplicates} identical steps`}
           </span>
         )}
-        {!selected && (
-          <button type="button" onClick={onSelect} title="Bring the toolbox to this palette">
+        {onEdit ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onEdit()
+            }}
+          >
             Edit
           </button>
+        ) : (
+          !selected && (
+            <button type="button" onClick={onSelect} title="Bring the toolbox to this palette">
+              Edit
+            </button>
+          )
         )}
         {/* The two-sheets icon reads as "make another one of these", so that
             is what it now does; the PNG copy sits beside it under a picture. */}

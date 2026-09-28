@@ -117,8 +117,14 @@ export function HelpDialog({ gamut }: Props) {
               </p>
             </section>
 
+            {/* Here as well as in the masthead, which a phone has no row to
+                spare for: this is where the credit lives on a small screen. */}
             <p className="help__credit">
-              Default color names powered by{' '}
+              Made with dedication by{' '}
+              <a href="https://www.pantoine.com" target="_blank" rel="noopener noreferrer">
+                Antoine Pouligny
+              </a>
+              . Default color names powered by{' '}
               <a
                 href="https://github.com/meodai/color-names"
                 target="_blank"

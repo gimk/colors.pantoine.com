@@ -35,6 +35,12 @@ type Props = {
    *  the document can now be empty and this panel has no meaning without one —
    *  so the caller decides whether there is anything to show. */
   selected: PaletteView
+  /**
+   * Carry the palette's own ramp under its name. A phone's: there the tools
+   * are a screen of their own, and a curve dragged with the ramp out of sight
+   * is a curve dragged blind.
+   */
+  preview?: boolean
 }
 
 /**
@@ -44,7 +50,7 @@ type Props = {
  * belong to a palette, not to the document: with a stack of palettes, a base
  * field far from the ramp it drives would be ambiguous.
  */
-export function Toolbox({ doc, selected }: Props) {
+export function Toolbox({ doc, selected, preview = false }: Props) {
   const parsedBase = parseToOklch(selected.config.base)
   const [width, setWidth] = useState(initialWidth)
   const [isResizing, setIsResizing] = useState(false)
@@ -133,6 +139,19 @@ export function Toolbox({ doc, selected }: Props) {
             name={selected.name}
             onRename={(name) => doc.rename(selected.id, name)}
           />
+          {/* Color only, no labels: it is there to be watched while a
+              handle moves, and the stack is one tab away for reading. */}
+          {preview && (
+            <div className="toolbox__preview" aria-hidden="true">
+              {selected.ramp.map((swatch) => (
+                <span
+                  key={swatch.index}
+                  className={swatch.isBase ? 'is-base' : undefined}
+                  style={{ background: swatch.displayColor }}
+                />
+              ))}
+            </div>
+          )}
         </header>
 
         {/* One column of titled panels — Source, then a channel each. The

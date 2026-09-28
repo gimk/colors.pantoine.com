@@ -17,6 +17,7 @@ import type { SchemeApi } from '../state/useScheme'
 import { Masthead } from './Masthead'
 import { SchemeBar } from './SchemeBar'
 import { SchemeExportDialog } from './SchemeExportDialog'
+import { usePhone } from './useMediaQuery'
 
 /** How long the pointer has to rest on a boundary before its seam opens. */
 export const SEAM_DWELL = 130
@@ -108,6 +109,9 @@ export function SchemeBoard({
   onCopy,
 }: Props) {
   const [bare, setBare] = useState(false)
+  const phone = usePhone()
+  /** Whether a phone's bar is showing the controls it keeps folded away. */
+  const [more, setMore] = useState(false)
   const [dragging, setDragging] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   /** Which boundary is standing open, if any. */
@@ -241,10 +245,25 @@ export function SchemeBoard({
           with what you are making, so neither does the bar that holds them. */}
       <Masthead mode={mode} onMode={onMode} gamut={gamut} />
 
-      <header className="scheme__bar">
+      {/* On a phone the bar folds to its first three and a toggle, and the
+          stylesheet puts the toggle at the end of that first row. The DOM
+          order is the desktop bar's, untouched. */}
+      <header
+        className={`scheme__bar${phone ? ` scheme__bar--phone${more ? ' is-open' : ''}` : ''}`}
+      >
+        {phone && (
+          <button
+            type="button"
+            className={`scheme__more${more ? ' is-on' : ''}`}
+            aria-expanded={more}
+            onClick={() => setMore((on) => !on)}
+          >
+            {more ? 'Less' : 'More'}
+          </button>
+        )}
         <button
           type="button"
-          className="is-primary"
+          className="is-primary scheme__lead"
           onClick={generate}
           title="Roll a new scheme, holding every locked colour (Space)"
         >
@@ -315,6 +334,7 @@ export function SchemeBoard({
 
         <button
           type="button"
+          className="scheme__lead"
           disabled={!scheme.canUndo}
           onClick={scheme.undo}
           title="Step back one roll (Ctrl+Z)"
@@ -324,6 +344,7 @@ export function SchemeBoard({
 
         <button
           type="button"
+          className="scheme__lead"
           disabled={!scheme.canRedo}
           onClick={scheme.redo}
           title="Redo (Ctrl+Shift+Z)"
@@ -463,7 +484,15 @@ export function SchemeBoard({
 
       {!bare && (
         <footer className="scheme__foot">
-          <span>Space rolls a new scheme · a digit locks that colour · click a bar to copy it</span>
+          <span className="scheme__hint--keys">
+            Space rolls a new scheme · a digit locks that colour · click a bar to copy it
+          </span>
+          {/* The same three things, said to a finger. Picked by the
+              stylesheet on whether the device can hover, not on width: a
+              narrow desktop window still has a keyboard. */}
+          <span className="scheme__hint--touch">
+            Generate rolls a new scheme · tap a bar to copy it · + adds a color between two
+          </span>
         </footer>
       )}
     </div>

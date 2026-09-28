@@ -97,6 +97,26 @@ export function CurveEditor({
     return () => observer.disconnect()
   }, [])
 
+  // A finger on the plot scrolls the page — on a phone the graphs are most of
+  // the column, and a column that only scrolled from the strips between them
+  // barely scrolled at all — but a finger on a handle drags it. The stylesheet
+  // lets a touch pan the plot; this takes the pan back for a touch that lands
+  // on a handle. A `touchstart` rather than `touch-action` on the circles,
+  // because not every browser honors `touch-action` on an SVG shape, and a
+  // handle that scrolled the page instead of moving would be worse than
+  // either. Not passive, or it could not cancel anything.
+  useLayoutEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    const onTouchStart = (event: TouchEvent) => {
+      if ((event.target as Element | null)?.closest?.('.graph__handle, .graph__hit')) {
+        event.preventDefault()
+      }
+    }
+    svg.addEventListener('touchstart', onTouchStart, { passive: false })
+    return () => svg.removeEventListener('touchstart', onTouchStart)
+  }, [])
+
   const viewW = view.w
   const viewH = view.h
   const plotW = viewW - PAD.left - PAD.right
@@ -372,6 +392,28 @@ export function CurveEditor({
           </g>
         )
       })}
+
+      {/* A fingertip's worth round every handle, drawn under all of them so
+          a handle still wins where two overlap. Shown only to a coarse pointer
+          by the stylesheet: a mouse is exact, and a wide invisible target
+          would take drags meant for the handle next door. Same gesture as the
+          handle itself, so a drag that starts here is a drag of that handle. */}
+      {controls.map(({ target, at }) =>
+        target === frozen ? null : (
+          <circle
+            key={`hit-${target}`}
+            className="graph__hit"
+            cx={at.x}
+            cy={at.y}
+            r={20}
+            aria-hidden="true"
+            onPointerDown={handlePointerDown(target)}
+            onPointerMove={handlePointerMove(target)}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+          />
+        ),
+      )}
 
       {controls.map(({ target, at, anchor, title, value }) => {
         const isFrozen = target === frozen

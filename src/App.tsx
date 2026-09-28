@@ -35,6 +35,7 @@ import { ReviewBoard } from './ui/ReviewBoard'
 import { SchemeBoard } from './ui/SchemeBoard'
 import { Toolbox } from './ui/Toolbox'
 import { useCopy } from './ui/useCopy'
+import { usePhone } from './ui/useMediaQuery'
 
 /** Read once, at mount. Guarded so the tree also renders without a DOM. */
 function readSession() {
@@ -113,6 +114,13 @@ export function App() {
    */
   const [mode, setMode] = useState<Mode>(session.mode)
   const { copy, copied } = useCopy()
+
+  const phone = usePhone()
+  /** Which of the editor's two screens a phone is on. Unused anywhere wider,
+   *  where the stack and the tools sit side by side. */
+  const [pane, setPane] = useState<'palettes' | 'edit'>('palettes')
+  /** Whether a phone's bar is showing the controls it keeps folded away. */
+  const [more, setMore] = useState(false)
 
   /**
    * The scheme, on its own history.
@@ -318,198 +326,262 @@ export function App() {
     )
   }
 
+  /* The controls one at a time, so a phone can lay them out its own way
+     without a second copy of any of them. The desktop bar below is put back
+     together from these in exactly the order it always had. */
+
+  /* First in the bar and filled solid: it is the one thing here that adds to
+     the document rather than adjusting it. Both it and the quick add stand
+     down while the document is empty, where the same pair is the whole of the
+     page. */
+  const newPaletteControl = selected && (
+    <NewPaletteDialog
+      palettes={doc.palettes}
+      selected={selected}
+      gamut={gamut}
+      onAdd={(bases) => {
+        doc.addPalettes(bases)
+        setPane('palettes')
+        triggerScroll()
+      }}
+    />
+  )
+
+  /* The old behaviour, kept as a shortcut. A guessed colour is a poor answer
+     for a scheme but a fine one for "just give me another ramp", and that is
+     worth not making anyone open a dialog for. */
+  const quickAddControl = selected && (
+    <button
+      type="button"
+      onClick={() => {
+        doc.newPalette()
+        setPane('palettes')
+        triggerScroll()
+      }}
+      title="Add a palette in a fresh colour further round the hue wheel, without the dialog"
+    >
+      + Quick add
+    </button>
+  )
+
+  const undoControl = (
+    <button
+      type="button"
+      disabled={!doc.canUndo}
+      onClick={undo}
+      title="Undo the last edit (Ctrl+Z)"
+    >
+      Undo
+    </button>
+  )
+
+  const redoControl = (
+    <button
+      type="button"
+      disabled={!doc.canRedo}
+      onClick={redo}
+      title="Redo (Ctrl+Shift+Z)"
+    >
+      Redo
+    </button>
+  )
+
+  const formatControl = (
+    <label className="field">
+      <span>Click copies</span>
+      <select value={format} onChange={(event) => setFormat(event.target.value as Format)}>
+        {FORMATS.map((option) => {
+          const unavailable =
+            gamut !== 'srgb' && (option === 'hex' || option === 'rgb' || option === 'hsl')
+          return (
+            <option
+              key={option}
+              value={option}
+              style={unavailable ? { color: 'var(--muted)' } : undefined}
+            >
+              {option}{unavailable ? ' (sRGB only)' : ''}
+            </option>
+          )
+        })}
+      </select>
+    </label>
+  )
+
+  const gamutControl = (
+    <label className="field">
+      <span>Gamut</span>
+      <select
+        value={gamut}
+        onChange={(event) => doc.setGamut(event.target.value as Gamut)}
+        title="Which display the palette is designed for. Widening it lets every derived chroma curve ask for more."
+      >
+        {GAMUTS.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+
+  const stepsControl = selected && (
+    <div className="controls__steps">
+      <NumberField
+        label="Steps"
+        title={
+          doc.stepsLocked
+            ? 'Number of steps, shared across every palette in the document'
+            : 'Global steps — lock to synchronize all palettes to this step count'
+        }
+        value={selected?.config.steps ?? DEFAULT_STEPS}
+        min={MIN_STEPS}
+        max={MAX_STEPS}
+        step={1}
+        decimals={0}
+        onCommit={doc.setSteps}
+      />
+      <button
+        type="button"
+        className={`controls__btn-lock ${doc.stepsLocked ? 'is-locked' : 'is-unlocked'}`}
+        aria-label={doc.stepsLocked ? 'Unlock steps per palette' : 'Lock steps across all palettes'}
+        title={
+          doc.stepsLocked
+            ? 'Steps are shared across all palettes — click to unlock and customize per palette'
+            : 'Steps are independent per palette — click to lock all palettes to this step count'
+        }
+        onClick={() => doc.setStepsLocked(!doc.stepsLocked)}
+      >
+        {doc.stepsLocked ? (
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="3" y="11" width="18" height="11" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+        ) : (
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="3" y="11" width="18" height="11" />
+            <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+          </svg>
+        )}
+      </button>
+    </div>
+  )
+
+  /* Both of these answer to a stack of palettes, so neither has anything to
+     say about an empty one. */
+  const reviewControl = selected && (
+    <button
+      type="button"
+      onClick={() => setReview(true)}
+      title="Put every tool and every label away and look at the whole document at once, laid out however you arrange it"
+    >
+      Review
+    </button>
+  )
+
+  const canvasControl = (
+    <button
+      type="button"
+      onClick={() => setDark((on) => !on)}
+      title="Judge the ramp against the other ground"
+    >
+      {dark ? 'Light canvas' : 'Dark canvas'}
+    </button>
+  )
+
+  /* Last in the bar, with Review and the canvas: the three things here that
+     answer to the whole document rather than to the palette the toolbox
+     happens to be on. */
+  const exportControl = selected && (
+    <ExportDialog
+      palettes={doc.palettes}
+      gamut={gamut}
+      stepsLocked={doc.stepsLocked}
+    />
+  )
+
+  const controls = phone ? (
+    /* A phone gets the four things it reaches for on every visit — add, undo,
+       redo — and the rest behind one toggle. Wrapped in full, the desktop bar
+       was four rows and a third of the screen before a single color. */
+    <div className="controls controls--phone">
+      <div className="controls__group">
+        {newPaletteControl}
+        {undoControl}
+        {redoControl}
+        <span className="spacer" />
+        <button
+          type="button"
+          className={more ? 'is-on' : undefined}
+          aria-expanded={more}
+          onClick={() => setMore((on) => !on)}
+        >
+          {more ? 'Less' : 'More'}
+        </button>
+      </div>
+      {more && (
+        <div className="controls__more">
+          {quickAddControl}
+          {formatControl}
+          {gamutControl}
+          {stepsControl}
+          {reviewControl}
+          {canvasControl}
+          {exportControl}
+        </div>
+      )}
+    </div>
+  ) : (
+    <div className="controls">
+      <div className="controls__group">
+        {newPaletteControl}
+        {quickAddControl}
+        {undoControl}
+        {redoControl}
+      </div>
+
+      <span className="divider" aria-hidden="true" />
+
+      <div className="controls__group">
+        {formatControl}
+        {gamutControl}
+        {stepsControl}
+      </div>
+
+      <span className="spacer" />
+
+      <div className="controls__group">
+        {reviewControl}
+        {canvasControl}
+        {exportControl}
+      </div>
+    </div>
+  )
+
   return (
     <div className="app">
       <Masthead mode={mode} onMode={setMode} gamut={gamut} />
 
-      <div className="controls">
-        <div className="controls__group">
-          {/* First in the bar and filled solid: it is the one thing here that
-              adds to the document rather than adjusting it. Both it and the
-              quick add stand down while the document is empty, where the same
-              pair is the whole of the page. */}
-          {selected && (
-          <NewPaletteDialog
-            palettes={doc.palettes}
-            selected={selected}
-            gamut={gamut}
-            onAdd={(bases) => {
-              doc.addPalettes(bases)
-              triggerScroll()
-            }}
-          />
-          )}
-
-          {/* The old behaviour, kept as a shortcut. A guessed colour is a poor
-              answer for a scheme but a fine one for "just give me another
-              ramp", and that is worth not making anyone open a dialog for. */}
-          {selected && (
-          <button
-            type="button"
-            onClick={() => {
-              doc.newPalette()
-              triggerScroll()
-            }}
-            title="Add a palette in a fresh colour further round the hue wheel, without the dialog"
-          >
-            + Quick add
-          </button>
-          )}
-
-          <button
-            type="button"
-            disabled={!doc.canUndo}
-            onClick={undo}
-            title="Undo the last edit (Ctrl+Z)"
-          >
-            Undo
-          </button>
-
-          <button
-            type="button"
-            disabled={!doc.canRedo}
-            onClick={redo}
-            title="Redo (Ctrl+Shift+Z)"
-          >
-            Redo
-          </button>
-        </div>
-
-        <span className="divider" aria-hidden="true" />
-
-        <div className="controls__group">
-          <label className="field">
-            <span>Click copies</span>
-            <select value={format} onChange={(event) => setFormat(event.target.value as Format)}>
-              {FORMATS.map((option) => {
-                const unavailable =
-                  gamut !== 'srgb' && (option === 'hex' || option === 'rgb' || option === 'hsl')
-                return (
-                  <option
-                    key={option}
-                    value={option}
-                    style={unavailable ? { color: 'var(--muted)' } : undefined}
-                  >
-                    {option}{unavailable ? ' (sRGB only)' : ''}
-                  </option>
-                )
-              })}
-            </select>
-          </label>
-
-          <label className="field">
-            <span>Gamut</span>
-            <select
-              value={gamut}
-              onChange={(event) => doc.setGamut(event.target.value as Gamut)}
-              title="Which display the palette is designed for. Widening it lets every derived chroma curve ask for more."
-            >
-              {GAMUTS.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {selected && (
-          <div className="controls__steps">
-            <NumberField
-              label="Steps"
-              title={
-                doc.stepsLocked
-                  ? 'Number of steps, shared across every palette in the document'
-                  : 'Global steps — lock to synchronize all palettes to this step count'
-              }
-              value={selected?.config.steps ?? DEFAULT_STEPS}
-              min={MIN_STEPS}
-              max={MAX_STEPS}
-              step={1}
-              decimals={0}
-              onCommit={doc.setSteps}
-            />
-            <button
-              type="button"
-              className={`controls__btn-lock ${doc.stepsLocked ? 'is-locked' : 'is-unlocked'}`}
-              aria-label={doc.stepsLocked ? 'Unlock steps per palette' : 'Lock steps across all palettes'}
-              title={
-                doc.stepsLocked
-                  ? 'Steps are shared across all palettes — click to unlock and customize per palette'
-                  : 'Steps are independent per palette — click to lock all palettes to this step count'
-              }
-              onClick={() => doc.setStepsLocked(!doc.stepsLocked)}
-            >
-              {doc.stepsLocked ? (
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <rect x="3" y="11" width="18" height="11" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-              ) : (
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <rect x="3" y="11" width="18" height="11" />
-                  <path d="M7 11V7a5 5 0 0 1 9.9-1" />
-                </svg>
-              )}
-            </button>
-          </div>
-          )}
-        </div>
-
-        <span className="spacer" />
-
-        <div className="controls__group">
-          {/* Both of these answer to a stack of palettes, so neither has anything
-              to say about an empty one. */}
-          {selected && (
-          <button
-            type="button"
-            onClick={() => setReview(true)}
-            title="Put every tool and every label away and look at the whole document at once, laid out however you arrange it"
-          >
-            Review
-          </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setDark((on) => !on)}
-            title="Judge the ramp against the other ground"
-          >
-            {dark ? 'Light canvas' : 'Dark canvas'}
-          </button>
-
-          {/* Last in the bar, with Review and the canvas: the three things
-              here that answer to the whole document rather than to the
-              palette the toolbox happens to be on. */}
-          {selected && (
-          <ExportDialog
-            palettes={doc.palettes}
-            gamut={gamut}
-            stepsLocked={doc.stepsLocked}
-          />
-          )}
-        </div>
-      </div>
+      {controls}
 
       {/* An emptied document is a real state, not an error, so it gets the two
           ways back into one rather than an apology. Centred and on its own,
@@ -521,7 +593,10 @@ export function App() {
           height going without asking what the masthead and the bar above it
           came to, and the stack scrolls inside its own column rather than
           taking the window's scrollbar with it. */}
-      <div className="workspace">
+      {/* On a phone the two take turns instead, one screen each, switched by
+          the tabs along the foot: stacked, neither had the height to be
+          worked in. Both stay mounted so each keeps its scroll position. */}
+      <div className={`workspace${phone ? ` workspace--phone is-${pane}` : ''}`}>
       {!selected ? (
         <div className="blank">
           <p className="blank__note">No palettes.</p>
@@ -549,11 +624,12 @@ export function App() {
         </div>
       ) : (
       <div className="stack">
-        {doc.palettes.map((palette) => (
+        {doc.palettes.map((palette, index) => (
           <PaletteRow
             key={palette.id}
             palette={palette}
             count={doc.palettes.length}
+            index={index}
             selected={palette.id === selected?.id}
             format={format}
             gamut={gamut}
@@ -570,6 +646,27 @@ export function App() {
             }}
             onRemove={() => doc.remove(palette.id)}
             onReorder={doc.reorder}
+            /* Dragging a row is a mouse's gesture; a finger gets a step up
+               and a step down instead. Swapping with the neighbor is a
+               reorder onto it, which lands the row in its place. */
+            onStep={
+              phone
+                ? (by) => {
+                    const neighbor = doc.palettes[index + by]
+                    if (neighbor) doc.reorder(palette.id, neighbor.id)
+                  }
+                : undefined
+            }
+            /* The tools are a screen of their own on a phone, so editing a
+               palette is also going there. */
+            onEdit={
+              phone
+                ? () => {
+                    doc.select(palette.id)
+                    setPane('edit')
+                  }
+                : undefined
+            }
             onCopy={copy}
           />
         ))}
@@ -580,8 +677,32 @@ export function App() {
           of the workspace, and it names the palette it is editing since it is
           no longer beside it. Gone entirely on an empty document, where it
           would be a panel of controls for a palette that is not there. */}
-      {selected && <Toolbox doc={doc} selected={selected} />}
+      {selected && <Toolbox doc={doc} selected={selected} preview={phone} />}
       </div>
+
+      {phone && selected && (
+        <nav className="panes" aria-label="View">
+          <button
+            type="button"
+            className={pane === 'palettes' ? 'is-on' : undefined}
+            aria-pressed={pane === 'palettes'}
+            onClick={() => {
+              setPane('palettes')
+              triggerScroll()
+            }}
+          >
+            Palettes · {doc.palettes.length}
+          </button>
+          <button
+            type="button"
+            className={pane === 'edit' ? 'is-on' : undefined}
+            aria-pressed={pane === 'edit'}
+            onClick={() => setPane('edit')}
+          >
+            Edit · <span className="panes__name">{selected.name}</span>
+          </button>
+        </nav>
+      )}
     </div>
   )
 }

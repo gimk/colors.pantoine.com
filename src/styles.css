@@ -2597,18 +2597,6 @@ button.newpal__cand:hover {
   margin-left: -1px;
 }
 
-/* Rides inside the label rather than beside it, so the switch stays two
-   buttons wide and the mark travels with the word it qualifies. Inherits its
-   colour, which is what keeps it legible on the filled half as well as the
-   empty one. */
-.modes__beta {
-  margin-left: var(--space-2);
-  font-size: var(--text-2xs);
-  letter-spacing: var(--tracking-pill);
-  opacity: 0.55;
-  vertical-align: 1px;
-}
-
 /* --- scheme ------------------------------------------------------------ */
 
 /* The loudest thing in the app, on purpose. The editor is a workshop and looks
@@ -2834,7 +2822,7 @@ button.newpal__cand:hover {
    This strip is the reason the dwell is a timer in the component rather than
    a `transition-delay` here: a delay would postpone the look of the seam and
    not this, leaving an invisible band over every boundary that takes the
-   clicks meant for the colours either side of it. */
+   clicks meant for the colors either side of it. */
 .scheme__seam::before {
   content: '';
   position: absolute;
@@ -3107,5 +3095,331 @@ button.newpal__cand:hover {
 @media (prefers-reduced-motion: reduce) {
   button {
     transition-duration: 1ms;
+  }
+}
+
+/* --- phone and touch --------------------------------------------------
+
+   Two different questions, asked separately. Width decides the layout: at
+   720 and under there is no room for the desktop arrangement, whatever is
+   holding the device. Hover decides the interactions: a finger cannot rest
+   over a bar to reveal its tools, however wide the screen it is on — and a
+   narrow desktop window still has a mouse, so it keeps the hover ones.
+
+   Nothing here applies to a desktop window of ordinary width with a mouse.
+   Everything the tree adds for a phone is rendered only on a phone, so the
+   few defaults below are for the pieces that are always there. */
+
+.graph__hit {
+  display: none;
+  fill: transparent;
+  touch-action: none;
+}
+
+.scheme__hint--touch {
+  display: none;
+}
+
+/* A fingertip is not a point: every handle gets a target round it, and a
+   finger on the plot away from the handles pans the column instead of doing
+   nothing. `CurveEditor` takes the pan back for a touch on a handle. */
+@media (pointer: coarse) {
+  .graph__hit {
+    display: inline;
+  }
+
+  .toolbox__panels > .panel > .graph,
+  .graph {
+    touch-action: pan-y;
+  }
+
+  .graph__handle {
+    touch-action: none;
+  }
+
+  /* Hover is emulated on a tap and then sticks, which left a tapped handle
+     filled black as if it were still held. */
+  .graph__handle:hover {
+    fill: var(--paper);
+  }
+}
+
+@media (hover: none) {
+  /* The tools are there from the start. Hidden until hover, they could only
+     be reached by a tap on the bar — which copies the color. */
+  .sbar__tool {
+    opacity: 0.7;
+    pointer-events: auto;
+  }
+
+  .sbar__tool:disabled {
+    opacity: 0.25;
+  }
+
+  /* No dwell to wait out, so no seam to open: the + stands on the boundary
+     the whole time, and the strip that caught a resting pointer would only
+     swallow taps meant for the colors either side of it. */
+  .scheme__seam::before {
+    display: none;
+  }
+
+  .scheme__seam.is-open {
+    flex-basis: 0;
+  }
+
+  /* The two ends would stand half off the board. Colors added at the end
+     come from the count in the bar. */
+  .scheme__seam:first-child,
+  .scheme__seam:last-child {
+    display: none;
+  }
+
+  .scheme__insert {
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .scheme__hint--keys {
+    display: none;
+  }
+
+  .scheme__hint--touch {
+    display: inline;
+  }
+}
+
+@media (max-width: 720px) {
+  /* One row: the title, then the switch with the help beside it. Stacked and
+     centred, the masthead alone was a sixth of the screen. */
+  .masthead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3) var(--space-4);
+    padding: var(--space-4) var(--space-7);
+  }
+
+  .masthead h1 {
+    font-size: var(--text-sm);
+    letter-spacing: var(--tracking-wider);
+  }
+
+  .masthead__switch {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  /* Said once, on a desk. On a phone it was two lines of keys a phone does
+     not have, under colors that wanted the room. */
+  .scheme__foot {
+    display: none;
+  }
+
+  /* The base is in the tools, one tab away; in the header it was the thing
+     that pushed the row onto a third line. */
+  .prow__note {
+    display: none;
+  }
+
+  /* The bar folded: its first row, and whatever More opens under it. */
+  .controls--phone {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-7);
+  }
+
+  .controls--phone .controls__group {
+    flex-wrap: nowrap;
+  }
+
+  .controls__more {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4) var(--space-5);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--grid);
+  }
+
+  .controls--phone button,
+  .scheme__bar--phone button {
+    min-height: 36px;
+  }
+
+  /* The scheme's bar folds the same way, done here rather than in the tree:
+     the first three and the toggle are lifted to the front of the row, a
+     zero-height item breaks the line after them, and while it is shut
+     everything else is put away. */
+  .scheme__bar--phone {
+    padding: var(--space-4) var(--space-7);
+  }
+
+  .scheme__bar--phone .scheme__lead {
+    order: -3;
+  }
+
+  .scheme__bar--phone .scheme__more {
+    order: -2;
+    margin-left: auto;
+  }
+
+  .scheme__bar--phone::before {
+    content: '';
+    order: -1;
+    flex-basis: 100%;
+    height: 0;
+    margin-top: calc(var(--space-4) * -1);
+  }
+
+  .scheme__bar--phone:not(.is-open)::before,
+  .scheme__bar--phone:not(.is-open) > :not(.scheme__lead):not(.scheme__more),
+  .scheme__bar--phone > .spacer,
+  .scheme__bar--phone > .divider {
+    display: none;
+  }
+
+  /* The editor's two screens, one at a time. */
+  .workspace--phone.is-palettes > .toolbox,
+  .workspace--phone.is-edit > .stack {
+    display: none;
+  }
+
+  .workspace--phone > .toolbox {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+    border-top: 0;
+  }
+
+  .panes {
+    flex: none;
+    display: flex;
+    border-top: 2px solid var(--rule);
+    background: var(--paper);
+  }
+
+  .panes button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 48px;
+    border: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .panes button + button {
+    border-left: 1px solid var(--rule);
+  }
+
+  /* Somebody's name for their palette, shown the way they typed it. */
+  .panes__name {
+    text-transform: none;
+    letter-spacing: var(--tracking-normal);
+  }
+
+  /* The palette being edited, as color alone, under its name. The base step
+     is marked the way the stack marks it, in ink along its foot. */
+  .toolbox__preview {
+    display: flex;
+    height: 32px;
+    margin-top: var(--space-3);
+  }
+
+  .toolbox__preview > span {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .toolbox__preview > .is-base {
+    box-shadow: inset 0 -4px 0 var(--ink);
+  }
+
+  /* A palette's header wraps onto two rows at the spacer: what it is on the
+     first, what can be done to it on the second. On one row it ran off the
+     side and took Delete with it. */
+  .prow__head {
+    flex-wrap: wrap;
+    row-gap: var(--space-3);
+  }
+
+  .prow__head > .spacer {
+    flex-basis: 100%;
+    height: 0;
+  }
+
+  .prow__moves {
+    display: inline-flex;
+    gap: var(--space-2);
+  }
+
+  /* Eleven steps across a phone is thirty pixels each: room for the step's
+     name and nothing else legible. The value and the contrast went over the
+     neighboring cells; they are a tap away in the formats and the export. */
+  .prow .swatch__chip {
+    height: 72px;
+  }
+
+  .prow .swatch__meta {
+    padding: var(--space-2) var(--space-1);
+  }
+
+  .prow .swatch__label {
+    font-size: var(--text-xs);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .prow .swatch__value,
+  .prow .swatch__sub {
+    display: none;
+  }
+
+  /* Still the copy acknowledgement, in the room a step has: a tick rather
+     than a word. */
+  .prow .swatch__copied {
+    font-size: 0;
+  }
+
+  .prow .swatch__copied::before {
+    content: '\2713';
+    font-size: var(--text-base);
+  }
+
+  /* A finger's tools: at the end of the bar rather than over its middle,
+     where they sat on the reading. The reading moves to the start to leave
+     them the room. */
+  @media (hover: none) {
+    .sbar__face {
+      align-items: flex-start;
+      padding-right: 220px;
+    }
+
+    .sbar__read {
+      align-items: flex-start;
+      text-align: left;
+    }
+
+    .sbar__tools {
+      left: auto;
+      right: var(--space-6);
+      transform: translateY(-50%);
+      gap: var(--space-2);
+    }
+
+    .sbar__tool {
+      width: 36px;
+      height: 36px;
+    }
+
+    .scheme__insert {
+      left: 32px;
+    }
   }
 }
